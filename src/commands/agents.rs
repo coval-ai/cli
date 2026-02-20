@@ -1,0 +1,112 @@
+use anyhow::Result;
+use clap::{Args, Subcommand};
+
+use crate::client::models::{AgentType, CreateAgentRequest, ListParams, UpdateAgentRequest};
+use crate::client::CovalClient;
+use crate::output::{print_list, print_one, print_success, OutputFormat};
+
+#[derive(Subcommand)]
+pub enum AgentCommands {
+    List(ListArgs),
+    Get(GetArgs),
+    Create(CreateArgs),
+    Update(UpdateArgs),
+    Delete(DeleteArgs),
+}
+
+#[derive(Args)]
+pub struct ListArgs {
+    #[arg(long)]
+    filter: Option<String>,
+    #[arg(long, default_value = "50")]
+    page_size: u32,
+    #[arg(long)]
+    order_by: Option<String>,
+}
+
+#[derive(Args)]
+pub struct GetArgs {
+    agent_id: String,
+}
+
+#[derive(Args)]
+pub struct CreateArgs {
+    #[arg(long)]
+    name: String,
+    #[arg(long, value_enum)]
+    r#type: AgentType,
+    #[arg(long)]
+    phone_number: Option<String>,
+    #[arg(long)]
+    endpoint: Option<String>,
+    #[arg(long)]
+    prompt: Option<String>,
+}
+
+#[derive(Args)]
+pub struct UpdateArgs {
+    agent_id: String,
+    #[arg(long)]
+    name: Option<String>,
+    #[arg(long, value_enum)]
+    r#type: Option<AgentType>,
+    #[arg(long)]
+    phone_number: Option<String>,
+    #[arg(long)]
+    endpoint: Option<String>,
+    #[arg(long)]
+    prompt: Option<String>,
+}
+
+#[derive(Args)]
+pub struct DeleteArgs {
+    agent_id: String,
+}
+
+pub async fn execute(cmd: AgentCommands, client: &CovalClient, format: OutputFormat) -> Result<()> {
+    match cmd {
+        AgentCommands::List(args) => {
+            let params = ListParams {
+                filter: args.filter,
+                page_size: Some(args.page_size),
+                order_by: args.order_by,
+                ..Default::default()
+            };
+            let response = client.agents().list(params).await?;
+            print_list(&response.agents, format);
+        }
+        AgentCommands::Get(args) => {
+            let agent = client.agents().get(&args.agent_id).await?;
+            print_one(&agent, format);
+        }
+        AgentCommands::Create(args) => {
+            let req = CreateAgentRequest {
+                display_name: args.name,
+                model_type: args.r#type,
+                phone_number: args.phone_number,
+                endpoint: args.endpoint,
+                prompt: args.prompt,
+                metadata: None,
+            };
+            let agent = client.agents().create(req).await?;
+            print_one(&agent, format);
+        }
+        AgentCommands::Update(args) => {
+            let req = UpdateAgentRequest {
+                display_name: args.name,
+                model_type: args.r#type,
+                phone_number: args.phone_number,
+                endpoint: args.endpoint,
+                prompt: args.prompt,
+                ..Default::default()
+            };
+            let agent = client.agents().update(&args.agent_id, req).await?;
+            print_one(&agent, format);
+        }
+        AgentCommands::Delete(args) => {
+            client.agents().delete(&args.agent_id).await?;
+            print_success("Agent deleted.");
+        }
+    }
+    Ok(())
+}

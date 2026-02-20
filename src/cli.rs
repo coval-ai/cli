@@ -1,0 +1,119 @@
+use clap::{Parser, Subcommand};
+
+use crate::client::CovalClient;
+use crate::commands;
+use crate::config::Config;
+use crate::output::OutputFormat;
+
+#[derive(Parser)]
+#[command(name = "coval")]
+#[command(version, about = "Coval AI evaluation CLI")]
+#[command(propagate_version = true)]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Commands,
+
+    #[arg(long, global = true, default_value = "table", value_enum)]
+    pub format: OutputFormat,
+
+    #[arg(long, global = true, env = "COVAL_API_KEY")]
+    pub api_key: Option<String>,
+
+    #[arg(long, global = true, env = "COVAL_API_URL")]
+    pub api_url: Option<String>,
+}
+
+#[derive(Subcommand)]
+pub enum Commands {
+    Login(commands::auth::LoginArgs),
+    Whoami,
+    Config {
+        #[command(subcommand)]
+        command: commands::config::ConfigCommands,
+    },
+    Agents {
+        #[command(subcommand)]
+        command: commands::agents::AgentCommands,
+    },
+    Runs {
+        #[command(subcommand)]
+        command: commands::runs::RunCommands,
+    },
+    Simulations {
+        #[command(subcommand)]
+        command: commands::simulations::SimulationCommands,
+    },
+    #[command(name = "test-sets")]
+    TestSets {
+        #[command(subcommand)]
+        command: commands::test_sets::TestSetCommands,
+    },
+    #[command(name = "test-cases")]
+    TestCases {
+        #[command(subcommand)]
+        command: commands::test_cases::TestCaseCommands,
+    },
+    Personas {
+        #[command(subcommand)]
+        command: commands::personas::PersonaCommands,
+    },
+    Metrics {
+        #[command(subcommand)]
+        command: commands::metrics::MetricCommands,
+    },
+    Mutations {
+        #[command(subcommand)]
+        command: commands::mutations::MutationCommands,
+    },
+}
+
+pub async fn run(cli: Cli) -> anyhow::Result<()> {
+    let config = Config::load().unwrap_or_default();
+    let api_key = cli.api_key.or(config.api_key);
+    let api_url = cli.api_url.or(config.api_url);
+
+    match cli.command {
+        Commands::Login(args) => commands::auth::login(args).await,
+        Commands::Whoami => {
+            commands::auth::whoami(api_key.as_ref());
+            Ok(())
+        }
+        Commands::Config { command } => commands::config::execute(command),
+        _ => {
+            let api_key = api_key.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Not authenticated. Run `coval login` or set COVAL_API_KEY environment variable."
+                )
+            })?;
+            let client = CovalClient::new(api_key, api_url.as_deref());
+
+            match cli.command {
+                Commands::Agents { command } => {
+                    commands::agents::execute(command, &client, cli.format).await
+                }
+                Commands::Runs { command } => {
+                    commands::runs::execute(command, &client, cli.format).await
+                }
+                Commands::Simulations { command } => {
+                    commands::simulations::execute(command, &client, cli.format).await
+                }
+                Commands::TestSets { command } => {
+                    commands::test_sets::execute(command, &client, cli.format).await
+                }
+                Commands::TestCases { command } => {
+                    commands::test_cases::execute(command, &client, cli.format).await
+                }
+                Commands::Personas { command } => {
+                    commands::personas::execute(command, &client, cli.format).await
+                }
+                Commands::Metrics { command } => {
+                    commands::metrics::execute(command, &client, cli.format).await
+                }
+                Commands::Mutations { command } => {
+                    commands::mutations::execute(command, &client, cli.format).await
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+}

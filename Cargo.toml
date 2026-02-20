@@ -1,0 +1,44 @@
+[package]
+name = "coval"
+version = "0.1.0"
+edition = "2021"
+description = "CLI for Coval AI agent evaluation platform"
+license = "MIT"
+repository = "https://github.com/coval-ai/cli"
+homepage = "https://coval.dev"
+documentation = "https://docs.coval.dev"
+keywords = ["cli", "ai", "evaluation", "testing", "voice"]
+categories = ["command-line-utilities", "development-tools"]
+rust-version = "1.75"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive", "env", "wrap_help"] }
+tokio = { version = "1.36", features = ["rt-multi-thread", "macros"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+anyhow = "1.0"
+dirs = "5.0"
+toml = "0.8"
+tabled = "0.15"
+colored = "2.1"
+indicatif = "0.17"
+chrono = { version = "0.4", features = ["serde"] }
+url = "2.5"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+tempfile = "3.10"
+wiremock = "0.6"
+tokio-test = "0.4"
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1
+
+[[bin]]
+name = "coval"
+path = "src/main.rs"
