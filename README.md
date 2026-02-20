@@ -4,12 +4,6 @@ Command-line interface for the [Coval](https://coval.dev) AI evaluation platform
 
 ## Installation
 
-### Homebrew (macOS/Linux)
-
-```bash
-brew install covaldev/tap/coval
-```
-
 ### Cargo
 
 ```bash
