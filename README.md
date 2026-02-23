@@ -122,7 +122,6 @@ Config file: `~/.config/coval/config.toml`
 
 ```toml
 api_key = "sk_..."
-api_url = "https://api.coval.dev"  # Optional, for development
 ```
 
 ## Environment Variables
@@ -130,23 +129,6 @@ api_url = "https://api.coval.dev"  # Optional, for development
 | Variable | Description |
 |----------|-------------|
 | `COVAL_API_KEY` | API key (overrides config file) |
-| `COVAL_API_URL` | API base URL (for development) |
-
-## Development
-
-```bash
-# Build
-cargo build
-
-# Run
-cargo run -- agents list
-
-# Test
-cargo test
-
-# Lint
-cargo clippy -- -D warnings
-```
 
 ## License
 
