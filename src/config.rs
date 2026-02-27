@@ -12,8 +12,9 @@ pub struct Config {
 
 impl Config {
     pub fn path() -> PathBuf {
-        dirs::config_dir()
+        dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
+            .join(".config")
             .join("coval")
             .join("config.toml")
     }
