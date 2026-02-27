@@ -12,13 +12,35 @@ pub struct Config {
 
 impl Config {
     pub fn path() -> PathBuf {
-        dirs::config_dir()
+        dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
+            .join(".config")
             .join("coval")
             .join("config.toml")
     }
 
+    fn legacy_path() -> Option<PathBuf> {
+        dirs::config_dir().map(|d| d.join("coval").join("config.toml"))
+    }
+
+    fn migrate_legacy() {
+        let new_path = Self::path();
+        if new_path.exists() {
+            return;
+        }
+        if let Some(old_path) = Self::legacy_path() {
+            if old_path.exists() {
+                if let Some(parent) = new_path.parent() {
+                    let _ = fs::create_dir_all(parent);
+                }
+                let _ = fs::copy(&old_path, &new_path);
+                let _ = fs::remove_file(&old_path);
+            }
+        }
+    }
+
     pub fn load() -> Result<Self> {
+        Self::migrate_legacy();
         let path = Self::path();
         if !path.exists() {
             return Ok(Self::default());
