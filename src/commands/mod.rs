@@ -8,3 +8,4 @@ pub mod runs;
 pub mod simulations;
 pub mod test_cases;
 pub mod test_sets;
+pub mod traces;
