@@ -65,6 +65,10 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::mutations::MutationCommands,
     },
+    Traces {
+        #[command(subcommand)]
+        command: commands::traces::TraceCommands,
+    },
 }
 
 pub async fn run(cli: Cli) -> anyhow::Result<()> {
@@ -111,6 +115,9 @@ pub async fn run(cli: Cli) -> anyhow::Result<()> {
                 }
                 Commands::Mutations { command } => {
                     commands::mutations::execute(command, &client, cli.format).await
+                }
+                Commands::Traces { command } => {
+                    commands::traces::execute(command, &client).await
                 }
                 _ => unreachable!(),
             }
