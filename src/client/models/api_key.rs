@@ -15,18 +15,19 @@ fn truncate(s: &str, max: usize) -> String {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiKey {
     pub id: String,
-    pub display_name: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
     pub key_type: ApiKeyType,
     pub environment: ApiKeyEnvironment,
     pub status: ApiKeyStatus,
     #[serde(default)]
     pub permissions: Vec<String>,
+    #[serde(rename = "api_key", default)]
+    pub key: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub key: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_used_time: Option<DateTime<Utc>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expires_time: Option<DateTime<Utc>>,
+    pub last_used_at: Option<DateTime<Utc>>,
     pub create_time: DateTime<Utc>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub update_time: Option<DateTime<Utc>>,
@@ -103,23 +104,21 @@ impl std::fmt::Display for ApiKeyStatus {
 
 #[derive(Debug, Serialize)]
 pub struct CreateApiKeyRequest {
-    pub display_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     pub key_type: ApiKeyType,
     pub environment: ApiKeyEnvironment,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub permissions: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expires_time: Option<String>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Serialize)]
 pub struct UpdateApiKeyRequest {
+    pub status: ApiKeyStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<ApiKeyStatus>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub permissions: Option<Vec<String>>,
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -158,12 +157,12 @@ impl Tabular for ApiKey {
             format!("{} scopes", self.permissions.len())
         };
         let last_used = self
-            .last_used_time
+            .last_used_at
             .map(|t| t.format("%Y-%m-%d %H:%M").to_string())
             .unwrap_or_else(|| "Never".to_string());
         vec![
             self.id.clone(),
-            truncate(&self.display_name, 25),
+            truncate(&self.name, 25),
             self.key_type.to_string(),
             self.environment.to_string(),
             self.status.to_string(),

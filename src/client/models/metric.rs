@@ -70,6 +70,9 @@ pub enum MetricType {
     #[serde(rename = "METRIC_PAUSE_ANALYSIS")]
     #[value(name = "pause")]
     Pause,
+    #[serde(rename = "METRIC_COMPOSITE_EVALUATION")]
+    #[value(name = "composite")]
+    CompositeEvaluation,
 }
 
 impl std::fmt::Display for MetricType {
@@ -85,6 +88,7 @@ impl std::fmt::Display for MetricType {
             Self::Metadata => write!(f, "METADATA"),
             Self::Regex => write!(f, "REGEX"),
             Self::Pause => write!(f, "PAUSE"),
+            Self::CompositeEvaluation => write!(f, "COMPOSITE"),
         }
     }
 }

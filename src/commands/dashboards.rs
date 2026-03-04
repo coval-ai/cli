@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::{Args, Subcommand};
 
 use crate::client::models::{
@@ -86,9 +86,13 @@ pub struct WidgetCreateArgs {
     #[arg(long)]
     config: Option<String>,
     #[arg(long)]
-    width: Option<u32>,
+    grid_x: Option<i32>,
     #[arg(long)]
-    height: Option<u32>,
+    grid_y: Option<i32>,
+    #[arg(long)]
+    grid_w: Option<i32>,
+    #[arg(long)]
+    grid_h: Option<i32>,
 }
 
 #[derive(Args)]
@@ -102,15 +106,33 @@ pub struct WidgetUpdateArgs {
     #[arg(long)]
     config: Option<String>,
     #[arg(long)]
-    width: Option<u32>,
+    grid_x: Option<i32>,
     #[arg(long)]
-    height: Option<u32>,
+    grid_y: Option<i32>,
+    #[arg(long)]
+    grid_w: Option<i32>,
+    #[arg(long)]
+    grid_h: Option<i32>,
 }
 
 #[derive(Args)]
 pub struct WidgetDeleteArgs {
     dashboard_id: String,
     widget_id: String,
+}
+
+fn validate_widget_grid(grid_w: Option<i32>, grid_h: Option<i32>) -> Result<()> {
+    if let Some(w) = grid_w {
+        if w <= 0 {
+            bail!("--grid-w must be greater than 0");
+        }
+    }
+    if let Some(h) = grid_h {
+        if h <= 0 {
+            bail!("--grid-h must be greater than 0");
+        }
+    }
+    Ok(())
 }
 
 fn parse_config(raw: &str) -> Result<serde_json::Value> {
@@ -187,25 +209,31 @@ async fn execute_widget(
             print_one(&widget, format);
         }
         WidgetCommands::Create(args) => {
+            validate_widget_grid(args.grid_w, args.grid_h)?;
             let config = args.config.as_ref().map(|c| parse_config(c)).transpose()?;
             let req = CreateWidgetRequest {
                 display_name: args.name,
                 widget_type: args.r#type,
                 config,
-                grid_width: args.width,
-                grid_height: args.height,
+                grid_x: args.grid_x,
+                grid_y: args.grid_y,
+                grid_w: args.grid_w,
+                grid_h: args.grid_h,
             };
             let widget = client.widgets(&args.dashboard_id).create(req).await?;
             print_one(&widget, format);
         }
         WidgetCommands::Update(args) => {
+            validate_widget_grid(args.grid_w, args.grid_h)?;
             let config = args.config.as_ref().map(|c| parse_config(c)).transpose()?;
             let req = UpdateWidgetRequest {
                 display_name: args.name,
                 widget_type: args.r#type,
                 config,
-                grid_width: args.width,
-                grid_height: args.height,
+                grid_x: args.grid_x,
+                grid_y: args.grid_y,
+                grid_w: args.grid_w,
+                grid_h: args.grid_h,
             };
             let widget = client
                 .widgets(&args.dashboard_id)
