@@ -55,6 +55,11 @@ coval simulations list --run-id <run_id>
 | `coval test-cases` | Manage individual test cases |
 | `coval personas` | Manage simulated personas |
 | `coval metrics` | Manage evaluation metrics |
+| `coval mutations` | Test agent variations with config overrides |
+| `coval api-keys` | Manage API keys |
+| `coval run-templates` | Save reusable evaluation configurations |
+| `coval scheduled-runs` | Schedule recurring evaluation runs |
+| `coval dashboards` | Manage dashboards and widgets |
 | `coval config` | Manage CLI configuration |
 
 ### Common Flags
