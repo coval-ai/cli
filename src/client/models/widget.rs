@@ -20,12 +20,13 @@ fn extract_widget_id(name: &str) -> String {
 pub struct Widget {
     pub name: String,
     pub display_name: String,
+    #[serde(rename = "type")]
     pub widget_type: WidgetType,
     #[serde(default)]
     pub config: serde_json::Value,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "grid_w", skip_serializing_if = "Option::is_none")]
     pub grid_width: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "grid_h", skip_serializing_if = "Option::is_none")]
     pub grid_height: Option<u32>,
     pub create_time: DateTime<Utc>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -34,13 +35,13 @@ pub struct Widget {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ValueEnum)]
 pub enum WidgetType {
-    #[serde(rename = "CHART")]
+    #[serde(rename = "chart")]
     #[value(name = "chart")]
     Chart,
-    #[serde(rename = "TABLE")]
+    #[serde(rename = "table")]
     #[value(name = "table")]
     Table,
-    #[serde(rename = "TEXT")]
+    #[serde(rename = "text")]
     #[value(name = "text")]
     Text,
 }
@@ -48,9 +49,9 @@ pub enum WidgetType {
 impl std::fmt::Display for WidgetType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Chart => write!(f, "CHART"),
-            Self::Table => write!(f, "TABLE"),
-            Self::Text => write!(f, "TEXT"),
+            Self::Chart => write!(f, "chart"),
+            Self::Table => write!(f, "table"),
+            Self::Text => write!(f, "text"),
         }
     }
 }
@@ -58,12 +59,13 @@ impl std::fmt::Display for WidgetType {
 #[derive(Debug, Serialize)]
 pub struct CreateWidgetRequest {
     pub display_name: String,
+    #[serde(rename = "type")]
     pub widget_type: WidgetType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "grid_w", skip_serializing_if = "Option::is_none")]
     pub grid_width: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "grid_h", skip_serializing_if = "Option::is_none")]
     pub grid_height: Option<u32>,
 }
 
@@ -71,13 +73,13 @@ pub struct CreateWidgetRequest {
 pub struct UpdateWidgetRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub widget_type: Option<WidgetType>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "grid_w", skip_serializing_if = "Option::is_none")]
     pub grid_width: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "grid_h", skip_serializing_if = "Option::is_none")]
     pub grid_height: Option<u32>,
 }
 
