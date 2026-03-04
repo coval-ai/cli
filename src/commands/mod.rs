@@ -1,10 +1,14 @@
 pub mod agents;
+pub mod api_keys;
 pub mod auth;
 pub mod config;
+pub mod dashboards;
 pub mod metrics;
 pub mod mutations;
 pub mod personas;
+pub mod run_templates;
 pub mod runs;
+pub mod scheduled_runs;
 pub mod simulations;
 pub mod test_cases;
 pub mod test_sets;
