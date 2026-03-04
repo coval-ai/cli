@@ -67,9 +67,9 @@ pub struct TranscriptMessage {
     pub role: String,
     pub content: serde_json::Value,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub start_timestamp: Option<String>,
+    pub start_timestamp: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_timestamp: Option<String>,
+    pub end_timestamp: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]

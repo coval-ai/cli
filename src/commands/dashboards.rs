@@ -86,9 +86,13 @@ pub struct WidgetCreateArgs {
     #[arg(long)]
     config: Option<String>,
     #[arg(long)]
-    width: Option<u32>,
+    grid_x: Option<i32>,
     #[arg(long)]
-    height: Option<u32>,
+    grid_y: Option<i32>,
+    #[arg(long)]
+    grid_w: Option<i32>,
+    #[arg(long)]
+    grid_h: Option<i32>,
 }
 
 #[derive(Args)]
@@ -102,9 +106,13 @@ pub struct WidgetUpdateArgs {
     #[arg(long)]
     config: Option<String>,
     #[arg(long)]
-    width: Option<u32>,
+    grid_x: Option<i32>,
     #[arg(long)]
-    height: Option<u32>,
+    grid_y: Option<i32>,
+    #[arg(long)]
+    grid_w: Option<i32>,
+    #[arg(long)]
+    grid_h: Option<i32>,
 }
 
 #[derive(Args)]
@@ -192,8 +200,10 @@ async fn execute_widget(
                 display_name: args.name,
                 widget_type: args.r#type,
                 config,
-                grid_width: args.width,
-                grid_height: args.height,
+                grid_x: args.grid_x,
+                grid_y: args.grid_y,
+                grid_w: args.grid_w,
+                grid_h: args.grid_h,
             };
             let widget = client.widgets(&args.dashboard_id).create(req).await?;
             print_one(&widget, format);
@@ -204,8 +214,10 @@ async fn execute_widget(
                 display_name: args.name,
                 widget_type: args.r#type,
                 config,
-                grid_width: args.width,
-                grid_height: args.height,
+                grid_x: args.grid_x,
+                grid_y: args.grid_y,
+                grid_w: args.grid_w,
+                grid_h: args.grid_h,
             };
             let widget = client
                 .widgets(&args.dashboard_id)

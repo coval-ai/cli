@@ -45,6 +45,31 @@ pub enum AgentType {
     #[serde(rename = "MODEL_TYPE_WEBSOCKET")]
     #[value(name = "websocket")]
     Websocket,
+    // Legacy types (read-only, not available as CLI create args)
+    #[serde(rename = "MODEL_TYPE_TEXT")]
+    #[value(skip)]
+    Text,
+    #[serde(rename = "MODEL_TYPE_LIVEKIT")]
+    #[value(skip)]
+    Livekit,
+    #[serde(rename = "MODEL_TYPE_NOOP")]
+    #[value(skip)]
+    Noop,
+    #[serde(rename = "MODEL_TYPE_OPENAI_ENDPOINT")]
+    #[value(skip)]
+    OpenaiEndpoint,
+    #[serde(rename = "MODEL_TYPE_OPENAI_REALTIME")]
+    #[value(skip)]
+    OpenaiRealtime,
+    #[serde(rename = "MODEL_TYPE_TRANSCRIPTION")]
+    #[value(skip)]
+    Transcription,
+    #[serde(rename = "MODEL_TYPE_TTS")]
+    #[value(skip)]
+    Tts,
+    #[serde(rename = "MODEL_TYPE_VOICE_TO_VOICE")]
+    #[value(skip)]
+    VoiceToVoice,
 }
 
 impl std::fmt::Display for AgentType {
@@ -55,6 +80,14 @@ impl std::fmt::Display for AgentType {
             Self::Chat => write!(f, "CHAT"),
             Self::Sms => write!(f, "SMS"),
             Self::Websocket => write!(f, "WEBSOCKET"),
+            Self::Text => write!(f, "TEXT"),
+            Self::Livekit => write!(f, "LIVEKIT"),
+            Self::Noop => write!(f, "NOOP"),
+            Self::OpenaiEndpoint => write!(f, "OPENAI_ENDPOINT"),
+            Self::OpenaiRealtime => write!(f, "OPENAI_REALTIME"),
+            Self::Transcription => write!(f, "TRANSCRIPTION"),
+            Self::Tts => write!(f, "TTS"),
+            Self::VoiceToVoice => write!(f, "VOICE_TO_VOICE"),
         }
     }
 }

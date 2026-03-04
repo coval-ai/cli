@@ -18,7 +18,8 @@ fn extract_id(name: &str) -> String {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Dashboard {
     pub name: String,
-    pub display_name: String,
+    #[serde(default)]
+    pub display_name: Option<String>,
     pub create_time: DateTime<Utc>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub update_time: Option<DateTime<Utc>>,
@@ -68,7 +69,7 @@ impl Tabular for Dashboard {
             .unwrap_or_default();
         vec![
             extract_id(&self.name),
-            truncate(&self.display_name, 30),
+            truncate(self.display_name.as_deref().unwrap_or(""), 30),
             self.create_time.format("%Y-%m-%d %H:%M").to_string(),
             updated,
         ]

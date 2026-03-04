@@ -70,6 +70,30 @@ pub enum MetricType {
     #[serde(rename = "METRIC_PAUSE_ANALYSIS")]
     #[value(name = "pause")]
     Pause,
+    #[serde(rename = "METRIC_COMPOSITE_EVALUATION")]
+    #[value(name = "composite")]
+    CompositeEvaluation,
+    #[serde(rename = "METRIC_LLM_TTFB")]
+    #[value(skip)]
+    LlmTtfb,
+    #[serde(rename = "METRIC_TTS_TTFB")]
+    #[value(skip)]
+    TtsTtfb,
+    #[serde(rename = "METRIC_STT_TTFB")]
+    #[value(skip)]
+    SttTtfb,
+    #[serde(rename = "METRIC_LLM_TOKEN_USAGE")]
+    #[value(skip)]
+    LlmTokenUsage,
+    #[serde(rename = "METRIC_TOOL_CALL_RATE")]
+    #[value(skip)]
+    ToolCallRate,
+    #[serde(rename = "METRIC_TRACE_STT_WER")]
+    #[value(skip)]
+    TraceSttWer,
+    #[serde(rename = "METRIC_TRACE_AUDIO_UPLOAD_STT_WER")]
+    #[value(skip)]
+    TraceAudioUploadSttWer,
 }
 
 impl std::fmt::Display for MetricType {
@@ -85,6 +109,14 @@ impl std::fmt::Display for MetricType {
             Self::Metadata => write!(f, "METADATA"),
             Self::Regex => write!(f, "REGEX"),
             Self::Pause => write!(f, "PAUSE"),
+            Self::CompositeEvaluation => write!(f, "COMPOSITE"),
+            Self::LlmTtfb => write!(f, "LLM_TTFB"),
+            Self::TtsTtfb => write!(f, "TTS_TTFB"),
+            Self::SttTtfb => write!(f, "STT_TTFB"),
+            Self::LlmTokenUsage => write!(f, "TOKEN_USAGE"),
+            Self::ToolCallRate => write!(f, "TOOL_CALL_RATE"),
+            Self::TraceSttWer => write!(f, "STT_WER"),
+            Self::TraceAudioUploadSttWer => write!(f, "AUDIO_STT_WER"),
         }
     }
 }

@@ -34,25 +34,23 @@ pub struct ListArgs {
 pub struct CreateArgs {
     #[arg(long)]
     name: String,
+    #[arg(long)]
+    description: Option<String>,
     #[arg(long, value_enum)]
     r#type: ApiKeyType,
     #[arg(long, value_enum)]
     environment: ApiKeyEnvironment,
     #[arg(long, value_delimiter = ',')]
     permissions: Option<Vec<String>>,
-    #[arg(long)]
-    expires: Option<String>,
 }
 
 #[derive(Args)]
 pub struct UpdateArgs {
     api_key_id: String,
-    #[arg(long)]
-    name: Option<String>,
     #[arg(long, value_enum)]
-    status: Option<ApiKeyStatus>,
-    #[arg(long, value_delimiter = ',')]
-    permissions: Option<Vec<String>>,
+    status: ApiKeyStatus,
+    #[arg(long)]
+    reason: Option<String>,
 }
 
 #[derive(Args)]
@@ -81,24 +79,23 @@ pub async fn execute(
         }
         ApiKeyCommands::Create(args) => {
             let req = CreateApiKeyRequest {
-                display_name: args.name,
+                name: Some(args.name),
+                description: args.description,
                 key_type: args.r#type,
                 environment: args.environment,
                 permissions: args.permissions,
-                expires_time: args.expires,
             };
             let api_key = client.api_keys().create(req).await?;
-            if let Some(ref key) = api_key.key {
+            if !api_key.key.is_empty() && !api_key.key.contains("***") {
                 eprintln!("WARNING: Store this key now. It will not be shown again.");
-                eprintln!("Key: {key}");
+                eprintln!("Key: {}", api_key.key);
             }
             print_one(&api_key, format);
         }
         ApiKeyCommands::Update(args) => {
             let req = UpdateApiKeyRequest {
-                display_name: args.name,
                 status: args.status,
-                permissions: args.permissions,
+                reason: args.reason,
             };
             let api_key = client.api_keys().update(&args.api_key_id, req).await?;
             print_one(&api_key, format);
