@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::{Args, Subcommand};
 
 use crate::client::models::{
@@ -121,6 +121,20 @@ pub struct WidgetDeleteArgs {
     widget_id: String,
 }
 
+fn validate_widget_grid(grid_w: Option<i32>, grid_h: Option<i32>) -> Result<()> {
+    if let Some(w) = grid_w {
+        if w <= 0 {
+            bail!("--grid-w must be greater than 0");
+        }
+    }
+    if let Some(h) = grid_h {
+        if h <= 0 {
+            bail!("--grid-h must be greater than 0");
+        }
+    }
+    Ok(())
+}
+
 fn parse_config(raw: &str) -> Result<serde_json::Value> {
     if let Some(path) = raw.strip_prefix('@') {
         let contents = std::fs::read_to_string(path)?;
@@ -195,6 +209,7 @@ async fn execute_widget(
             print_one(&widget, format);
         }
         WidgetCommands::Create(args) => {
+            validate_widget_grid(args.grid_w, args.grid_h)?;
             let config = args.config.as_ref().map(|c| parse_config(c)).transpose()?;
             let req = CreateWidgetRequest {
                 display_name: args.name,
@@ -209,6 +224,7 @@ async fn execute_widget(
             print_one(&widget, format);
         }
         WidgetCommands::Update(args) => {
+            validate_widget_grid(args.grid_w, args.grid_h)?;
             let config = args.config.as_ref().map(|c| parse_config(c)).transpose()?;
             let req = UpdateWidgetRequest {
                 display_name: args.name,

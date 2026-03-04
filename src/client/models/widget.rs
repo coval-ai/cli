@@ -127,10 +127,7 @@ impl Tabular for Widget {
             (Some(w), Some(h)) => format!("{w}x{h}"),
             _ => String::new(),
         };
-        let display = self
-            .display_name
-            .as_deref()
-            .unwrap_or("");
+        let display = self.display_name.as_deref().unwrap_or("");
         vec![
             extract_widget_id(&self.name),
             truncate(display, 25),
