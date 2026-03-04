@@ -65,6 +65,25 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::mutations::MutationCommands,
     },
+    #[command(name = "api-keys")]
+    ApiKeys {
+        #[command(subcommand)]
+        command: commands::api_keys::ApiKeyCommands,
+    },
+    #[command(name = "run-templates")]
+    RunTemplates {
+        #[command(subcommand)]
+        command: commands::run_templates::RunTemplateCommands,
+    },
+    #[command(name = "scheduled-runs")]
+    ScheduledRuns {
+        #[command(subcommand)]
+        command: commands::scheduled_runs::ScheduledRunCommands,
+    },
+    Dashboards {
+        #[command(subcommand)]
+        command: commands::dashboards::DashboardCommands,
+    },
 }
 
 pub async fn run(cli: Cli) -> anyhow::Result<()> {
@@ -111,6 +130,18 @@ pub async fn run(cli: Cli) -> anyhow::Result<()> {
                 }
                 Commands::Mutations { command } => {
                     commands::mutations::execute(command, &client, cli.format).await
+                }
+                Commands::ApiKeys { command } => {
+                    commands::api_keys::execute(command, &client, cli.format).await
+                }
+                Commands::RunTemplates { command } => {
+                    commands::run_templates::execute(command, &client, cli.format).await
+                }
+                Commands::ScheduledRuns { command } => {
+                    commands::scheduled_runs::execute(command, &client, cli.format).await
+                }
+                Commands::Dashboards { command } => {
+                    commands::dashboards::execute(command, &client, cli.format).await
                 }
                 _ => unreachable!(),
             }
