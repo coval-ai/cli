@@ -45,6 +45,9 @@ pub enum AgentType {
     #[serde(rename = "MODEL_TYPE_WEBSOCKET")]
     #[value(name = "websocket")]
     Websocket,
+    #[serde(other)]
+    #[value(skip)]
+    Unknown,
 }
 
 impl std::fmt::Display for AgentType {
@@ -55,6 +58,7 @@ impl std::fmt::Display for AgentType {
             Self::Chat => write!(f, "CHAT"),
             Self::Sms => write!(f, "SMS"),
             Self::Websocket => write!(f, "WEBSOCKET"),
+            Self::Unknown => write!(f, "UNKNOWN"),
         }
     }
 }
