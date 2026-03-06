@@ -116,9 +116,7 @@ pub async fn run(cli: Cli) -> anyhow::Result<()> {
                 Commands::Mutations { command } => {
                     commands::mutations::execute(command, &client, cli.format).await
                 }
-                Commands::Traces { command } => {
-                    commands::traces::execute(command, &client).await
-                }
+                Commands::Traces { command } => commands::traces::execute(command, &client).await,
                 _ => unreachable!(),
             }
         }

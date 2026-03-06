@@ -100,7 +100,10 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
         (f, "(--framework flag)".to_string())
     } else {
         let (f, note) = detect_framework(&dir);
-        (f, note.unwrap_or_else(|| "no framework-specific marker found".to_string()))
+        (
+            f,
+            note.unwrap_or_else(|| "no framework-specific marker found".to_string()),
+        )
     };
     println!(
         "  {} Detected {} ({})",
@@ -125,7 +128,10 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
 
     // ── Step 5: Analyze entry file ────────────────────────────────────────────
     println!();
-    println!("{}", format!("Analyzing {}...", entry_path.display()).cyan());
+    println!(
+        "{}",
+        format!("Analyzing {}...", entry_path.display()).cyan()
+    );
 
     let analysis = analyze_entry_point(&entry_path, framework)?;
     print_analysis(&analysis);
@@ -165,28 +171,22 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
         );
     }
 
-    let entry_name = entry_path
-        .file_name()
-        .unwrap_or_default()
-        .to_string_lossy();
+    let entry_name = entry_path.file_name().unwrap_or_default().to_string_lossy();
     println!(
         "  {} {} — add import + configure_coval_tracing() call",
         "~".yellow(),
         entry_name.bold()
     );
-    println!(
-        "    (backup → {}.bak)",
-        entry_path.display()
-    );
+    println!("    (backup → {}.bak)", entry_path.display());
 
     if analysis.import_line > 0 {
-        println!(
-            "    - Insert import at line {}",
-            analysis.import_line + 2
-        );
+        println!("    - Insert import at line {}", analysis.import_line + 2);
     }
     if let Some(ref ctx) = analysis.call_context {
-        println!("    - Insert configure_coval_tracing() before: {}", ctx.cyan());
+        println!(
+            "    - Insert configure_coval_tracing() before: {}",
+            ctx.cyan()
+        );
     }
 
     println!();
@@ -228,10 +228,7 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
         "export COVAL_API_KEY=<your-key>".bold()
     );
     println!("  2. Get the simulation_output_id from the Coval API when a run starts.");
-    println!(
-        "     See the TODO comment in {} for details.",
-        entry_name
-    );
+    println!("     See the TODO comment in {} for details.", entry_name);
     println!(
         "  3. Run a simulation — traces appear at {}",
         format!("https://app.coval.dev/runs/{agent_id}").bold()
@@ -244,7 +241,13 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
             .default(true)
             .interact()?
         {
-            validate(ValidateArgs { simulation_id: None }, client).await?;
+            validate(
+                ValidateArgs {
+                    simulation_id: None,
+                },
+                client,
+            )
+            .await?;
         }
     }
 
@@ -254,9 +257,7 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
 // ─── validate ─────────────────────────────────────────────────────────────────
 
 async fn validate(args: ValidateArgs, client: &CovalClient) -> Result<()> {
-    let sim_id = args
-        .simulation_id
-        .unwrap_or_else(|| "cli-test".to_string());
+    let sim_id = args.simulation_id.unwrap_or_else(|| "cli-test".to_string());
 
     println!();
     print!(
@@ -611,12 +612,12 @@ fn find_livekit_injection(lines: &[&str]) -> (Option<usize>, String, Option<Stri
     // Prefer: first statement inside the entrypoint function
     for (i, line) in lines.iter().enumerate() {
         if line.contains("async def entrypoint") {
-            for j in (i + 1)..lines.len() {
-                let t = lines[j].trim();
+            for (j, inner_line) in lines.iter().enumerate().skip(i + 1) {
+                let t = inner_line.trim();
                 if !t.is_empty() && !t.starts_with('#') {
                     return (
                         Some(j),
-                        leading_whitespace(lines[j]),
+                        leading_whitespace(inner_line),
                         Some(format!("inside entrypoint() at line {}", j + 1)),
                     );
                 }
@@ -639,12 +640,12 @@ fn find_livekit_injection(lines: &[&str]) -> (Option<usize>, String, Option<Stri
 fn find_generic_injection(lines: &[&str]) -> (Option<usize>, String, Option<String>) {
     // First non-import, non-blank, non-comment top-level statement after imports
     let last_import = find_last_import_line(lines);
-    for i in (last_import + 1)..lines.len() {
-        let t = lines[i].trim();
+    for (i, line) in lines.iter().enumerate().skip(last_import + 1) {
+        let t = line.trim();
         if !t.is_empty() && !t.starts_with('#') {
             return (
                 Some(i),
-                leading_whitespace(lines[i]),
+                leading_whitespace(line),
                 Some(format!(
                     "line {}: {}",
                     i + 1,
@@ -839,4 +840,577 @@ fn generate_trace_ids() -> (String, String, u128) {
     let trace_id = format!("{trace_val:032x}");
     let span_id = format!("{:016x}", now_ns & 0xFFFF_FFFF_FFFF_FFFF);
     (trace_id, span_id, now_ns)
+}
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    // ── detect_python_project ────────────────────────────────────────────
+
+    #[test]
+    fn detect_python_project_finds_pyproject_toml() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("pyproject.toml"), "").unwrap();
+        assert_eq!(
+            detect_python_project(dir.path()),
+            Some("pyproject.toml".to_string())
+        );
+    }
+
+    #[test]
+    fn detect_python_project_finds_requirements_txt() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("requirements.txt"), "flask\n").unwrap();
+        assert_eq!(
+            detect_python_project(dir.path()),
+            Some("requirements.txt".to_string())
+        );
+    }
+
+    #[test]
+    fn detect_python_project_finds_pipfile() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("Pipfile"), "").unwrap();
+        assert_eq!(
+            detect_python_project(dir.path()),
+            Some("Pipfile".to_string())
+        );
+    }
+
+    #[test]
+    fn detect_python_project_finds_setup_py() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("setup.py"), "").unwrap();
+        assert_eq!(
+            detect_python_project(dir.path()),
+            Some("setup.py".to_string())
+        );
+    }
+
+    #[test]
+    fn detect_python_project_returns_none_for_empty_dir() {
+        let dir = TempDir::new().unwrap();
+        assert_eq!(detect_python_project(dir.path()), None);
+    }
+
+    #[test]
+    fn detect_python_project_prefers_pyproject_over_requirements() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("pyproject.toml"), "").unwrap();
+        fs::write(dir.path().join("requirements.txt"), "").unwrap();
+        assert_eq!(
+            detect_python_project(dir.path()),
+            Some("pyproject.toml".to_string())
+        );
+    }
+
+    // ── detect_framework ─────────────────────────────────────────────────
+
+    #[test]
+    fn detect_framework_pipecat_from_pyproject() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("pyproject.toml"),
+            "[project]\ndependencies = [\"pipecat-ai>=0.1\"]\n",
+        )
+        .unwrap();
+        let (fw, note) = detect_framework(dir.path());
+        assert!(matches!(fw, Framework::Pipecat));
+        assert!(note.unwrap().contains("pyproject.toml"));
+    }
+
+    #[test]
+    fn detect_framework_livekit_from_pyproject() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("pyproject.toml"),
+            "[project]\ndependencies = [\"livekit-agents\"]\n",
+        )
+        .unwrap();
+        let (fw, note) = detect_framework(dir.path());
+        assert!(matches!(fw, Framework::Livekit));
+        assert!(note.unwrap().contains("pyproject.toml"));
+    }
+
+    #[test]
+    fn detect_framework_pipecat_from_requirements() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("requirements.txt"), "pipecat-ai==0.1\n").unwrap();
+        let (fw, _) = detect_framework(dir.path());
+        assert!(matches!(fw, Framework::Pipecat));
+    }
+
+    #[test]
+    fn detect_framework_livekit_from_requirements() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("requirements.txt"), "livekit-agents\n").unwrap();
+        let (fw, _) = detect_framework(dir.path());
+        assert!(matches!(fw, Framework::Livekit));
+    }
+
+    #[test]
+    fn detect_framework_generic_for_empty_dir() {
+        let dir = TempDir::new().unwrap();
+        let (fw, note) = detect_framework(dir.path());
+        assert!(matches!(fw, Framework::Generic));
+        assert!(note.is_none());
+    }
+
+    // ── scan_python_imports ──────────────────────────────────────────────
+
+    #[test]
+    fn scan_python_imports_finds_pipecat() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("bot.py"),
+            "from pipecat.pipeline import Pipeline\n",
+        )
+        .unwrap();
+        let result = scan_python_imports(dir.path());
+        assert!(result.is_some());
+        let (fw, note) = result.unwrap();
+        assert!(matches!(fw, Framework::Pipecat));
+        assert!(note.unwrap().contains("bot.py"));
+    }
+
+    #[test]
+    fn scan_python_imports_finds_livekit() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("agent.py"),
+            "from livekit.agents import AgentSession\n",
+        )
+        .unwrap();
+        let result = scan_python_imports(dir.path());
+        assert!(result.is_some());
+        let (fw, _) = result.unwrap();
+        assert!(matches!(fw, Framework::Livekit));
+    }
+
+    #[test]
+    fn scan_python_imports_returns_none_for_no_matches() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("main.py"),
+            "import flask\napp = flask.Flask()\n",
+        )
+        .unwrap();
+        assert!(scan_python_imports(dir.path()).is_none());
+    }
+
+    #[test]
+    fn scan_python_imports_returns_none_for_empty_dir() {
+        let dir = TempDir::new().unwrap();
+        assert!(scan_python_imports(dir.path()).is_none());
+    }
+
+    // ── find_last_import_line ────────────────────────────────────────────
+
+    #[test]
+    fn find_last_import_line_basic() {
+        let lines = vec!["import os", "import sys", "", "x = 1"];
+        assert_eq!(find_last_import_line(&lines), 1);
+    }
+
+    #[test]
+    fn find_last_import_line_with_from_imports() {
+        let lines = vec!["import os", "from pathlib import Path", "", "def main():"];
+        assert_eq!(find_last_import_line(&lines), 1);
+    }
+
+    #[test]
+    fn find_last_import_line_no_imports() {
+        let lines = vec!["x = 1", "y = 2"];
+        assert_eq!(find_last_import_line(&lines), 0);
+    }
+
+    #[test]
+    fn find_last_import_line_empty() {
+        let lines: Vec<&str> = vec![];
+        assert_eq!(find_last_import_line(&lines), 0);
+    }
+
+    #[test]
+    fn find_last_import_line_imports_scattered() {
+        let lines = vec![
+            "import os",
+            "",
+            "# comment",
+            "from sys import argv",
+            "",
+            "x = 1",
+        ];
+        assert_eq!(find_last_import_line(&lines), 3);
+    }
+
+    // ── find_pipecat_injection ───────────────────────────────────────────
+
+    #[test]
+    fn find_pipecat_injection_pipeline_task() {
+        let lines = vec![
+            "import os",
+            "from pipecat import Pipeline",
+            "",
+            "async def main():",
+            "    task = PipelineTask(pipeline)",
+        ];
+        let (line, indent, ctx) = find_pipecat_injection(&lines);
+        assert_eq!(line, Some(4));
+        assert_eq!(indent, "    ");
+        assert!(ctx.unwrap().contains("PipelineTask"));
+    }
+
+    #[test]
+    fn find_pipecat_injection_runner_run() {
+        let lines = vec![
+            "import os",
+            "",
+            "async def main():",
+            "    await runner.run(task)",
+        ];
+        let (line, indent, _) = find_pipecat_injection(&lines);
+        assert_eq!(line, Some(3));
+        assert_eq!(indent, "    ");
+    }
+
+    #[test]
+    fn find_pipecat_injection_falls_back_to_generic() {
+        let lines = vec!["import os", "", "print('hello')"];
+        let (line, _, _) = find_pipecat_injection(&lines);
+        assert_eq!(line, Some(2));
+    }
+
+    // ── find_livekit_injection ───────────────────────────────────────────
+
+    #[test]
+    fn find_livekit_injection_entrypoint() {
+        let lines = vec![
+            "import os",
+            "",
+            "async def entrypoint(ctx):",
+            "    session = AgentSession()",
+        ];
+        let (line, indent, ctx) = find_livekit_injection(&lines);
+        assert_eq!(line, Some(3));
+        assert_eq!(indent, "    ");
+        assert!(ctx.unwrap().contains("entrypoint"));
+    }
+
+    #[test]
+    fn find_livekit_injection_skips_comments() {
+        let lines = vec![
+            "import os",
+            "",
+            "async def entrypoint(ctx):",
+            "    # this is a comment",
+            "    session = AgentSession()",
+        ];
+        let (line, _, _) = find_livekit_injection(&lines);
+        assert_eq!(line, Some(4));
+    }
+
+    #[test]
+    fn find_livekit_injection_agent_session_fallback() {
+        let lines = vec![
+            "import os",
+            "",
+            "async def main():",
+            "    session = AgentSession(config)",
+        ];
+        let (line, _, ctx) = find_livekit_injection(&lines);
+        assert_eq!(line, Some(3));
+        assert!(ctx.unwrap().contains("AgentSession"));
+    }
+
+    #[test]
+    fn find_livekit_injection_voice_pipeline_agent() {
+        let lines = vec![
+            "import os",
+            "",
+            "async def run():",
+            "    agent = VoicePipelineAgent(llm=llm)",
+        ];
+        let (line, _, _) = find_livekit_injection(&lines);
+        assert_eq!(line, Some(3));
+    }
+
+    // ── find_generic_injection ───────────────────────────────────────────
+
+    #[test]
+    fn find_generic_injection_after_imports() {
+        let lines = vec!["import os", "import sys", "", "app = Flask()"];
+        let (line, indent, _) = find_generic_injection(&lines);
+        assert_eq!(line, Some(3));
+        assert_eq!(indent, "");
+    }
+
+    #[test]
+    fn find_generic_injection_skips_comments_and_blanks() {
+        let lines = vec!["import os", "", "# config section", "", "app = Flask()"];
+        let (line, _, _) = find_generic_injection(&lines);
+        assert_eq!(line, Some(4));
+    }
+
+    #[test]
+    fn find_generic_injection_empty_file() {
+        let lines: Vec<&str> = vec![];
+        let (line, indent, ctx) = find_generic_injection(&lines);
+        assert_eq!(line, None);
+        assert_eq!(indent, "");
+        assert!(ctx.is_none());
+    }
+
+    #[test]
+    fn find_generic_injection_only_imports() {
+        let lines = vec!["import os", "import sys"];
+        let (line, _, _) = find_generic_injection(&lines);
+        assert_eq!(line, None);
+    }
+
+    // ── leading_whitespace ───────────────────────────────────────────────
+
+    #[test]
+    fn leading_whitespace_spaces() {
+        assert_eq!(leading_whitespace("    hello"), "    ");
+    }
+
+    #[test]
+    fn leading_whitespace_tabs() {
+        assert_eq!(leading_whitespace("\t\thello"), "\t\t");
+    }
+
+    #[test]
+    fn leading_whitespace_none() {
+        assert_eq!(leading_whitespace("hello"), "");
+    }
+
+    #[test]
+    fn leading_whitespace_empty_string() {
+        assert_eq!(leading_whitespace(""), "");
+    }
+
+    #[test]
+    fn leading_whitespace_all_whitespace() {
+        assert_eq!(leading_whitespace("   "), "   ");
+    }
+
+    // ── generate_call_snippet ────────────────────────────────────────────
+
+    #[test]
+    fn generate_call_snippet_generic() {
+        let lines = generate_call_snippet(Framework::Generic, "");
+        let joined = lines.join("\n");
+        assert!(joined.contains("configure_coval_tracing(simulation_output_id)"));
+        assert!(joined.contains("COVAL_SIMULATION_ID"));
+        assert!(!joined.contains("ctx.job.metadata"));
+    }
+
+    #[test]
+    fn generate_call_snippet_livekit_includes_ctx() {
+        let lines = generate_call_snippet(Framework::Livekit, "    ");
+        let joined = lines.join("\n");
+        assert!(joined.contains("ctx"));
+        assert!(joined.contains("job"));
+        assert!(joined.contains("configure_coval_tracing"));
+    }
+
+    #[test]
+    fn generate_call_snippet_pipecat() {
+        let lines = generate_call_snippet(Framework::Pipecat, "  ");
+        let joined = lines.join("\n");
+        assert!(joined.contains("configure_coval_tracing"));
+        assert!(joined.contains("COVAL_SIMULATION_ID"));
+    }
+
+    #[test]
+    fn generate_call_snippet_ends_with_blank_line() {
+        let lines = generate_call_snippet(Framework::Generic, "");
+        assert_eq!(lines.last().unwrap(), "");
+    }
+
+    // ── generate_coval_tracing_py ────────────────────────────────────────
+
+    #[test]
+    fn generate_coval_tracing_py_contains_expected_elements() {
+        let content = generate_coval_tracing_py("test-key");
+        assert!(content.contains("def configure_coval_tracing"));
+        assert!(content.contains("TracerProvider"));
+        assert!(content.contains("OTLPSpanExporter"));
+        assert!(content.contains("COVAL_API_KEY"));
+        // Should NOT embed the actual key
+        assert!(!content.contains("test-key"));
+    }
+
+    #[test]
+    fn generate_coval_tracing_py_valid_python_structure() {
+        let content = generate_coval_tracing_py("");
+        assert!(content.contains("import os"));
+        assert!(content.contains("import base64"));
+        assert!(content.contains("from opentelemetry"));
+    }
+
+    // ── generate_trace_ids ───────────────────────────────────────────────
+
+    #[test]
+    fn generate_trace_ids_correct_lengths() {
+        let (trace_id, span_id, now_ns) = generate_trace_ids();
+        assert_eq!(trace_id.len(), 32, "trace_id should be 32 hex chars");
+        assert_eq!(span_id.len(), 16, "span_id should be 16 hex chars");
+        assert!(now_ns > 0);
+    }
+
+    #[test]
+    fn generate_trace_ids_valid_hex() {
+        let (trace_id, span_id, _) = generate_trace_ids();
+        assert!(
+            u128::from_str_radix(&trace_id, 16).is_ok(),
+            "trace_id should be valid hex"
+        );
+        assert!(
+            u64::from_str_radix(&span_id, 16).is_ok(),
+            "span_id should be valid hex"
+        );
+    }
+
+    #[test]
+    fn generate_trace_ids_unique_across_calls() {
+        // Add a small sleep to guarantee different nanosecond timestamps.
+        let (t1, s1, _) = generate_trace_ids();
+        std::thread::sleep(std::time::Duration::from_millis(1));
+        let (t2, s2, _) = generate_trace_ids();
+        assert!(t1 != t2 || s1 != s2);
+    }
+
+    // ── apply_entry_point_modifications ──────────────────────────────────
+
+    #[test]
+    fn apply_entry_point_modifications_generic() {
+        let dir = TempDir::new().unwrap();
+        let entry = dir.path().join("main.py");
+        fs::write(
+            &entry,
+            "import os\nimport sys\n\ndef main():\n    print('hello')\n",
+        )
+        .unwrap();
+
+        let analysis = EntryPointAnalysis {
+            import_line: 1,
+            has_os_import: true,
+            call_line: Some(3),
+            call_indent: String::new(),
+            call_context: Some("def main()".to_string()),
+            otel_already_configured: false,
+        };
+
+        apply_entry_point_modifications(&entry, &analysis, Framework::Generic).unwrap();
+
+        let result = fs::read_to_string(&entry).unwrap();
+        assert!(result.contains("from coval_tracing import configure_coval_tracing"));
+        assert!(result.contains("configure_coval_tracing(simulation_output_id)"));
+        assert_eq!(result.matches("import os").count(), 1);
+
+        let bak = PathBuf::from(format!("{}.bak", entry.display()));
+        assert!(bak.exists());
+    }
+
+    #[test]
+    fn apply_entry_point_modifications_adds_os_import_when_missing() {
+        let dir = TempDir::new().unwrap();
+        let entry = dir.path().join("bot.py");
+        fs::write(
+            &entry,
+            "from pipecat import Pipeline\n\ntask = PipelineTask(p)\n",
+        )
+        .unwrap();
+
+        let analysis = EntryPointAnalysis {
+            import_line: 0,
+            has_os_import: false,
+            call_line: Some(2),
+            call_indent: String::new(),
+            call_context: None,
+            otel_already_configured: false,
+        };
+
+        apply_entry_point_modifications(&entry, &analysis, Framework::Pipecat).unwrap();
+
+        let result = fs::read_to_string(&entry).unwrap();
+        assert!(result.contains("import os"));
+        assert!(result.contains("from coval_tracing import configure_coval_tracing"));
+    }
+
+    #[test]
+    fn apply_entry_point_modifications_preserves_trailing_newline() {
+        let dir = TempDir::new().unwrap();
+        let entry = dir.path().join("app.py");
+        fs::write(&entry, "import os\n\nx = 1\n").unwrap();
+
+        let analysis = EntryPointAnalysis {
+            import_line: 0,
+            has_os_import: true,
+            call_line: Some(2),
+            call_indent: String::new(),
+            call_context: None,
+            otel_already_configured: false,
+        };
+
+        apply_entry_point_modifications(&entry, &analysis, Framework::Generic).unwrap();
+
+        let result = fs::read_to_string(&entry).unwrap();
+        assert!(result.ends_with('\n'));
+    }
+
+    #[test]
+    fn apply_entry_point_modifications_no_call_line() {
+        let dir = TempDir::new().unwrap();
+        let entry = dir.path().join("empty_ish.py");
+        fs::write(&entry, "import os\n").unwrap();
+
+        let analysis = EntryPointAnalysis {
+            import_line: 0,
+            has_os_import: true,
+            call_line: None,
+            call_indent: String::new(),
+            call_context: None,
+            otel_already_configured: false,
+        };
+
+        apply_entry_point_modifications(&entry, &analysis, Framework::Generic).unwrap();
+
+        let result = fs::read_to_string(&entry).unwrap();
+        assert!(result.contains("from coval_tracing import configure_coval_tracing"));
+        assert!(!result.contains("configure_coval_tracing(simulation_output_id)"));
+    }
+
+    #[test]
+    fn apply_entry_point_modifications_livekit_indented() {
+        let dir = TempDir::new().unwrap();
+        let entry = dir.path().join("agent.py");
+        fs::write(
+            &entry,
+            "import os\nfrom livekit.agents import AgentSession\n\nasync def entrypoint(ctx):\n    session = AgentSession()\n",
+        )
+        .unwrap();
+
+        let analysis = EntryPointAnalysis {
+            import_line: 1,
+            has_os_import: true,
+            call_line: Some(4),
+            call_indent: "    ".to_string(),
+            call_context: Some("inside entrypoint()".to_string()),
+            otel_already_configured: false,
+        };
+
+        apply_entry_point_modifications(&entry, &analysis, Framework::Livekit).unwrap();
+
+        let result = fs::read_to_string(&entry).unwrap();
+        assert!(result.contains("from coval_tracing import configure_coval_tracing"));
+        assert!(result.contains("    configure_coval_tracing(simulation_output_id)"));
+        assert!(result.contains("ctx"));
+    }
 }
