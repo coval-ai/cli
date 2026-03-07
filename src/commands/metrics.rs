@@ -45,6 +45,16 @@ pub struct CreateArgs {
     min_value: Option<f64>,
     #[arg(long)]
     max_value: Option<f64>,
+    #[arg(long)]
+    regex_pattern: Option<String>,
+    #[arg(long)]
+    role: Option<String>,
+    #[arg(long)]
+    match_mode: Option<String>,
+    #[arg(long)]
+    position: Option<String>,
+    #[arg(long)]
+    case_insensitive: Option<bool>,
 }
 
 #[derive(Args)]
@@ -94,8 +104,11 @@ pub async fn execute(
                 max_value: args.max_value,
                 metadata_field_type: None,
                 metadata_field_key: None,
-                regex_pattern: None,
-                role: None,
+                regex_pattern: args.regex_pattern,
+                role: args.role,
+                match_mode: args.match_mode,
+                position: args.position,
+                case_insensitive: args.case_insensitive,
                 min_pause_duration_seconds: None,
             };
             let metric = client.metrics().create(req).await?;
