@@ -340,6 +340,25 @@ async fn validate(args: ValidateArgs, client: &CovalClient) -> Result<()> {
             "✓".green(),
             "https://app.coval.dev".bold()
         );
+    } else if status == reqwest::StatusCode::NOT_FOUND {
+        // 404 "Simulation output not found" means auth succeeded — the endpoint
+        // just can't associate the test trace with a real simulation. Treat as OK.
+        let body = resp.text().await.unwrap_or_default();
+        if body.contains("Simulation output not found") || body.contains("simulation") {
+            println!("{}", "OK".green().bold());
+            println!(
+                "  {} API key is valid. Ready to collect traces.",
+                "✓".green(),
+            );
+            println!(
+                "  Run a simulation from {} to see traces in action.",
+                "https://app.coval.dev".bold()
+            );
+        } else {
+            println!("{}", "FAILED".red().bold());
+            println!("  {} HTTP {}: {}", "✗".red(), status, body);
+            return Err(anyhow::anyhow!("Trace validation failed (HTTP {})", status));
+        }
     } else {
         let body = resp.text().await.unwrap_or_default();
         println!("{}", "FAILED".red().bold());
