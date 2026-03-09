@@ -545,6 +545,11 @@ fn pick_entry_point(dir: &Path, framework: Framework) -> Result<PathBuf> {
         return Ok(p);
     }
 
+    // Auto-select when there's only one candidate
+    if candidates.len() == 1 {
+        return Ok(candidates.into_iter().next().unwrap());
+    }
+
     let mut items: Vec<String> = candidates
         .iter()
         .map(|p| {
