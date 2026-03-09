@@ -55,6 +55,7 @@ coval simulations list --run-id <run_id>
 | `coval test-cases` | Manage individual test cases |
 | `coval personas` | Manage simulated personas |
 | `coval metrics` | Manage evaluation metrics |
+| `coval traces` | Configure and validate Coval tracing |
 | `coval config` | Manage CLI configuration |
 
 ### Common Flags
@@ -66,6 +67,20 @@ coval simulations list --run-id <run_id>
 | `--help` | Show help |
 
 ## Examples
+
+### Setup Traces
+
+```bash
+# LiveKit Agents or Pipecat
+coval traces setup
+
+# Force generic mode for other Python agents
+coval traces setup --framework generic
+```
+
+`coval traces setup` is currently framework-aware for `LiveKit Agents` and `Pipecat`.
+`--framework generic` is a best-effort fallback for other Python agents and may require manual review
+before deploy.
 
 ### Launch a Run
 

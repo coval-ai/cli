@@ -13,7 +13,7 @@ use crate::client::CovalClient;
 
 #[derive(Subcommand)]
 pub enum TraceCommands {
-    /// Interactive setup wizard — instruments your agent for Coval traces
+    /// Setup Coval traces for LiveKit Agents or Pipecat; generic Python support is best-effort
     Setup(SetupArgs),
     /// Validate your Coval traces configuration by sending a test span
     Validate(ValidateArgs),
@@ -64,7 +64,7 @@ impl std::fmt::Display for Framework {
         match self {
             Framework::Pipecat => write!(f, "Pipecat"),
             Framework::Livekit => write!(f, "LiveKit Agents"),
-            Framework::Generic => write!(f, "Generic Python"),
+            Framework::Generic => write!(f, "Generic Python (best-effort)"),
         }
     }
 }
@@ -117,6 +117,17 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
         framework.to_string().bold(),
         detection_note
     );
+    if matches!(framework, Framework::Generic) {
+        println!(
+            "  {} Framework-specific automation currently supports {} and {}.",
+            "!".yellow(),
+            "LiveKit Agents".bold(),
+            "Pipecat".bold()
+        );
+        println!(
+            "    Generic mode applies a best-effort Python patch and may require manual review."
+        );
+    }
 
     // ── Step 3: Find entry point ──────────────────────────────────────────────
     let entry_path = if let Some(ep) = args.entry_point {
@@ -189,6 +200,9 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
     }
     if let Some(ref ctx) = analysis.call_context {
         println!("    - Insert setup_coval_tracing() before: {}", ctx.cyan());
+    }
+    if matches!(framework, Framework::Generic) {
+        println!("    - Manual review recommended before deploy");
     }
 
     println!();
@@ -291,6 +305,9 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
         "  3. Run a simulation from {} to verify traces are collected.",
         "https://app.coval.dev".bold()
     );
+    if matches!(framework, Framework::Generic) {
+        println!("     Generic mode is best-effort; review the generated changes if traces do not appear.");
+    }
 
     if !args.no_validate {
         println!();
