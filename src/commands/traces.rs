@@ -38,9 +38,8 @@ pub struct SetupArgs {
     #[arg(long)]
     pub entry_point: Option<PathBuf>,
 
-    /// Auto-confirm all prompts without interaction.
-    /// Picks the first agent when --agent-id is absent.
-    /// Answers yes to "Apply changes?", "Validate now?", "Continue and overwrite?".
+    /// Auto-confirm setup prompts without interaction.
+    /// Answers yes to "Apply changes?", "Validate now?", and "Continue and overwrite?".
     #[arg(long, default_value = "false")]
     pub yes: bool,
 }
