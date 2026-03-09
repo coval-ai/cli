@@ -312,3 +312,73 @@ async fn test_mutations_list() {
         .stdout(predicate::str::contains("mut123"))
         .stdout(predicate::str::contains("GPT-4 Fast"));
 }
+
+#[tokio::test]
+async fn test_run_templates_list_hyphenated_path() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/run-templates"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "run_templates": [
+                {
+                    "id": "rt123",
+                    "display_name": "My Template",
+                    "metric_ids": [],
+                    "mutation_ids": [],
+                    "metadata": {},
+                    "create_time": "2025-01-15T10:30:00Z"
+                }
+            ]
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("run-templates")
+        .arg("list")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("rt123"))
+        .stdout(predicate::str::contains("My Template"));
+}
+
+#[tokio::test]
+async fn test_scheduled_runs_list_hyphenated_path() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/scheduled-runs"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "scheduled_runs": [
+                {
+                    "id": "sr123",
+                    "display_name": "Daily Run",
+                    "run_template_id": "rt123",
+                    "schedule_expression": "rate(1 day)",
+                    "enabled": true,
+                    "create_time": "2025-01-15T10:30:00Z"
+                }
+            ]
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("scheduled-runs")
+        .arg("list")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("sr123"))
+        .stdout(predicate::str::contains("Daily Run"));
+}
