@@ -102,6 +102,7 @@ pub async fn execute(
         ScheduledRunCommands::Update(args) => {
             let req = UpdateScheduledRunRequest {
                 display_name: args.name,
+                run_template_id: None,
                 schedule_expression: args.schedule,
                 schedule_timezone: args.timezone,
                 enabled: args.enabled,

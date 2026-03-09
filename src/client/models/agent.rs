@@ -23,6 +23,8 @@ pub struct Agent {
     pub metric_ids: Vec<String>,
     #[serde(default)]
     pub test_set_ids: Vec<String>,
+    #[serde(default)]
+    pub knowledge_base_ids: Vec<String>,
     pub create_time: DateTime<Utc>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub update_time: Option<DateTime<Utc>>,
@@ -71,6 +73,10 @@ pub struct CreateAgentRequest {
     pub prompt: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metric_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub test_set_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -87,6 +93,10 @@ pub struct UpdateAgentRequest {
     pub prompt: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metric_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub test_set_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]

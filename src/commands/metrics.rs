@@ -110,6 +110,7 @@ pub async fn execute(
                 position: args.position,
                 case_insensitive: args.case_insensitive,
                 min_pause_duration_seconds: None,
+                target_condition: None,
             };
             let metric = client.metrics().create(req).await?;
             print_one(&metric, format);
