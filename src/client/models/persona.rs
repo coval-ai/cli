@@ -135,3 +135,24 @@ fn truncate(s: &str, max: usize) -> String {
         format!("{}...", &s[..max - 3])
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PhoneNumberMapping {
+    pub index: u32,
+    pub phone_number: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListPhoneNumbersResponse {
+    pub phone_numbers: Vec<PhoneNumberMapping>,
+}
+
+impl Tabular for PhoneNumberMapping {
+    fn headers() -> Vec<&'static str> {
+        vec!["INDEX", "PHONE NUMBER"]
+    }
+
+    fn row(&self) -> Vec<String> {
+        vec![self.index.to_string(), self.phone_number.clone()]
+    }
+}

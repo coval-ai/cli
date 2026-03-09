@@ -291,6 +291,26 @@ impl SimulationsClient<'_> {
         let url = self.0.url(&format!("/v1/simulations/{id}/audio"));
         self.0.get(url).await
     }
+
+    pub async fn list_metrics(
+        &self,
+        id: &str,
+    ) -> Result<models::ListSimulationMetricsResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/simulations/{id}/metrics"));
+        self.0.get(url).await
+    }
+
+    pub async fn get_metric(
+        &self,
+        id: &str,
+        metric_output_id: &str,
+    ) -> Result<models::SimpleMetricOutput, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/simulations/{id}/metrics/{metric_output_id}"));
+        let resp: models::GetSimulationMetricResponse = self.0.get(url).await?;
+        Ok(resp.metric)
+    }
 }
 
 impl TestSetsClient<'_> {
@@ -413,6 +433,11 @@ impl PersonasClient<'_> {
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
         let url = self.0.url(&format!("/v1/personas/{id}"));
         self.0.delete(url).await
+    }
+
+    pub async fn list_phone_numbers(&self) -> Result<models::ListPhoneNumbersResponse, ApiError> {
+        let url = self.0.url("/v1/personas/phone-numbers");
+        self.0.get(url).await
     }
 }
 
