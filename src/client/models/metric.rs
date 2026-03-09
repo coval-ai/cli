@@ -28,6 +28,12 @@ pub struct Metric {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub match_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub position: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub case_insensitive: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub min_pause_duration_seconds: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_condition: Option<serde_json::Value>,
@@ -114,6 +120,12 @@ pub struct CreateMetricRequest {
     pub regex_pattern: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub match_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub position: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub case_insensitive: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min_pause_duration_seconds: Option<f64>,
 }
