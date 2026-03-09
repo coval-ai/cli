@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -187,10 +188,7 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
         println!("    - Insert import at line {}", analysis.import_line + 2);
     }
     if let Some(ref ctx) = analysis.call_context {
-        println!(
-            "    - Insert setup_coval_tracing() before: {}",
-            ctx.cyan()
-        );
+        println!("    - Insert setup_coval_tracing() before: {}", ctx.cyan());
     }
 
     println!();
@@ -229,19 +227,65 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
         entry_path.display()
     );
 
-    // ── Step 8: Next steps ────────────────────────────────────────────────────
+    // ── Step 8: Configure LiveKit SIP trunks ───────────────────────────────────
+    if matches!(framework, Framework::Livekit) {
+        println!();
+        println!("{}", "Configuring LiveKit SIP trunks...".cyan());
+
+        match read_livekit_creds(&dir) {
+            Some(creds) => match configure_livekit_sip_trunks(&creds).await {
+                Ok((updated, total)) => {
+                    if total == 0 {
+                        println!(
+                            "  {} No inbound SIP trunks found — you may need to create one.",
+                            "!".yellow()
+                        );
+                    } else if updated == 0 {
+                        println!(
+                            "  {} All {} SIP trunk(s) already configured for Coval headers",
+                            "✓".green(),
+                            total
+                        );
+                    } else {
+                        println!(
+                            "  {} Updated {}/{} SIP trunk(s) with Coval header mapping",
+                            "✓".green(),
+                            updated,
+                            total
+                        );
+                    }
+                }
+                Err(e) => {
+                    println!("  {} Could not configure SIP trunks: {}", "!".yellow(), e);
+                    println!(
+                        "    You may need to manually add headers_to_attributes to your trunk."
+                    );
+                    println!("    See: {}", "https://docs.livekit.io/sip/trunk/".bold());
+                }
+            },
+            None => {
+                println!(
+                    "  {} LiveKit credentials not found (LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)",
+                    "!".yellow()
+                );
+                println!("    Skipping automatic SIP trunk configuration.");
+                println!(
+                    "    You must manually add {} to your inbound SIP trunk's headers_to_attributes.",
+                    "X-Coval-Simulation-Id".bold()
+                );
+            }
+        }
+    }
+
+    // ── Step 9: Next steps ────────────────────────────────────────────────────
     println!();
     println!("{}", "Next steps:".bold());
     println!(
         "  1. Set your API key: {}",
         "export COVAL_API_KEY=<your-key>".bold()
     );
-    println!(
-        "  2. Restart (or redeploy) your agent — tracing is now enabled automatically."
-    );
-    println!(
-        "     Coval sends the simulation ID via SIP header on each call."
-    );
+    println!("  2. Restart (or redeploy) your agent — tracing is now enabled automatically.");
+    println!("     Coval sends the simulation ID via SIP header on each call.");
     println!("     Spans are buffered until the ID arrives — no manual config needed.");
     println!(
         "  3. Run a simulation from {} to verify traces are collected.",
@@ -260,7 +304,13 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
                 .interact()?
         };
         if do_validate {
-            validate(ValidateArgs { simulation_id: None }, client).await?;
+            validate(
+                ValidateArgs {
+                    simulation_id: None,
+                },
+                client,
+            )
+            .await?;
         }
     }
 
@@ -455,10 +505,7 @@ fn resolve_entry_point(dir: &Path, entry_point_arg: &Path) -> Result<PathBuf> {
         dir.join(entry_point_arg)
     };
     if !p.exists() {
-        return Err(anyhow::anyhow!(
-            "Entry point not found: {}",
-            p.display()
-        ));
+        return Err(anyhow::anyhow!("Entry point not found: {}", p.display()));
     }
     println!("  {} Entry point: {}", "✓".green(), p.display());
     Ok(p)
@@ -816,9 +863,9 @@ fn apply_entry_point_modifications(
     // LiveKit: insert instrument_session(session) after session.start()
     if let Some(session_line) = analysis.session_start_line {
         let indent = &analysis.session_start_indent;
-        let session_lines = vec![
-            format!("{indent}instrument_session(session)  # Hook Coval trace events"),
-        ];
+        let session_lines = vec![format!(
+            "{indent}instrument_session(session)  # Hook Coval trace events"
+        )];
         insertions.push((session_line + 1, session_lines));
     }
 
@@ -1162,6 +1209,235 @@ fn generate_trace_ids() -> (String, String, u128) {
     let trace_id = format!("{trace_val:032x}");
     let span_id = format!("{:016x}", now_ns & 0xFFFF_FFFF_FFFF_FFFF);
     (trace_id, span_id, now_ns)
+}
+
+// ─── LiveKit SIP trunk configuration ──────────────────────────────────────────
+
+/// LiveKit credentials read from the project directory.
+struct LiveKitCreds {
+    url: String,     // e.g. "wss://testproj-idq4nqwp.livekit.cloud"
+    api_key: String, // e.g. "APIHSCPz5LgQhut"
+    api_secret: String,
+}
+
+/// Read LiveKit credentials from .env.local, .env, or environment variables.
+fn read_livekit_creds(dir: &Path) -> Option<LiveKitCreds> {
+    let mut url = String::new();
+    let mut api_key = String::new();
+    let mut api_secret = String::new();
+
+    // Try .env.local first, then .env
+    for env_file in [".env.local", ".env"] {
+        if let Ok(content) = fs::read_to_string(dir.join(env_file)) {
+            for line in content.lines() {
+                let line = line.trim();
+                if line.starts_with('#') || !line.contains('=') {
+                    continue;
+                }
+                let (key, val) = match line.split_once('=') {
+                    Some((k, v)) => (k.trim(), v.trim().trim_matches('"')),
+                    None => continue,
+                };
+                match key {
+                    "LIVEKIT_URL" => url = val.to_string(),
+                    "LIVEKIT_API_KEY" => api_key = val.to_string(),
+                    "LIVEKIT_API_SECRET" => api_secret = val.to_string(),
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    // Fall back to environment variables for any missing values
+    if url.is_empty() {
+        url = std::env::var("LIVEKIT_URL").unwrap_or_default();
+    }
+    if api_key.is_empty() {
+        api_key = std::env::var("LIVEKIT_API_KEY").unwrap_or_default();
+    }
+    if api_secret.is_empty() {
+        api_secret = std::env::var("LIVEKIT_API_SECRET").unwrap_or_default();
+    }
+
+    if url.is_empty() || api_key.is_empty() || api_secret.is_empty() {
+        return None;
+    }
+
+    Some(LiveKitCreds {
+        url,
+        api_key,
+        api_secret,
+    })
+}
+
+/// Generate a LiveKit JWT for SIP admin operations.
+fn generate_livekit_jwt(api_key: &str, api_secret: &str) -> Result<String> {
+    use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let claims = serde_json::json!({
+        "iss": api_key,
+        "sub": api_key,
+        "iat": now,
+        "nbf": now,
+        "exp": now + 600,
+        "video": { "roomAdmin": true },
+        "sip": { "admin": true }
+    });
+
+    let header = Header::new(Algorithm::HS256);
+    let key = EncodingKey::from_secret(api_secret.as_bytes());
+    encode(&header, &claims, &key).context("Failed to generate LiveKit JWT")
+}
+
+/// Convert a LiveKit WSS URL to the HTTPS API base URL.
+fn livekit_api_url(wss_url: &str) -> String {
+    wss_url
+        .replace("wss://", "https://")
+        .replace("ws://", "http://")
+        .trim_end_matches('/')
+        .to_string()
+}
+
+/// The header mapping we need on the SIP trunk.
+const COVAL_SIP_HEADER: &str = "X-Coval-Simulation-Id";
+const COVAL_SIP_ATTR: &str = "sip.h.X-Coval-Simulation-Id";
+
+/// List inbound SIP trunks and configure headers_to_attributes on any that are missing it.
+async fn configure_livekit_sip_trunks(creds: &LiveKitCreds) -> Result<(usize, usize)> {
+    let jwt = generate_livekit_jwt(&creds.api_key, &creds.api_secret)?;
+    let base = livekit_api_url(&creds.url);
+    let http = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()?;
+
+    // List inbound trunks
+    let list_url = format!("{base}/twirp/livekit.SIP/ListSIPInboundTrunk");
+    let resp = http
+        .post(&list_url)
+        .header("Authorization", format!("Bearer {jwt}"))
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .context("Failed to list LiveKit SIP trunks")?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(anyhow::anyhow!(
+            "LiveKit SIP API error ({}): {}",
+            status,
+            body
+        ));
+    }
+
+    let body: serde_json::Value = resp.json().await?;
+    let trunks = body["items"].as_array().unwrap_or(&Vec::new()).clone();
+
+    let mut updated = 0;
+    let total = trunks.len();
+
+    for trunk in &trunks {
+        let trunk_id = trunk["sip_trunk_id"].as_str().unwrap_or("");
+        if trunk_id.is_empty() {
+            continue;
+        }
+
+        // Check if headers_to_attributes already has our header
+        let existing = trunk["headers_to_attributes"].as_object();
+        let already_configured = existing
+            .map(|m| m.contains_key(COVAL_SIP_HEADER))
+            .unwrap_or(false);
+
+        if already_configured {
+            continue;
+        }
+
+        // Build updated headers_to_attributes (preserve existing + add ours)
+        let mut headers: HashMap<String, String> = HashMap::new();
+        if let Some(existing_map) = existing {
+            for (k, v) in existing_map {
+                if let Some(s) = v.as_str() {
+                    headers.insert(k.clone(), s.to_string());
+                }
+            }
+        }
+        headers.insert(COVAL_SIP_HEADER.to_string(), COVAL_SIP_ATTR.to_string());
+
+        // Preserve existing trunk fields so the update doesn't clear them
+        let name = trunk["name"].as_str().unwrap_or("");
+        let numbers: Vec<&str> = trunk["numbers"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
+            .unwrap_or_default();
+        let allowed_addresses: Vec<&str> = trunk["allowed_addresses"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
+            .unwrap_or_default();
+        let allowed_numbers: Vec<&str> = trunk["allowed_numbers"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
+            .unwrap_or_default();
+
+        let update_url = format!("{base}/twirp/livekit.SIP/UpdateSIPInboundTrunk");
+        // The update API uses camelCase and wraps fields in a "replace" object
+        let update_body = serde_json::json!({
+            "sipTrunkId": trunk_id,
+            "replace": {
+                "name": name,
+                "numbers": numbers,
+                "allowedAddresses": allowed_addresses,
+                "allowedNumbers": allowed_numbers,
+                "headersToAttributes": headers,
+            }
+        });
+
+        let update_resp = http
+            .post(&update_url)
+            .header("Authorization", format!("Bearer {jwt}"))
+            .header("Content-Type", "application/json")
+            .json(&update_body)
+            .send()
+            .await;
+
+        match update_resp {
+            Ok(r) if r.status().is_success() => {
+                let trunk_name = if name.is_empty() {
+                    trunk_id.to_string()
+                } else {
+                    format!("{name} ({trunk_id})")
+                };
+                println!("    {} Configured SIP trunk: {}", "✓".green(), trunk_name);
+                updated += 1;
+            }
+            Ok(r) => {
+                let status = r.status();
+                let body = r.text().await.unwrap_or_default();
+                println!(
+                    "    {} Failed to update trunk {}: {} {}",
+                    "✗".red(),
+                    trunk_id,
+                    status,
+                    body
+                );
+            }
+            Err(e) => {
+                println!(
+                    "    {} Failed to update trunk {}: {}",
+                    "✗".red(),
+                    trunk_id,
+                    e
+                );
+            }
+        }
+    }
+
+    Ok((updated, total))
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────

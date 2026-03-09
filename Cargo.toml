@@ -28,6 +28,9 @@ chrono = { version = "0.4", features = ["serde"] }
 url = "2.5"
 base64 = "0.22"
 dialoguer = "0.11"
+jsonwebtoken = "9"
+hmac = "0.12"
+sha2 = "0.10"
 
 [dev-dependencies]
 assert_cmd = "2.0"
