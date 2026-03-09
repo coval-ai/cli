@@ -79,7 +79,7 @@ coval simulations list --run-id <run_id>
 # LiveKit Agents or Pipecat
 coval traces setup
 
-# Force generic mode for other Python agents
+# Force generic mode for other Python voice agents
 coval traces setup --framework generic
 ```
 

@@ -297,9 +297,15 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
         "  1. Set your API key: {}",
         "export COVAL_API_KEY=<your-key>".bold()
     );
-    println!("  2. Restart (or redeploy) your agent — tracing is now enabled automatically.");
-    println!("     Coval sends the simulation ID via SIP header on each call.");
-    println!("     Spans are buffered until the ID arrives — no manual config needed.");
+    if matches!(framework, Framework::Generic) {
+        println!("  2. Restart (or redeploy) your agent and review the generated changes before testing.");
+        println!("     The generated helper buffers spans until the simulation ID is set.");
+        println!("     Additional manual instrumentation may still be required.");
+    } else {
+        println!("  2. Restart (or redeploy) your agent — tracing is now enabled automatically.");
+        println!("     Coval sends the simulation ID via SIP header on each call.");
+        println!("     Spans are buffered until the ID arrives — no manual config needed.");
+    }
     println!(
         "  3. Run a simulation from {} to verify traces are collected.",
         "https://app.coval.dev".bold()
@@ -1133,12 +1139,12 @@ fn generate_coval_tracing_py(api_key: &str) -> String {
 #
 # This module configures OpenTelemetry tracing for Coval evaluation.
 # Call setup_coval_tracing() once at startup, then set_simulation_id()
-# when the Coval simulation ID arrives (typically via SIP header).
+# when the Coval simulation ID arrives (typically via SIP header or env var).
 #
 # Spans are buffered until set_simulation_id() is called, so no spans
 # are lost even if tracing is initialized before the call connects.
 #
-# Span names must follow Coval conventions:
+# Prefer Coval span naming conventions for the richest UI and metric support:
 #   llm           — LLM inference spans
 #   tts           — Text-to-speech spans
 #   stt           — Speech-to-text spans
@@ -1256,7 +1262,7 @@ def setup_coval_tracing(service_name: str = "coval-agent") -> None:
     """Initialize OpenTelemetry tracing for Coval. Call once at startup.
 
     Spans are buffered until set_simulation_id() is called.
-    If COVAL_API_KEY is not set, tracing is silently disabled.
+    If COVAL_API_KEY is not set, tracing is disabled and a warning is logged.
     """
     global _exporter
     if not COVAL_API_KEY:
