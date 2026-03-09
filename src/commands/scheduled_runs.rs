@@ -53,6 +53,8 @@ pub struct UpdateArgs {
     #[arg(long)]
     name: Option<String>,
     #[arg(long)]
+    template_id: Option<String>,
+    #[arg(long)]
     schedule: Option<String>,
     #[arg(long)]
     timezone: Option<String>,
@@ -102,7 +104,7 @@ pub async fn execute(
         ScheduledRunCommands::Update(args) => {
             let req = UpdateScheduledRunRequest {
                 display_name: args.name,
-                run_template_id: None,
+                run_template_id: args.template_id,
                 schedule_expression: args.schedule,
                 schedule_timezone: args.timezone,
                 enabled: args.enabled,
