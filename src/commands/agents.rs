@@ -87,6 +87,8 @@ pub async fn execute(cmd: AgentCommands, client: &CovalClient, format: OutputFor
                 endpoint: args.endpoint,
                 prompt: args.prompt,
                 metadata: None,
+                metric_ids: None,
+                test_set_ids: None,
             };
             let agent = client.agents().create(req).await?;
             print_one(&agent, format);

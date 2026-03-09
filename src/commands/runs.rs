@@ -104,6 +104,7 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, format: OutputForma
                 test_set_id: args.test_set_id,
                 mutation_id: args.mutation_id,
                 mutation_ids: args.mutation_ids,
+                persona_metrics: None,
                 options,
                 metadata,
                 metric_ids: None,

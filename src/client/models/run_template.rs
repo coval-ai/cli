@@ -15,6 +15,8 @@ fn truncate(s: &str, max: usize) -> String {
 pub struct RunTemplate {
     pub id: String,
     pub display_name: String,
+    #[serde(default)]
+    pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -44,6 +46,8 @@ pub struct RunTemplate {
 pub struct CreateRunTemplateRequest {
     pub display_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub persona_id: Option<String>,
@@ -69,6 +73,8 @@ pub struct CreateRunTemplateRequest {
 pub struct UpdateRunTemplateRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -46,6 +46,8 @@ pub struct UpdateScheduledRunRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_template_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub schedule_expression: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub schedule_timezone: Option<String>,

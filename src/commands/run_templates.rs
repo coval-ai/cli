@@ -106,6 +106,7 @@ pub async fn execute(
         RunTemplateCommands::Create(args) => {
             let req = CreateRunTemplateRequest {
                 display_name: args.name,
+                description: None,
                 agent_id: args.agent_id,
                 persona_id: args.persona_id,
                 test_set_id: args.test_set_id,
