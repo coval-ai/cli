@@ -2,12 +2,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use clap::{Args, Subcommand, ValueEnum};
 use colored::Colorize;
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
 
-use crate::client::models::ListParams;
 use crate::client::CovalClient;
 
 // ─── Command types ────────────────────────────────────────────────────────────
@@ -22,10 +20,6 @@ pub enum TraceCommands {
 
 #[derive(Args)]
 pub struct SetupArgs {
-    /// Pre-select an agent by ID (skips interactive agent selection)
-    #[arg(long)]
-    pub agent_id: Option<String>,
-
     /// Override detected framework
     #[arg(long, value_enum)]
     pub framework: Option<Framework>,
@@ -123,23 +117,7 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
         detection_note
     );
 
-    // ── Step 3: Pick agent ────────────────────────────────────────────────────
-    println!();
-    let _agent_id = match args.agent_id {
-        Some(id) => {
-            println!("  {} Using agent ID: {}", "✓".green(), id.bold());
-            id
-        }
-        None => {
-            if args.yes {
-                pick_agent_auto(client).await?
-            } else {
-                pick_agent(client).await?
-            }
-        }
-    };
-
-    // ── Step 4: Find entry point ──────────────────────────────────────────────
+    // ── Step 3: Find entry point ──────────────────────────────────────────────
     let entry_path = if let Some(ep) = args.entry_point {
         resolve_entry_point(&dir, &ep)?
     } else {
@@ -304,7 +282,6 @@ async fn validate(args: ValidateArgs, client: &CovalClient) -> Result<()> {
     use std::io::Write;
     let _ = std::io::stdout().flush();
 
-    let b64_key = BASE64.encode(client.api_key());
     // Ensure base URL ends without trailing slash before joining path
     let base = client.base_url().trim_end_matches('/');
     let traces_url = format!("{base}/v1/traces");
@@ -347,7 +324,7 @@ async fn validate(args: ValidateArgs, client: &CovalClient) -> Result<()> {
 
     let resp = http
         .post(&traces_url)
-        .header("Authorization", format!("Basic {b64_key}"))
+        .header("x-api-key", client.api_key())
         .header("X-Simulation-Id", &sim_id)
         .header("Content-Type", "application/json")
         .json(&payload)
@@ -468,32 +445,6 @@ fn resolve_entry_point(dir: &Path, entry_point_arg: &Path) -> Result<PathBuf> {
     Ok(p)
 }
 
-async fn pick_agent_auto(client: &CovalClient) -> Result<String> {
-    let agents = client
-        .agents()
-        .list(ListParams {
-            page_size: Some(50),
-            ..Default::default()
-        })
-        .await
-        .context("Failed to list agents")?;
-
-    if agents.agents.is_empty() {
-        return Err(anyhow::anyhow!(
-            "No agents found. Create one first with `coval agents create`."
-        ));
-    }
-
-    let first = &agents.agents[0];
-    println!(
-        "  {} Auto-selected first agent: {} (id: {})",
-        "✓".green(),
-        first.display_name.bold(),
-        first.id
-    );
-    Ok(first.id.clone())
-}
-
 // ─── Entry point selection ────────────────────────────────────────────────────
 
 fn pick_entry_point(dir: &Path, framework: Framework) -> Result<PathBuf> {
@@ -562,40 +513,6 @@ fn pick_entry_point(dir: &Path, framework: Framework) -> Result<PathBuf> {
     } else {
         Ok(candidates.into_iter().nth(selection).unwrap())
     }
-}
-
-// ─── Agent selection ──────────────────────────────────────────────────────────
-
-async fn pick_agent(client: &CovalClient) -> Result<String> {
-    let agents = client
-        .agents()
-        .list(ListParams {
-            page_size: Some(50),
-            ..Default::default()
-        })
-        .await
-        .context("Failed to list agents")?;
-
-    if agents.agents.is_empty() {
-        return Err(anyhow::anyhow!(
-            "No agents found. Create one first with `coval agents create`."
-        ));
-    }
-
-    let items: Vec<String> = agents
-        .agents
-        .iter()
-        .map(|a| format!("{:<30} (id: {})", a.display_name, a.id))
-        .collect();
-
-    println!();
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Which agent?")
-        .items(&items)
-        .default(0)
-        .interact()?;
-
-    Ok(agents.agents[selection].id.clone())
 }
 
 // ─── Entry point analysis ─────────────────────────────────────────────────────
