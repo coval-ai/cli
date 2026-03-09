@@ -12,6 +12,8 @@ pub enum PersonaCommands {
     Create(CreateArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
+    #[command(name = "phone-numbers")]
+    PhoneNumbers,
 }
 
 #[derive(Args)]
@@ -116,6 +118,10 @@ pub async fn execute(
         PersonaCommands::Delete(args) => {
             client.personas().delete(&args.persona_id).await?;
             print_success("Persona deleted.");
+        }
+        PersonaCommands::PhoneNumbers => {
+            let response = client.personas().list_phone_numbers().await?;
+            print_list(&response.phone_numbers, format);
         }
     }
     Ok(())

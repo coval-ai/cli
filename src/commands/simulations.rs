@@ -14,6 +14,9 @@ pub enum SimulationCommands {
     Get(GetArgs),
     Delete(DeleteArgs),
     Audio(AudioArgs),
+    Metrics(MetricsArgs),
+    #[command(name = "metric-detail")]
+    MetricDetail(MetricDetailArgs),
 }
 
 #[derive(Args)]
@@ -43,6 +46,17 @@ pub struct AudioArgs {
     simulation_id: String,
     #[arg(short, long)]
     output: Option<PathBuf>,
+}
+
+#[derive(Args)]
+pub struct MetricsArgs {
+    simulation_id: String,
+}
+
+#[derive(Args)]
+pub struct MetricDetailArgs {
+    simulation_id: String,
+    metric_output_id: String,
 }
 
 pub async fn execute(
@@ -75,6 +89,20 @@ pub async fn execute(
         SimulationCommands::Delete(args) => {
             client.simulations().delete(&args.simulation_id).await?;
             print_success("Simulation deleted.");
+        }
+        SimulationCommands::Metrics(args) => {
+            let response = client
+                .simulations()
+                .list_metrics(&args.simulation_id)
+                .await?;
+            print_list(&response.metrics, format);
+        }
+        SimulationCommands::MetricDetail(args) => {
+            let metric = client
+                .simulations()
+                .get_metric(&args.simulation_id, &args.metric_output_id)
+                .await?;
+            print_one(&metric, format);
         }
         SimulationCommands::Audio(args) => {
             let audio = client.simulations().audio(&args.simulation_id).await?;
