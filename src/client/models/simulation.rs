@@ -67,9 +67,9 @@ pub struct TranscriptMessage {
     pub role: String,
     pub content: serde_json::Value,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub start_timestamp: Option<String>,
+    pub start_timestamp: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_timestamp: Option<String>,
+    pub end_timestamp: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -113,5 +113,43 @@ fn truncate(s: &str, max: usize) -> String {
         s.to_string()
     } else {
         format!("{}...", &s[..max - 3])
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimpleMetricOutput {
+    pub metric_output_id: String,
+    pub metric_id: String,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub value: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListSimulationMetricsResponse {
+    pub metrics: Vec<SimpleMetricOutput>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetSimulationMetricResponse {
+    pub metric: SimpleMetricOutput,
+}
+
+impl Tabular for SimpleMetricOutput {
+    fn headers() -> Vec<&'static str> {
+        vec!["OUTPUT ID", "METRIC ID", "STATUS", "VALUE"]
+    }
+
+    fn row(&self) -> Vec<String> {
+        vec![
+            self.metric_output_id.clone(),
+            self.metric_id.clone(),
+            self.status.clone().unwrap_or_else(|| "-".into()),
+            self.value
+                .as_ref()
+                .map(|v| truncate(&v.to_string(), 30))
+                .unwrap_or_else(|| "-".into()),
+        ]
     }
 }

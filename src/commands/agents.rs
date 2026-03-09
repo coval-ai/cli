@@ -41,6 +41,10 @@ pub struct CreateArgs {
     endpoint: Option<String>,
     #[arg(long)]
     prompt: Option<String>,
+    #[arg(long, value_delimiter = ',')]
+    metric_ids: Option<Vec<String>>,
+    #[arg(long, value_delimiter = ',')]
+    test_set_ids: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -56,6 +60,10 @@ pub struct UpdateArgs {
     endpoint: Option<String>,
     #[arg(long)]
     prompt: Option<String>,
+    #[arg(long, value_delimiter = ',')]
+    metric_ids: Option<Vec<String>>,
+    #[arg(long, value_delimiter = ',')]
+    test_set_ids: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -87,6 +95,8 @@ pub async fn execute(cmd: AgentCommands, client: &CovalClient, format: OutputFor
                 endpoint: args.endpoint,
                 prompt: args.prompt,
                 metadata: None,
+                metric_ids: args.metric_ids,
+                test_set_ids: args.test_set_ids,
             };
             let agent = client.agents().create(req).await?;
             print_one(&agent, format);
@@ -98,6 +108,8 @@ pub async fn execute(cmd: AgentCommands, client: &CovalClient, format: OutputFor
                 phone_number: args.phone_number,
                 endpoint: args.endpoint,
                 prompt: args.prompt,
+                metric_ids: args.metric_ids,
+                test_set_ids: args.test_set_ids,
                 ..Default::default()
             };
             let agent = client.agents().update(&args.agent_id, req).await?;

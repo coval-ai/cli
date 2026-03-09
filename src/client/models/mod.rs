@@ -1,21 +1,31 @@
 #![allow(dead_code, clippy::struct_field_names)]
 
 mod agent;
+mod api_key;
 mod common;
+mod dashboard;
 mod metric;
 mod mutation;
 mod persona;
 mod run;
+mod run_template;
+mod scheduled_run;
 mod simulation;
 mod test_case;
 mod test_set;
+mod widget;
 
 pub use agent::*;
+pub use api_key::*;
 pub use common::*;
+pub use dashboard::*;
 pub use metric::*;
 pub use mutation::*;
 pub use persona::*;
 pub use run::*;
+pub use run_template::*;
+pub use scheduled_run::*;
 pub use simulation::*;
 pub use test_case::*;
 pub use test_set::*;
+pub use widget::*;

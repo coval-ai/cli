@@ -45,6 +45,25 @@ pub struct CreateArgs {
     min_value: Option<f64>,
     #[arg(long)]
     max_value: Option<f64>,
+    #[arg(long)]
+    regex_pattern: Option<String>,
+    #[arg(long)]
+    role: Option<String>,
+    #[arg(long)]
+    match_mode: Option<String>,
+    #[arg(long)]
+    position: Option<String>,
+    #[arg(long)]
+    case_insensitive: Option<bool>,
+    #[arg(long)]
+    metadata_field_type: Option<String>,
+    #[arg(long)]
+    metadata_field_key: Option<String>,
+    #[arg(long)]
+    min_pause_duration: Option<f64>,
+    /// JSON string for target condition
+    #[arg(long)]
+    target_condition: Option<String>,
 }
 
 #[derive(Args)]
@@ -54,8 +73,35 @@ pub struct UpdateArgs {
     name: Option<String>,
     #[arg(long)]
     description: Option<String>,
+    #[arg(long, value_enum)]
+    r#type: Option<MetricType>,
     #[arg(long)]
     prompt: Option<String>,
+    #[arg(long, value_delimiter = ',')]
+    categories: Option<Vec<String>>,
+    #[arg(long)]
+    min_value: Option<f64>,
+    #[arg(long)]
+    max_value: Option<f64>,
+    #[arg(long)]
+    metadata_field_type: Option<String>,
+    #[arg(long)]
+    metadata_field_key: Option<String>,
+    #[arg(long)]
+    regex_pattern: Option<String>,
+    #[arg(long)]
+    role: Option<String>,
+    #[arg(long)]
+    match_mode: Option<String>,
+    #[arg(long)]
+    position: Option<String>,
+    #[arg(long)]
+    case_insensitive: Option<bool>,
+    #[arg(long)]
+    min_pause_duration: Option<f64>,
+    /// JSON string for target condition
+    #[arg(long)]
+    target_condition: Option<String>,
 }
 
 #[derive(Args)]
@@ -84,6 +130,12 @@ pub async fn execute(
             print_one(&metric, format);
         }
         MetricCommands::Create(args) => {
+            let target_condition = args
+                .target_condition
+                .map(|s| serde_json::from_str(&s))
+                .transpose()
+                .map_err(|e| anyhow::anyhow!("Invalid JSON for --target-condition: {e}"))?;
+
             let req = CreateMetricRequest {
                 metric_name: args.name,
                 description: args.description,
@@ -92,21 +144,43 @@ pub async fn execute(
                 categories: args.categories,
                 min_value: args.min_value,
                 max_value: args.max_value,
-                metadata_field_type: None,
-                metadata_field_key: None,
-                regex_pattern: None,
-                role: None,
-                min_pause_duration_seconds: None,
+                metadata_field_type: args.metadata_field_type,
+                metadata_field_key: args.metadata_field_key,
+                regex_pattern: args.regex_pattern,
+                role: args.role,
+                match_mode: args.match_mode,
+                position: args.position,
+                case_insensitive: args.case_insensitive,
+                min_pause_duration_seconds: args.min_pause_duration,
+                target_condition,
             };
             let metric = client.metrics().create(req).await?;
             print_one(&metric, format);
         }
         MetricCommands::Update(args) => {
+            let target_condition = args
+                .target_condition
+                .map(|s| serde_json::from_str(&s))
+                .transpose()
+                .map_err(|e| anyhow::anyhow!("Invalid JSON for --target-condition: {e}"))?;
+
             let req = UpdateMetricRequest {
                 metric_name: args.name,
                 description: args.description,
+                metric_type: args.r#type,
                 prompt: args.prompt,
-                ..Default::default()
+                categories: args.categories,
+                min_value: args.min_value,
+                max_value: args.max_value,
+                metadata_field_type: args.metadata_field_type,
+                metadata_field_key: args.metadata_field_key,
+                regex_pattern: args.regex_pattern,
+                role: args.role,
+                match_mode: args.match_mode,
+                position: args.position,
+                case_insensitive: args.case_insensitive,
+                min_pause_duration_seconds: args.min_pause_duration,
+                target_condition,
             };
             let metric = client.metrics().update(&args.metric_id, req).await?;
             print_one(&metric, format);
