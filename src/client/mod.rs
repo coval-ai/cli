@@ -47,10 +47,6 @@ impl CovalClient {
         &self.api_key
     }
 
-    pub fn base_url(&self) -> &str {
-        self.base_url.as_str()
-    }
-
     pub async fn get<T: serde::de::DeserializeOwned>(&self, url: Url) -> Result<T, ApiError> {
         let resp = self
             .http

@@ -102,6 +102,13 @@ pub async fn run(cli: Cli) -> anyhow::Result<()> {
             Ok(())
         }
         Commands::Config { command } => commands::config::execute(command),
+        Commands::Traces {
+            command: commands::traces::TraceCommands::Setup(args),
+        } if args.no_validate => commands::traces::execute(
+            commands::traces::TraceCommands::Setup(args),
+            None,
+        )
+        .await,
         _ => {
             let api_key = api_key.ok_or_else(|| {
                 anyhow::anyhow!(
@@ -135,7 +142,9 @@ pub async fn run(cli: Cli) -> anyhow::Result<()> {
                 Commands::Mutations { command } => {
                     commands::mutations::execute(command, &client, cli.format).await
                 }
-                Commands::Traces { command } => commands::traces::execute(command, &client).await,
+                Commands::Traces { command } => {
+                    commands::traces::execute(command, Some(&client)).await
+                }
                 Commands::ApiKeys { command } => {
                     commands::api_keys::execute(command, &client, cli.format).await
                 }
