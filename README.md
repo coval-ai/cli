@@ -83,9 +83,9 @@ coval traces setup
 coval traces setup --framework generic
 ```
 
-`coval traces setup` is currently framework-aware for `LiveKit Agents` and `Pipecat`.
-`--framework generic` is a best-effort fallback for other Python agents and may require manual review
-before deploy.
+`coval traces setup` is currently framework-aware for `LiveKit Agents` and `Pipecat` only.
+Other Python voice agents are not currently validated and may require manual instrumentation,
+even when using `--framework generic`.
 
 ### Launch a Run
 
