@@ -42,10 +42,16 @@ pub struct LaunchArgs {
     persona_id: String,
     #[arg(long)]
     test_set_id: String,
+    #[arg(long, value_delimiter = ',')]
+    metric_ids: Option<Vec<String>>,
     #[arg(long)]
     iterations: Option<u32>,
     #[arg(long)]
     concurrency: Option<u32>,
+    #[arg(long)]
+    sub_sample_size: Option<u32>,
+    #[arg(long)]
+    sub_sample_seed: Option<u64>,
     #[arg(long)]
     name: Option<String>,
     #[arg(long)]
@@ -83,11 +89,16 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, format: OutputForma
             print_one(&run, format);
         }
         RunCommands::Launch(args) => {
-            let options = if args.iterations.is_some() || args.concurrency.is_some() {
+            let options = if args.iterations.is_some()
+                || args.concurrency.is_some()
+                || args.sub_sample_size.is_some()
+                || args.sub_sample_seed.is_some()
+            {
                 Some(LaunchOptions {
                     iteration_count: args.iterations,
                     concurrency: args.concurrency,
-                    ..Default::default()
+                    sub_sample_size: args.sub_sample_size,
+                    sub_sample_seed: args.sub_sample_seed,
                 })
             } else {
                 None
@@ -102,12 +113,12 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, format: OutputForma
                 agent_id: args.agent_id,
                 persona_id: args.persona_id,
                 test_set_id: args.test_set_id,
+                metric_ids: args.metric_ids,
                 mutation_id: args.mutation_id,
                 mutation_ids: args.mutation_ids,
                 persona_metrics: None,
                 options,
                 metadata,
-                metric_ids: None,
             };
             let run = client.runs().launch(req).await?;
             print_one(&run, format);
