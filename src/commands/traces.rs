@@ -603,6 +603,10 @@ struct EntryPointAnalysis {
     session_start_line: Option<usize>,
     /// Indentation at the session.start() line
     session_start_indent: String,
+    /// 0-indexed line inside `on_dialin_connected` handler body for Pipecat SIP header extraction.
+    dialin_handler_line: Option<usize>,
+    /// Indentation inside the dialin handler body
+    dialin_handler_indent: String,
 }
 
 fn analyze_entry_point(path: &Path, framework: Framework) -> Result<EntryPointAnalysis> {
@@ -635,6 +639,12 @@ fn analyze_entry_point(path: &Path, framework: Framework) -> Result<EntryPointAn
         (None, String::new())
     };
 
+    let (dialin_handler_line, dialin_handler_indent) = if matches!(framework, Framework::Pipecat) {
+        find_pipecat_dialin_handler(&lines)
+    } else {
+        (None, String::new())
+    };
+
     Ok(EntryPointAnalysis {
         import_line,
         has_os_import,
@@ -644,6 +654,8 @@ fn analyze_entry_point(path: &Path, framework: Framework) -> Result<EntryPointAn
         otel_already_configured,
         session_start_line,
         session_start_indent,
+        dialin_handler_line,
+        dialin_handler_indent,
     })
 }
 
@@ -775,6 +787,43 @@ fn find_livekit_session_start(lines: &[&str]) -> (Option<usize>, String) {
     (None, String::new())
 }
 
+fn find_pipecat_dialin_handler(lines: &[&str]) -> (Option<usize>, String) {
+    // Find the `on_dialin_connected` event handler body to inject SIP header extraction.
+    // Pattern: @transport.event_handler("on_dialin_connected") followed by async def, then body.
+    for (i, line) in lines.iter().enumerate() {
+        let t = line.trim();
+        if t.contains("on_dialin_connected")
+            && (t.contains("event_handler") || t.contains("async def"))
+        {
+            // Find the async def line (might be the decorator line itself or the next line)
+            let fn_line = if t.starts_with("@") {
+                // Decorator — find the async def after it
+                let mut found = i;
+                for j in (i + 1)..lines.len() {
+                    if lines[j].trim().starts_with("async def") {
+                        found = j;
+                        break;
+                    }
+                }
+                found
+            } else {
+                i
+            };
+
+            // Find the first real statement in the body
+            for j in (fn_line + 1)..lines.len() {
+                let inner = lines[j].trim();
+                if !inner.is_empty() && !inner.starts_with('#') {
+                    let indent = leading_whitespace(lines[j]);
+                    // Insert AFTER the first statement (usually a logger.info call)
+                    return (Some(j + 1), indent);
+                }
+            }
+        }
+    }
+    (None, String::new())
+}
+
 fn find_generic_injection(lines: &[&str]) -> (Option<usize>, String, Option<String>) {
     // First non-import, non-blank, non-comment top-level statement after imports
     let last_import = find_last_import_line(lines);
@@ -869,6 +918,19 @@ fn apply_entry_point_modifications(
         insertions.push((session_line + 1, session_lines));
     }
 
+    // Pipecat: insert SIP header extraction inside on_dialin_connected handler
+    if let Some(dialin_line) = analysis.dialin_handler_line {
+        let indent = &analysis.dialin_handler_indent;
+        let dialin_lines = vec![
+            format!("{indent}# Coval tracing: extract simulation ID from SIP headers"),
+            format!("{indent}sip_headers = data.get(\"sipHeaders\", {{}})"),
+            format!("{indent}_coval_sim_id = sip_headers.get(\"X-Coval-Simulation-Id\", \"\")"),
+            format!("{indent}if _coval_sim_id:"),
+            format!("{indent}    set_simulation_id(_coval_sim_id)"),
+        ];
+        insertions.push((dialin_line, dialin_lines));
+    }
+
     // Apply in descending order: higher line numbers first so earlier indices stay stable
     insertions.sort_by_key(|(pos, _)| std::cmp::Reverse(*pos));
 
@@ -911,13 +973,9 @@ fn generate_call_snippet(framework: Framework, indent: &str) -> Vec<String> {
              {indent}ctx.room.on(\"participant_attributes_changed\", lambda changed, p: _coval_extract_sim_id(p))"
         ),
         Framework::Pipecat => format!(
-            "{indent}# Coval tracing: extract simulation ID from SIP headers.\n\
-             {indent}# Coval sends X-Coval-Simulation-Id as a SIP header when dialing your agent.\n\
-             {indent}setup_coval_tracing()\n\
-             {indent}# In your on_dialin_ready handler, extract the simulation ID:\n\
-             {indent}# sip_headers = data.get(\"sipHeaders\", {{}})\n\
-             {indent}# sim_id = sip_headers.get(\"X-Coval-Simulation-Id\", \"\")\n\
-             {indent}# if sim_id: set_simulation_id(sim_id)"
+            "{indent}# Coval tracing: set up once at startup.\n\
+             {indent}# Simulation ID is extracted from SIP headers in on_dialin_connected.\n\
+             {indent}setup_coval_tracing()"
         ),
         Framework::Generic => format!(
             "{indent}# Coval tracing: set up once at startup.\n\
@@ -1823,7 +1881,7 @@ mod tests {
         let lines = generate_call_snippet(Framework::Pipecat, "  ");
         let joined = lines.join("\n");
         assert!(joined.contains("setup_coval_tracing"));
-        assert!(joined.contains("set_simulation_id"));
+        assert!(joined.contains("on_dialin_connected"));
     }
 
     #[test]
@@ -1908,6 +1966,8 @@ mod tests {
             otel_already_configured: false,
             session_start_line: None,
             session_start_indent: String::new(),
+            dialin_handler_line: None,
+            dialin_handler_indent: String::new(),
         };
 
         apply_entry_point_modifications(&entry, &analysis, Framework::Generic).unwrap();
@@ -1940,6 +2000,8 @@ mod tests {
             otel_already_configured: false,
             session_start_line: None,
             session_start_indent: String::new(),
+            dialin_handler_line: None,
+            dialin_handler_indent: String::new(),
         };
 
         apply_entry_point_modifications(&entry, &analysis, Framework::Pipecat).unwrap();
@@ -1964,6 +2026,8 @@ mod tests {
             otel_already_configured: false,
             session_start_line: None,
             session_start_indent: String::new(),
+            dialin_handler_line: None,
+            dialin_handler_indent: String::new(),
         };
 
         apply_entry_point_modifications(&entry, &analysis, Framework::Generic).unwrap();
@@ -1987,6 +2051,8 @@ mod tests {
             otel_already_configured: false,
             session_start_line: None,
             session_start_indent: String::new(),
+            dialin_handler_line: None,
+            dialin_handler_indent: String::new(),
         };
 
         apply_entry_point_modifications(&entry, &analysis, Framework::Generic).unwrap();
@@ -2016,6 +2082,8 @@ mod tests {
             otel_already_configured: false,
             session_start_line: None,
             session_start_indent: String::new(),
+            dialin_handler_line: None,
+            dialin_handler_indent: String::new(),
         };
 
         apply_entry_point_modifications(&entry, &analysis, Framework::Livekit).unwrap();
