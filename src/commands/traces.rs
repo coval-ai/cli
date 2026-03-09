@@ -603,6 +603,12 @@ fn analyze_entry_point(path: &Path, framework: Framework) -> Result<EntryPointAn
 fn find_last_import_line(lines: &[&str]) -> usize {
     let mut last = 0;
     for (i, line) in lines.iter().enumerate() {
+        // Only consider top-level imports (no leading whitespace).
+        // Indented `from x import y` inside function bodies must not be counted.
+        let first_char = line.chars().next().unwrap_or(' ');
+        if first_char.is_whitespace() {
+            continue;
+        }
         let t = line.trim();
         if t.starts_with("import ") || t.starts_with("from ") {
             last = i;
