@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand, ValueEnum};
 use colored::Colorize;
-use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
+use dialoguer::{theme::ColorfulTheme, Confirm, Input};
 
 use crate::client::CovalClient;
 
@@ -545,45 +545,8 @@ fn pick_entry_point(dir: &Path, framework: Framework) -> Result<PathBuf> {
         return Ok(p);
     }
 
-    // Auto-select when there's only one candidate
-    if candidates.len() == 1 {
-        return Ok(candidates.into_iter().next().unwrap());
-    }
-
-    let mut items: Vec<String> = candidates
-        .iter()
-        .map(|p| {
-            p.file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string()
-        })
-        .collect();
-    items.push("Enter path manually".to_string());
-
-    println!();
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Which file is your main agent/bot entry point?")
-        .items(&items)
-        .default(0)
-        .interact()?;
-
-    if selection == candidates.len() {
-        let path: String = Input::with_theme(&ColorfulTheme::default())
-            .with_prompt("Enter path to your agent's main Python file")
-            .interact_text()?;
-        let p = if Path::new(&path).is_absolute() {
-            PathBuf::from(&path)
-        } else {
-            dir.join(&path)
-        };
-        if !p.exists() {
-            return Err(anyhow::anyhow!("File not found: {}", p.display()));
-        }
-        Ok(p)
-    } else {
-        Ok(candidates.into_iter().nth(selection).unwrap())
-    }
+    // Auto-select the highest-priority candidate (preferred list is priority-ordered)
+    Ok(candidates.into_iter().next().unwrap())
 }
 
 // ─── Entry point analysis ─────────────────────────────────────────────────────
