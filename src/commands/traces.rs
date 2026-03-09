@@ -37,6 +37,17 @@ pub struct SetupArgs {
     /// Project directory to analyze (defaults to current directory)
     #[arg(long)]
     pub dir: Option<PathBuf>,
+
+    /// Specify the entry-point file (relative to --dir or absolute).
+    /// Skips interactive file selection.
+    #[arg(long)]
+    pub entry_point: Option<PathBuf>,
+
+    /// Auto-confirm all prompts without interaction.
+    /// Picks the first agent when --agent-id is absent.
+    /// Answers yes to "Apply changes?", "Validate now?", "Continue and overwrite?".
+    #[arg(long, default_value = "false")]
+    pub yes: bool,
 }
 
 #[derive(Args)]
@@ -114,16 +125,26 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
 
     // ── Step 3: Pick agent ────────────────────────────────────────────────────
     println!();
-    let agent_id = match args.agent_id {
+    let _agent_id = match args.agent_id {
         Some(id) => {
             println!("  {} Using agent ID: {}", "✓".green(), id.bold());
             id
         }
-        None => pick_agent(client).await?,
+        None => {
+            if args.yes {
+                pick_agent_auto(client).await?
+            } else {
+                pick_agent(client).await?
+            }
+        }
     };
 
     // ── Step 4: Find entry point ──────────────────────────────────────────────
-    let entry_path = pick_entry_point(&dir, framework)?;
+    let entry_path = if let Some(ep) = args.entry_point {
+        resolve_entry_point(&dir, &ep)?
+    } else {
+        pick_entry_point(&dir, framework)?
+    };
     println!("  {} Selected: {}", "✓".green(), entry_path.display());
 
     // ── Step 5: Analyze entry file ────────────────────────────────────────────
@@ -141,11 +162,16 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
             "\n  {} OpenTelemetry is already configured in this file.",
             "!".yellow()
         );
-        if !Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Continue and overwrite?")
-            .default(false)
-            .interact()?
-        {
+        let confirmed = if args.yes {
+            println!("  {} Auto-confirmed overwrite (--yes)", "✓".green());
+            true
+        } else {
+            Confirm::with_theme(&ColorfulTheme::default())
+                .with_prompt("Continue and overwrite?")
+                .default(false)
+                .interact()?
+        };
+        if !confirmed {
             println!("Aborted.");
             return Ok(());
         }
@@ -173,7 +199,7 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
 
     let entry_name = entry_path.file_name().unwrap_or_default().to_string_lossy();
     println!(
-        "  {} {} — add import + configure_coval_tracing() call",
+        "  {} {} — add import + setup_coval_tracing() call",
         "~".yellow(),
         entry_name.bold()
     );
@@ -184,17 +210,22 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
     }
     if let Some(ref ctx) = analysis.call_context {
         println!(
-            "    - Insert configure_coval_tracing() before: {}",
+            "    - Insert setup_coval_tracing() before: {}",
             ctx.cyan()
         );
     }
 
     println!();
-    if !Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt("Apply these changes?")
-        .default(true)
-        .interact()?
-    {
+    let apply = if args.yes {
+        println!("  {} Auto-confirmed apply (--yes)", "✓".green());
+        true
+    } else {
+        Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt("Apply these changes?")
+            .default(true)
+            .interact()?
+    };
+    if !apply {
         println!("Aborted. No files were modified.");
         return Ok(());
     }
@@ -227,27 +258,31 @@ async fn setup(args: SetupArgs, client: &CovalClient) -> Result<()> {
         "  1. Set your API key: {}",
         "export COVAL_API_KEY=<your-key>".bold()
     );
-    println!("  2. Get the simulation_output_id from the Coval API when a run starts.");
-    println!("     See the TODO comment in {} for details.", entry_name);
     println!(
-        "  3. Run a simulation — traces appear at {}",
-        format!("https://app.coval.dev/runs/{agent_id}").bold()
+        "  2. Restart (or redeploy) your agent — tracing is now enabled automatically."
+    );
+    println!(
+        "     Coval sends the simulation ID via SIP header on each call."
+    );
+    println!("     Spans are buffered until the ID arrives — no manual config needed.");
+    println!(
+        "  3. Run a simulation from {} to verify traces are collected.",
+        "https://app.coval.dev".bold()
     );
 
     if !args.no_validate {
         println!();
-        if Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Validate auth now by sending a test trace?")
-            .default(true)
-            .interact()?
-        {
-            validate(
-                ValidateArgs {
-                    simulation_id: None,
-                },
-                client,
-            )
-            .await?;
+        let do_validate = if args.yes {
+            println!("  {} Auto-confirmed validate (--yes)", "✓".green());
+            true
+        } else {
+            Confirm::with_theme(&ColorfulTheme::default())
+                .with_prompt("Validate auth now by sending a test trace?")
+                .default(true)
+                .interact()?
+        };
+        if do_validate {
+            validate(ValidateArgs { simulation_id: None }, client).await?;
         }
     }
 
@@ -415,6 +450,50 @@ fn scan_python_imports(dir: &Path) -> Option<(Framework, Option<String>)> {
     None
 }
 
+// ─── Non-interactive helpers ──────────────────────────────────────────────────
+
+fn resolve_entry_point(dir: &Path, entry_point_arg: &Path) -> Result<PathBuf> {
+    let p = if entry_point_arg.is_absolute() {
+        entry_point_arg.to_path_buf()
+    } else {
+        dir.join(entry_point_arg)
+    };
+    if !p.exists() {
+        return Err(anyhow::anyhow!(
+            "Entry point not found: {}",
+            p.display()
+        ));
+    }
+    println!("  {} Entry point: {}", "✓".green(), p.display());
+    Ok(p)
+}
+
+async fn pick_agent_auto(client: &CovalClient) -> Result<String> {
+    let agents = client
+        .agents()
+        .list(ListParams {
+            page_size: Some(50),
+            ..Default::default()
+        })
+        .await
+        .context("Failed to list agents")?;
+
+    if agents.agents.is_empty() {
+        return Err(anyhow::anyhow!(
+            "No agents found. Create one first with `coval agents create`."
+        ));
+    }
+
+    let first = &agents.agents[0];
+    println!(
+        "  {} Auto-selected first agent: {} (id: {})",
+        "✓".green(),
+        first.display_name.bold(),
+        first.id
+    );
+    Ok(first.id.clone())
+}
+
 // ─── Entry point selection ────────────────────────────────────────────────────
 
 fn pick_entry_point(dir: &Path, framework: Framework) -> Result<PathBuf> {
@@ -527,7 +606,7 @@ struct EntryPointAnalysis {
     import_line: usize,
     /// Whether `import os` is already present in the file
     has_os_import: bool,
-    /// 0-indexed line before which to insert the configure_coval_tracing() call
+    /// 0-indexed line before which to insert the setup_coval_tracing() call
     /// (uses original line numbers, before any insertions are applied)
     call_line: Option<usize>,
     /// Indentation to use for the inserted call block
@@ -536,6 +615,11 @@ struct EntryPointAnalysis {
     call_context: Option<String>,
     /// Whether OpenTelemetry is already configured
     otel_already_configured: bool,
+    /// 0-indexed line of `await session.start(...)` for LiveKit session instrumentation.
+    /// instrument_session() is inserted AFTER this line.
+    session_start_line: Option<usize>,
+    /// Indentation at the session.start() line
+    session_start_indent: String,
 }
 
 fn analyze_entry_point(path: &Path, framework: Framework) -> Result<EntryPointAnalysis> {
@@ -546,7 +630,8 @@ fn analyze_entry_point(path: &Path, framework: Framework) -> Result<EntryPointAn
     let otel_already_configured = lines.iter().any(|l| {
         l.contains("opentelemetry")
             || l.contains("TracerProvider")
-            || l.contains("configure_coval_tracing")
+            || l.contains("setup_coval_tracing")
+            || l.contains("setup_coval_tracing")
     });
 
     let import_line = find_last_import_line(&lines);
@@ -561,6 +646,12 @@ fn analyze_entry_point(path: &Path, framework: Framework) -> Result<EntryPointAn
         Framework::Generic => find_generic_injection(&lines),
     };
 
+    let (session_start_line, session_start_indent) = if matches!(framework, Framework::Livekit) {
+        find_livekit_session_start(&lines)
+    } else {
+        (None, String::new())
+    };
+
     Ok(EntryPointAnalysis {
         import_line,
         has_os_import,
@@ -568,6 +659,8 @@ fn analyze_entry_point(path: &Path, framework: Framework) -> Result<EntryPointAn
         call_indent,
         call_context,
         otel_already_configured,
+        session_start_line,
+        session_start_indent,
     })
 }
 
@@ -609,15 +702,42 @@ fn find_pipecat_injection(lines: &[&str]) -> (Option<usize>, String, Option<Stri
 }
 
 fn find_livekit_injection(lines: &[&str]) -> (Option<usize>, String, Option<String>) {
-    // Prefer: first statement inside the entrypoint function
+    // Prefer: first statement inside the entrypoint function.
+    // Detect both `async def entrypoint(` and `@server.rtc_session` decorator patterns.
     for (i, line) in lines.iter().enumerate() {
-        if line.contains("async def entrypoint") {
-            for (j, inner_line) in lines.iter().enumerate().skip(i + 1) {
-                let t = inner_line.trim();
+        let is_entrypoint = line.contains("async def entrypoint");
+        let is_rtc_session = line.trim().starts_with("@") && line.contains("rtc_session");
+
+        if is_entrypoint || is_rtc_session {
+            // For @server.rtc_session, find the async def line first
+            let fn_line = if is_rtc_session {
+                let mut found = None;
+                for j in (i + 1)..lines.len() {
+                    let t = lines[j].trim();
+                    if t.starts_with("async def ") {
+                        found = Some(j);
+                        break;
+                    }
+                    // Stop if we hit a non-decorator, non-blank line
+                    if !t.is_empty() && !t.starts_with('#') && !t.starts_with('@') {
+                        break;
+                    }
+                }
+                match found {
+                    Some(l) => l,
+                    None => continue,
+                }
+            } else {
+                i
+            };
+
+            // Find the first real statement in the body
+            for j in (fn_line + 1)..lines.len() {
+                let t = lines[j].trim();
                 if !t.is_empty() && !t.starts_with('#') {
                     return (
                         Some(j),
-                        leading_whitespace(inner_line),
+                        leading_whitespace(lines[j]),
                         Some(format!("inside entrypoint() at line {}", j + 1)),
                     );
                 }
@@ -635,6 +755,35 @@ fn find_livekit_injection(lines: &[&str]) -> (Option<usize>, String, Option<Stri
         }
     }
     find_generic_injection(lines)
+}
+
+fn find_livekit_session_start(lines: &[&str]) -> (Option<usize>, String) {
+    // Find `await session.start(` or `session.start(` and return the line AFTER the
+    // entire call completes (tracking parentheses for multi-line calls).
+    for (i, line) in lines.iter().enumerate() {
+        let t = line.trim();
+        if t.contains("session.start(") || (t.contains(".start(") && t.contains("session")) {
+            let indent = leading_whitespace(line);
+            // Track parentheses to find the end of the call
+            let mut depth: i32 = 0;
+            for j in i..lines.len() {
+                for ch in lines[j].chars() {
+                    if ch == '(' {
+                        depth += 1;
+                    } else if ch == ')' {
+                        depth -= 1;
+                    }
+                }
+                if depth <= 0 {
+                    // The call ends on line j; insert after it
+                    return (Some(j), indent);
+                }
+            }
+            // Fallback: single-line call
+            return (Some(i), indent);
+        }
+    }
+    (None, String::new())
 }
 
 fn find_generic_injection(lines: &[&str]) -> (Option<usize>, String, Option<String>) {
@@ -708,13 +857,27 @@ fn apply_entry_point_modifications(
     if !analysis.has_os_import {
         import_lines.push("import os".to_string());
     }
-    import_lines.push("from coval_tracing import configure_coval_tracing".to_string());
+    let import_stmt = if matches!(framework, Framework::Livekit) {
+        "from coval_tracing import setup_coval_tracing, set_simulation_id, instrument_session"
+    } else {
+        "from coval_tracing import setup_coval_tracing, set_simulation_id"
+    };
+    import_lines.push(import_stmt.to_string());
     insertions.push((import_pos, import_lines));
 
-    // configure_coval_tracing() call block
+    // setup_coval_tracing() call block
     if let Some(call_line) = analysis.call_line {
         let snippet = generate_call_snippet(framework, &analysis.call_indent);
         insertions.push((call_line, snippet));
+    }
+
+    // LiveKit: insert instrument_session(session) after session.start()
+    if let Some(session_line) = analysis.session_start_line {
+        let indent = &analysis.session_start_indent;
+        let session_lines = vec![
+            format!("{indent}instrument_session(session)  # Hook Coval trace events"),
+        ];
+        insertions.push((session_line + 1, session_lines));
     }
 
     // Apply in descending order: higher line numbers first so earlier indices stay stable
@@ -739,33 +902,46 @@ fn apply_entry_point_modifications(
 }
 
 fn generate_call_snippet(framework: Framework, indent: &str) -> Vec<String> {
-    let comment = match framework {
+    let snippet = match framework {
         Framework::Livekit => format!(
-            "{indent}# TODO: Replace with actual simulation_output_id from the Coval API response.\n\
-             {indent}# For LiveKit, it may be passed via job metadata:\n\
-             {indent}#   simulation_output_id = ctx.job.metadata or os.environ.get(\"COVAL_SIMULATION_ID\", \"\")"
+            "{indent}# Coval tracing: extract simulation ID from SIP participant attributes.\n\
+             {indent}# Coval sends X-Coval-Simulation-Id as a SIP header when dialing your agent.\n\
+             {indent}# LiveKit exposes SIP headers as participant attributes with the sip.h. prefix.\n\
+             {indent}setup_coval_tracing()\n\
+             {indent}def _coval_extract_sim_id(participant):\n\
+             {indent}    sim_id = participant.attributes.get(\"sip.h.X-Coval-Simulation-Id\", \"\")\n\
+             {indent}    if not sim_id:\n\
+             {indent}        sim_id = os.environ.get(\"COVAL_SIMULATION_ID\", \"\")\n\
+             {indent}    if sim_id:\n\
+             {indent}        set_simulation_id(sim_id)\n\
+             {indent}# Check participants already in the room (SIP caller may already be connected)\n\
+             {indent}for _p in ctx.room.remote_participants.values():\n\
+             {indent}    _coval_extract_sim_id(_p)\n\
+             {indent}# Also listen for new participants and attribute changes\n\
+             {indent}ctx.room.on(\"participant_connected\", _coval_extract_sim_id)\n\
+             {indent}ctx.room.on(\"participant_attributes_changed\", lambda changed, p: _coval_extract_sim_id(p))"
         ),
-        _ => format!(
-            "{indent}# TODO: Replace with actual simulation_output_id from the Coval API response.\n\
-             {indent}# Example: simulation_output_id = coval_run[\"simulations\"][0][\"id\"]"
+        Framework::Pipecat => format!(
+            "{indent}# Coval tracing: extract simulation ID from SIP headers.\n\
+             {indent}# Coval sends X-Coval-Simulation-Id as a SIP header when dialing your agent.\n\
+             {indent}setup_coval_tracing()\n\
+             {indent}# In your on_dialin_ready handler, extract the simulation ID:\n\
+             {indent}# sip_headers = data.get(\"sipHeaders\", {{}})\n\
+             {indent}# sim_id = sip_headers.get(\"X-Coval-Simulation-Id\", \"\")\n\
+             {indent}# if sim_id: set_simulation_id(sim_id)"
+        ),
+        Framework::Generic => format!(
+            "{indent}# Coval tracing: set up once at startup.\n\
+             {indent}# The simulation ID is read from the COVAL_SIMULATION_ID env var,\n\
+             {indent}# or extracted from SIP headers if available.\n\
+             {indent}setup_coval_tracing()\n\
+             {indent}_sim_id = os.environ.get(\"COVAL_SIMULATION_ID\", \"\")\n\
+             {indent}if _sim_id:\n\
+             {indent}    set_simulation_id(_sim_id)"
         ),
     };
 
-    let call = if matches!(framework, Framework::Livekit) {
-        format!(
-            "{indent}simulation_output_id = getattr(getattr(ctx, \"job\", None), \"metadata\", None) \
-             or os.environ.get(\"COVAL_SIMULATION_ID\", \"\")\n\
-             {indent}configure_coval_tracing(simulation_output_id)"
-        )
-    } else {
-        format!(
-            "{indent}simulation_output_id = os.environ.get(\"COVAL_SIMULATION_ID\", \"\")\n\
-             {indent}configure_coval_tracing(simulation_output_id)"
-        )
-    };
-
-    let full = format!("{comment}\n{call}");
-    let mut lines: Vec<String> = full.lines().map(|l| l.to_string()).collect();
+    let mut lines: Vec<String> = snippet.lines().map(|l| l.to_string()).collect();
     lines.push(String::new()); // blank line after the block
     lines
 }
@@ -779,6 +955,12 @@ fn generate_coval_tracing_py(api_key: &str) -> String {
     r#"# coval_tracing.py — generated by `coval traces setup`
 #
 # This module configures OpenTelemetry tracing for Coval evaluation.
+# Call setup_coval_tracing() once at startup, then set_simulation_id()
+# when the Coval simulation ID arrives (typically via SIP header).
+#
+# Spans are buffered until set_simulation_id() is called, so no spans
+# are lost even if tracing is initialized before the call connects.
+#
 # Span names must follow Coval conventions:
 #   llm           — LLM inference spans
 #   tts           — Text-to-speech spans
@@ -787,42 +969,240 @@ fn generate_coval_tracing_py(api_key: &str) -> String {
 #
 # See: https://docs.coval.dev/traces
 
+import logging
 import os
-import base64
+from typing import Optional, Sequence
+
 from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.sdk.trace import ReadableSpan, Span, SpanProcessor, TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
 
-# Set your Coval API key via the environment variable
+logger = logging.getLogger("coval_tracing")
+
 COVAL_API_KEY = os.environ.get("COVAL_API_KEY", "")
-_b64_key = base64.b64encode(COVAL_API_KEY.encode()).decode()
+COVAL_TRACES_ENDPOINT = "https://api.coval.dev/v1/traces"
+
+# Module-level reference so set_simulation_id() can reach the exporter.
+_exporter: Optional["_DynamicCovalExporter"] = None
+
+# ── Span renamer ─────────────────────────────────────────────────────────────
+# Remaps span names from framework conventions to Coval conventions on start.
+
+_SPAN_NAME_MAP = {
+    "llm_request": "llm",
+    "llm_request_run": "llm",
+    "tts_request": "tts",
+    "tts_request_run": "tts",
+    "stt_request": "stt",
+    "stt_request_run": "stt",
+}
 
 
-def configure_coval_tracing(simulation_output_id: str) -> None:
-    """Configure OpenTelemetry to export traces to Coval.
+class _CovalSpanRenamer(SpanProcessor):
+    """Renames spans on start to match Coval conventions."""
 
-    Call this once per simulation run, BEFORE your agent pipeline starts.
-    The simulation_output_id is returned by the Coval API when a run is triggered.
+    def on_start(self, span: Span, parent_context=None) -> None:
+        name = span.name
+        if name in _SPAN_NAME_MAP:
+            span._name = _SPAN_NAME_MAP[name]
+        elif name.startswith("function_call"):
+            span._name = "llm_tool_call"
 
-    Example:
-        # From your Coval run trigger response:
-        simulation_output_id = run_response["simulations"][0]["id"]
-        configure_coval_tracing(simulation_output_id)
+    def on_end(self, span: ReadableSpan) -> None:
+        pass
 
-    IMPORTANT: The OTel provider is configured per-call (not once at startup)
-    because X-Simulation-Id is unique to each simulation run.
+    def shutdown(self) -> None:
+        pass
+
+    def force_flush(self, timeout_millis: int = 30000) -> bool:
+        return True
+
+
+# ── Dynamic exporter ─────────────────────────────────────────────────────────
+
+class _DynamicCovalExporter(SpanExporter):
+    """Buffers spans until the Coval simulation ID is known.
+
+    Call set_simulation_id() when the ID arrives (e.g. from a SIP header).
+    All buffered spans are flushed immediately, and subsequent spans export
+    in real time.
     """
-    provider = TracerProvider()
-    exporter = OTLPSpanExporter(
-        endpoint="https://api.coval.dev/v1/traces",
-        headers={
-            "Authorization": f"Basic {_b64_key}",
-            "X-Simulation-Id": simulation_output_id,
-        },
-    )
-    provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+    def __init__(self, api_key: str):
+        self._api_key = api_key
+        self._inner: Optional[OTLPSpanExporter] = None
+        self._buffer: list[ReadableSpan] = []
+
+    def reset(self) -> None:
+        """Reset for a new call (if the agent handles multiple calls)."""
+        if self._inner:
+            self._inner.shutdown()
+        self._inner = None
+        self._buffer.clear()
+
+    def activate(self, simulation_id: str) -> None:
+        """Start exporting spans with the given simulation ID."""
+        self._inner = OTLPSpanExporter(
+            endpoint=COVAL_TRACES_ENDPOINT,
+            headers={
+                "x-api-key": self._api_key,
+                "X-Simulation-Id": simulation_id,
+            },
+            timeout=30,
+        )
+        if self._buffer:
+            logger.info("Flushing %d buffered spans to Coval", len(self._buffer))
+            self._inner.export(self._buffer)
+            self._buffer.clear()
+
+    def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
+        if self._inner:
+            return self._inner.export(spans)
+        self._buffer.extend(spans)
+        return SpanExportResult.SUCCESS
+
+    def force_flush(self, timeout_millis: int = 30000) -> bool:
+        return self._inner.force_flush(timeout_millis) if self._inner else True
+
+    def shutdown(self) -> None:
+        if self._inner:
+            self._inner.shutdown()
+
+
+# ── Public API ───────────────────────────────────────────────────────────────
+
+def setup_coval_tracing(service_name: str = "coval-agent") -> None:
+    """Initialize OpenTelemetry tracing for Coval. Call once at startup.
+
+    Spans are buffered until set_simulation_id() is called.
+    If COVAL_API_KEY is not set, tracing is silently disabled.
+    """
+    global _exporter
+    if not COVAL_API_KEY:
+        logger.warning("COVAL_API_KEY not set — tracing disabled")
+        return
+    _exporter = _DynamicCovalExporter(api_key=COVAL_API_KEY)
+    resource = Resource.create({SERVICE_NAME: service_name})
+    provider = TracerProvider(resource=resource)
+    provider.add_span_processor(_CovalSpanRenamer())
+    provider.add_span_processor(SimpleSpanProcessor(_exporter))
     trace.set_tracer_provider(provider)
+    logger.info("Coval tracing initialized — waiting for simulation ID")
+
+
+def set_simulation_id(simulation_id: str) -> None:
+    """Activate trace export with the given simulation ID.
+
+    Typically called when the Coval simulation ID arrives via SIP header
+    (X-Coval-Simulation-Id) or environment variable (COVAL_SIMULATION_ID).
+    """
+    if _exporter and simulation_id:
+        _exporter.activate(simulation_id)
+        logger.info("Coval tracing active for simulation_id=%s", simulation_id)
+
+
+# ── LiveKit session instrumentation ──────────────────────────────────────────
+# Call instrument_session(session) after AgentSession.start() to hook events
+# that create Coval-compatible spans for STT, tool calls, and TTFB metrics.
+
+def instrument_session(session) -> None:
+    """Hook AgentSession events to create Coval trace spans.
+
+    Must be called after session.start(). Hooks:
+    - user_input_transcribed -> creates "stt" spans with transcript attribute
+    - function_tools_executed -> creates "llm_tool_call" spans
+    - metrics_collected -> creates spans with metrics.ttfb attribute
+    """
+    tracer = trace.get_tracer("coval.instrumentation")
+
+    def _on_user_input_transcribed(event):
+        if not getattr(event, "is_final", False):
+            return
+        with tracer.start_as_current_span("stt") as span:
+            span.set_attribute("transcript", event.transcript or "")
+
+    def _on_function_tools_executed(event):
+        for call in getattr(event, "function_calls", []):
+            with tracer.start_as_current_span("llm_tool_call") as span:
+                span.set_attribute("function.name", getattr(call, "name", ""))
+                span.set_attribute("tool_call_id", getattr(call, "call_id", ""))
+                span.set_attribute("function.arguments", getattr(call, "arguments", ""))
+
+    def _on_metrics_collected(event):
+        metrics = getattr(event, "metrics", None)
+        if metrics is None:
+            return
+        metrics_type = getattr(metrics, "type", "")
+        ttfb = getattr(metrics, "ttfb", None)
+        if ttfb is None:
+            return
+        if metrics_type == "llm_metrics":
+            span_name = "llm"
+        elif metrics_type == "stt_metrics":
+            span_name = "stt"
+        elif metrics_type == "tts_metrics":
+            span_name = "tts"
+        else:
+            return
+        with tracer.start_as_current_span(span_name) as span:
+            span.set_attribute("metrics.ttfb", ttfb)
+
+    session.on("user_input_transcribed", _on_user_input_transcribed)
+    session.on("function_tools_executed", _on_function_tools_executed)
+    session.on("metrics_collected", _on_metrics_collected)
+    logger.info("Coval session instrumentation active")
+
+
+# ── Utility functions for non-LiveKit frameworks ─────────────────────────────
+
+def create_llm_span(input_text: str = "", model: str = "", **kwargs):
+    """Create an LLM span. Use as a context manager: with create_llm_span(...) as span: ..."""
+    tracer = trace.get_tracer("coval.instrumentation")
+    span = tracer.start_span("llm")
+    if input_text:
+        span.set_attribute("input", input_text)
+    if model:
+        span.set_attribute("gen_ai.request.model", model)
+    for k, v in kwargs.items():
+        span.set_attribute(k, v)
+    return trace.use_span(span, end_on_exit=True)
+
+
+def create_stt_span(transcript: str = "", **kwargs):
+    """Create an STT span. Use as a context manager."""
+    tracer = trace.get_tracer("coval.instrumentation")
+    span = tracer.start_span("stt")
+    if transcript:
+        span.set_attribute("transcript", transcript)
+    for k, v in kwargs.items():
+        span.set_attribute(k, v)
+    return trace.use_span(span, end_on_exit=True)
+
+
+def create_tts_span(**kwargs):
+    """Create a TTS span. Use as a context manager."""
+    tracer = trace.get_tracer("coval.instrumentation")
+    span = tracer.start_span("tts")
+    for k, v in kwargs.items():
+        span.set_attribute(k, v)
+    return trace.use_span(span, end_on_exit=True)
+
+
+def create_tool_call_span(name: str = "", call_id: str = "", arguments: str = "", **kwargs):
+    """Create a tool call span. Use as a context manager."""
+    tracer = trace.get_tracer("coval.instrumentation")
+    span = tracer.start_span("llm_tool_call")
+    if name:
+        span.set_attribute("function.name", name)
+    if call_id:
+        span.set_attribute("tool_call_id", call_id)
+    if arguments:
+        span.set_attribute("function.arguments", arguments)
+    for k, v in kwargs.items():
+        span.set_attribute(k, v)
+    return trace.use_span(span, end_on_exit=True)
 "#
     .to_string()
 }
@@ -1205,7 +1585,7 @@ mod tests {
     fn generate_call_snippet_generic() {
         let lines = generate_call_snippet(Framework::Generic, "");
         let joined = lines.join("\n");
-        assert!(joined.contains("configure_coval_tracing(simulation_output_id)"));
+        assert!(joined.contains("setup_coval_tracing"));
         assert!(joined.contains("COVAL_SIMULATION_ID"));
         assert!(!joined.contains("ctx.job.metadata"));
     }
@@ -1214,17 +1594,18 @@ mod tests {
     fn generate_call_snippet_livekit_includes_ctx() {
         let lines = generate_call_snippet(Framework::Livekit, "    ");
         let joined = lines.join("\n");
-        assert!(joined.contains("ctx"));
-        assert!(joined.contains("job"));
-        assert!(joined.contains("configure_coval_tracing"));
+        assert!(joined.contains("ctx.room"));
+        assert!(joined.contains("participant_connected"));
+        assert!(joined.contains("participant_attributes_changed"));
+        assert!(joined.contains("setup_coval_tracing"));
     }
 
     #[test]
     fn generate_call_snippet_pipecat() {
         let lines = generate_call_snippet(Framework::Pipecat, "  ");
         let joined = lines.join("\n");
-        assert!(joined.contains("configure_coval_tracing"));
-        assert!(joined.contains("COVAL_SIMULATION_ID"));
+        assert!(joined.contains("setup_coval_tracing"));
+        assert!(joined.contains("set_simulation_id"));
     }
 
     #[test]
@@ -1238,7 +1619,7 @@ mod tests {
     #[test]
     fn generate_coval_tracing_py_contains_expected_elements() {
         let content = generate_coval_tracing_py("test-key");
-        assert!(content.contains("def configure_coval_tracing"));
+        assert!(content.contains("def setup_coval_tracing"));
         assert!(content.contains("TracerProvider"));
         assert!(content.contains("OTLPSpanExporter"));
         assert!(content.contains("COVAL_API_KEY"));
@@ -1250,8 +1631,10 @@ mod tests {
     fn generate_coval_tracing_py_valid_python_structure() {
         let content = generate_coval_tracing_py("");
         assert!(content.contains("import os"));
-        assert!(content.contains("import base64"));
+        assert!(content.contains("import logging"));
         assert!(content.contains("from opentelemetry"));
+        assert!(content.contains("instrument_session"));
+        assert!(content.contains("_CovalSpanRenamer"));
     }
 
     // ── generate_trace_ids ───────────────────────────────────────────────
@@ -1305,13 +1688,15 @@ mod tests {
             call_indent: String::new(),
             call_context: Some("def main()".to_string()),
             otel_already_configured: false,
+            session_start_line: None,
+            session_start_indent: String::new(),
         };
 
         apply_entry_point_modifications(&entry, &analysis, Framework::Generic).unwrap();
 
         let result = fs::read_to_string(&entry).unwrap();
-        assert!(result.contains("from coval_tracing import configure_coval_tracing"));
-        assert!(result.contains("configure_coval_tracing(simulation_output_id)"));
+        assert!(result.contains("from coval_tracing import setup_coval_tracing"));
+        assert!(result.contains("setup_coval_tracing"));
         assert_eq!(result.matches("import os").count(), 1);
 
         let bak = PathBuf::from(format!("{}.bak", entry.display()));
@@ -1335,13 +1720,15 @@ mod tests {
             call_indent: String::new(),
             call_context: None,
             otel_already_configured: false,
+            session_start_line: None,
+            session_start_indent: String::new(),
         };
 
         apply_entry_point_modifications(&entry, &analysis, Framework::Pipecat).unwrap();
 
         let result = fs::read_to_string(&entry).unwrap();
         assert!(result.contains("import os"));
-        assert!(result.contains("from coval_tracing import configure_coval_tracing"));
+        assert!(result.contains("from coval_tracing import setup_coval_tracing"));
     }
 
     #[test]
@@ -1357,6 +1744,8 @@ mod tests {
             call_indent: String::new(),
             call_context: None,
             otel_already_configured: false,
+            session_start_line: None,
+            session_start_indent: String::new(),
         };
 
         apply_entry_point_modifications(&entry, &analysis, Framework::Generic).unwrap();
@@ -1378,13 +1767,16 @@ mod tests {
             call_indent: String::new(),
             call_context: None,
             otel_already_configured: false,
+            session_start_line: None,
+            session_start_indent: String::new(),
         };
 
         apply_entry_point_modifications(&entry, &analysis, Framework::Generic).unwrap();
 
         let result = fs::read_to_string(&entry).unwrap();
-        assert!(result.contains("from coval_tracing import configure_coval_tracing"));
-        assert!(!result.contains("configure_coval_tracing(simulation_output_id)"));
+        assert!(result.contains("from coval_tracing import setup_coval_tracing"));
+        // No call block inserted since call_line is None — only the import is present
+        assert!(!result.contains("setup_coval_tracing()"));
     }
 
     #[test]
@@ -1404,13 +1796,15 @@ mod tests {
             call_indent: "    ".to_string(),
             call_context: Some("inside entrypoint()".to_string()),
             otel_already_configured: false,
+            session_start_line: None,
+            session_start_indent: String::new(),
         };
 
         apply_entry_point_modifications(&entry, &analysis, Framework::Livekit).unwrap();
 
         let result = fs::read_to_string(&entry).unwrap();
-        assert!(result.contains("from coval_tracing import configure_coval_tracing"));
-        assert!(result.contains("    configure_coval_tracing(simulation_output_id)"));
+        assert!(result.contains("from coval_tracing import setup_coval_tracing"));
+        assert!(result.contains("    setup_coval_tracing"));
         assert!(result.contains("ctx"));
     }
 }
