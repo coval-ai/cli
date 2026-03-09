@@ -575,6 +575,14 @@ struct EntryPointAnalysis {
     dialin_handler_line: Option<usize>,
     /// Indentation inside the dialin handler body
     dialin_handler_indent: String,
+    /// 0-indexed line after dialin_settings parsing for Pipecat args.body SIP header extraction.
+    body_extraction_line: Option<usize>,
+    /// Indentation for body extraction code
+    body_extraction_indent: String,
+    /// 0-indexed line before the closing `)` of `PipelineTask(...)` for Pipecat tracing enablement.
+    pipecat_task_line: Option<usize>,
+    /// Indentation for injected Pipecat `PipelineTask(...)` keyword arguments.
+    pipecat_task_indent: String,
 }
 
 fn analyze_entry_point(path: &Path, framework: Framework) -> Result<EntryPointAnalysis> {
@@ -613,6 +621,19 @@ fn analyze_entry_point(path: &Path, framework: Framework) -> Result<EntryPointAn
         (None, String::new())
     };
 
+    let (body_extraction_line, body_extraction_indent) = if matches!(framework, Framework::Pipecat)
+    {
+        find_pipecat_body_extraction(&lines)
+    } else {
+        (None, String::new())
+    };
+
+    let (pipecat_task_line, pipecat_task_indent) = if matches!(framework, Framework::Pipecat) {
+        find_pipecat_task_enable_tracing(&lines)
+    } else {
+        (None, String::new())
+    };
+
     Ok(EntryPointAnalysis {
         import_line,
         has_os_import,
@@ -624,6 +645,10 @@ fn analyze_entry_point(path: &Path, framework: Framework) -> Result<EntryPointAn
         session_start_indent,
         dialin_handler_line,
         dialin_handler_indent,
+        body_extraction_line,
+        body_extraction_indent,
+        pipecat_task_line,
+        pipecat_task_indent,
     })
 }
 
@@ -755,6 +780,33 @@ fn find_livekit_session_start(lines: &[&str]) -> (Option<usize>, String) {
     (None, String::new())
 }
 
+fn find_pipecat_body_extraction(lines: &[&str]) -> (Option<usize>, String) {
+    // Find where to inject args.body SIP header extraction inside bot().
+    // Look for the dialin_settings parsing block (DailyDialinSettings) and insert after it.
+    // Also handles simpler patterns like `body = getattr(args, "body"` or `body = args.body`.
+    for (i, line) in lines.iter().enumerate() {
+        let t = line.trim();
+        if t.contains("DailyDialinSettings(") || t.contains("dialin_settings") && t.contains("body")
+        {
+            // Find the end of this block — look for the next unindented or less-indented line
+            let base_indent = leading_whitespace(line);
+            for j in (i + 1)..lines.len() {
+                let inner = lines[j].trim();
+                if inner.is_empty() {
+                    // Blank line after the block — insert here
+                    let indent = if base_indent.is_empty() {
+                        "    ".to_string() // default to 4 spaces
+                    } else {
+                        base_indent.clone()
+                    };
+                    return (Some(j + 1), indent);
+                }
+            }
+        }
+    }
+    (None, String::new())
+}
+
 fn find_pipecat_dialin_handler(lines: &[&str]) -> (Option<usize>, String) {
     // Find the `on_dialin_connected` event handler body to inject SIP header extraction.
     // Pattern: @transport.event_handler("on_dialin_connected") followed by async def, then body.
@@ -789,6 +841,56 @@ fn find_pipecat_dialin_handler(lines: &[&str]) -> (Option<usize>, String) {
             }
         }
     }
+    (None, String::new())
+}
+
+fn find_pipecat_task_enable_tracing(lines: &[&str]) -> (Option<usize>, String) {
+    for (i, line) in lines.iter().enumerate() {
+        if !line.contains("PipelineTask(") {
+            continue;
+        }
+
+        let default_indent = format!("{}    ", leading_whitespace(line));
+        let mut arg_indent = String::new();
+        let mut depth: i32 = 0;
+        let mut has_enable_tracing = false;
+
+        for j in i..lines.len() {
+            let current = lines[j];
+            let trimmed = current.trim();
+
+            if j > i && arg_indent.is_empty() && !trimmed.is_empty() && trimmed != ")" {
+                arg_indent = leading_whitespace(current);
+            }
+
+            if trimmed.contains("enable_tracing") {
+                has_enable_tracing = true;
+            }
+
+            for ch in current.chars() {
+                if ch == '(' {
+                    depth += 1;
+                } else if ch == ')' {
+                    depth -= 1;
+                }
+            }
+
+            if depth <= 0 {
+                if has_enable_tracing || j == i {
+                    return (None, String::new());
+                }
+                return (
+                    Some(j),
+                    if arg_indent.is_empty() {
+                        default_indent
+                    } else {
+                        arg_indent
+                    },
+                );
+            }
+        }
+    }
+
     (None, String::new())
 }
 
@@ -869,12 +971,22 @@ fn apply_entry_point_modifications(
         "from coval_tracing import setup_coval_tracing, set_simulation_id"
     };
     import_lines.push(import_stmt.to_string());
+
+    // For Pipecat, setup_coval_tracing() goes at module level (right after imports)
+    // so the TracerProvider is in place before Pipecat creates any spans.
+    // For LiveKit/Generic, it goes at the injection point inside the entrypoint function.
+    if matches!(framework, Framework::Pipecat) {
+        import_lines.push("setup_coval_tracing()".to_string());
+    }
+
     insertions.push((import_pos, import_lines));
 
-    // setup_coval_tracing() call block
-    if let Some(call_line) = analysis.call_line {
-        let snippet = generate_call_snippet(framework, &analysis.call_indent);
-        insertions.push((call_line, snippet));
+    // setup_coval_tracing() call block (LiveKit and Generic only — Pipecat is handled above)
+    if !matches!(framework, Framework::Pipecat) {
+        if let Some(call_line) = analysis.call_line {
+            let snippet = generate_call_snippet(framework, &analysis.call_indent);
+            insertions.push((call_line, snippet));
+        }
     }
 
     // LiveKit: insert instrument_session(session) after session.start()
@@ -886,17 +998,49 @@ fn apply_entry_point_modifications(
         insertions.push((session_line + 1, session_lines));
     }
 
-    // Pipecat: insert SIP header extraction inside on_dialin_connected handler
+    // Pipecat: insert args.body SIP header extraction (primary path for PCC)
+    if let Some(body_line) = analysis.body_extraction_line {
+        let indent = &analysis.body_extraction_indent;
+        let body_lines = vec![
+            format!("{indent}# Coval tracing: extract simulation ID from SIP headers in body"),
+            format!("{indent}_coval_sim = \"\""),
+            format!("{indent}if isinstance(body, dict):"),
+            format!("{indent}    _raw_dialin = body.get(\"dialin_settings\") or body.get(\"dialinSettings\") or {{}}"),
+            format!("{indent}    if isinstance(_raw_dialin, dict):"),
+            format!("{indent}        _sip_h = _raw_dialin.get(\"sip_headers\") or _raw_dialin.get(\"sipHeaders\") or {{}}"),
+            format!("{indent}        if isinstance(_sip_h, dict):"),
+            format!("{indent}            _coval_sim = _sip_h.get(\"X-Coval-Simulation-Id\") or _sip_h.get(\"x-coval-simulation-id\") or \"\""),
+            format!("{indent}if not _coval_sim:"),
+            format!("{indent}    _coval_sim = os.environ.get(\"COVAL_SIMULATION_ID\", \"\")"),
+            format!("{indent}if _coval_sim:"),
+            format!("{indent}    set_simulation_id(_coval_sim)"),
+            String::new(),
+        ];
+        insertions.push((body_line, body_lines));
+    }
+
+    // Pipecat: insert SIP header extraction inside on_dialin_connected handler (fallback)
     if let Some(dialin_line) = analysis.dialin_handler_line {
         let indent = &analysis.dialin_handler_indent;
         let dialin_lines = vec![
             format!("{indent}# Coval tracing: extract simulation ID from SIP headers"),
-            format!("{indent}sip_headers = data.get(\"sipHeaders\", {{}})"),
-            format!("{indent}_coval_sim_id = sip_headers.get(\"X-Coval-Simulation-Id\", \"\")"),
+            format!("{indent}_coval_sim_id = \"\""),
+            format!("{indent}sip_headers = data.get(\"sipHeaders\") or data.get(\"sip_headers\") or {{}}"),
+            format!("{indent}if isinstance(sip_headers, dict):"),
+            format!("{indent}    _coval_sim_id = sip_headers.get(\"X-Coval-Simulation-Id\") or sip_headers.get(\"x-coval-simulation-id\") or \"\""),
+            format!("{indent}if not _coval_sim_id:"),
+            format!("{indent}    _coval_sim_id = os.environ.get(\"COVAL_SIMULATION_ID\", \"\")"),
             format!("{indent}if _coval_sim_id:"),
             format!("{indent}    set_simulation_id(_coval_sim_id)"),
         ];
         insertions.push((dialin_line, dialin_lines));
+    }
+
+    // Pipecat: enable OpenTelemetry tracing on PipelineTask(...)
+    if let Some(task_line) = analysis.pipecat_task_line {
+        let indent = &analysis.pipecat_task_indent;
+        let task_lines = vec![format!("{indent}enable_tracing=True,")];
+        insertions.push((task_line, task_lines));
     }
 
     // Apply in descending order: higher line numbers first so earlier indices stay stable
@@ -1059,6 +1203,8 @@ class _DynamicCovalExporter(SpanExporter):
 
     def activate(self, simulation_id: str) -> None:
         """Start exporting spans with the given simulation ID."""
+        if self._inner:
+            self._inner.shutdown()
         self._inner = OTLPSpanExporter(
             endpoint=COVAL_TRACES_ENDPOINT,
             headers={
@@ -1097,6 +1243,10 @@ def setup_coval_tracing(service_name: str = "coval-agent") -> None:
     global _exporter
     if not COVAL_API_KEY:
         logger.warning("COVAL_API_KEY not set — tracing disabled")
+        return
+    if _exporter is not None:
+        _exporter.reset()
+        logger.info("Coval tracing reset — waiting for simulation ID")
         return
     _exporter = _DynamicCovalExporter(api_key=COVAL_API_KEY)
     resource = Resource.create({SERVICE_NAME: service_name})
@@ -1879,6 +2029,7 @@ mod tests {
         assert!(content.contains("from opentelemetry"));
         assert!(content.contains("instrument_session"));
         assert!(content.contains("_CovalSpanRenamer"));
+        assert!(content.contains("Coval tracing reset"));
     }
 
     // ── generate_trace_ids ───────────────────────────────────────────────
@@ -1936,6 +2087,10 @@ mod tests {
             session_start_indent: String::new(),
             dialin_handler_line: None,
             dialin_handler_indent: String::new(),
+            body_extraction_line: None,
+            body_extraction_indent: String::new(),
+            pipecat_task_line: None,
+            pipecat_task_indent: String::new(),
         };
 
         apply_entry_point_modifications(&entry, &analysis, Framework::Generic).unwrap();
@@ -1970,6 +2125,10 @@ mod tests {
             session_start_indent: String::new(),
             dialin_handler_line: None,
             dialin_handler_indent: String::new(),
+            body_extraction_line: None,
+            body_extraction_indent: String::new(),
+            pipecat_task_line: None,
+            pipecat_task_indent: String::new(),
         };
 
         apply_entry_point_modifications(&entry, &analysis, Framework::Pipecat).unwrap();
@@ -1996,6 +2155,10 @@ mod tests {
             session_start_indent: String::new(),
             dialin_handler_line: None,
             dialin_handler_indent: String::new(),
+            body_extraction_line: None,
+            body_extraction_indent: String::new(),
+            pipecat_task_line: None,
+            pipecat_task_indent: String::new(),
         };
 
         apply_entry_point_modifications(&entry, &analysis, Framework::Generic).unwrap();
@@ -2021,6 +2184,10 @@ mod tests {
             session_start_indent: String::new(),
             dialin_handler_line: None,
             dialin_handler_indent: String::new(),
+            body_extraction_line: None,
+            body_extraction_indent: String::new(),
+            pipecat_task_line: None,
+            pipecat_task_indent: String::new(),
         };
 
         apply_entry_point_modifications(&entry, &analysis, Framework::Generic).unwrap();
@@ -2052,6 +2219,10 @@ mod tests {
             session_start_indent: String::new(),
             dialin_handler_line: None,
             dialin_handler_indent: String::new(),
+            body_extraction_line: None,
+            body_extraction_indent: String::new(),
+            pipecat_task_line: None,
+            pipecat_task_indent: String::new(),
         };
 
         apply_entry_point_modifications(&entry, &analysis, Framework::Livekit).unwrap();
@@ -2060,5 +2231,67 @@ mod tests {
         assert!(result.contains("from coval_tracing import setup_coval_tracing"));
         assert!(result.contains("    setup_coval_tracing"));
         assert!(result.contains("ctx"));
+    }
+
+    #[test]
+    fn find_pipecat_task_enable_tracing_skips_when_already_present() {
+        let lines = [
+            "task = PipelineTask(",
+            "    pipeline,",
+            "    enable_tracing=True,",
+            ")",
+        ];
+        let (line, indent) = find_pipecat_task_enable_tracing(&lines);
+        assert!(line.is_none());
+        assert!(indent.is_empty());
+    }
+
+    #[test]
+    fn apply_entry_point_modifications_pipecat_adds_task_tracing_and_header_fallbacks() {
+        let dir = TempDir::new().unwrap();
+        let entry = dir.path().join("bot.py");
+        fs::write(
+            &entry,
+            r#"import asyncio
+from loguru import logger
+from pipecat.pipeline.task import PipelineParams, PipelineTask
+from pipecat.transports.daily.transport import DailyDialinSettings
+
+async def bot(args):
+    body = getattr(args, "body", None) or {}
+    dialin_settings = None
+    if isinstance(body, dict):
+        raw = body.get("dialin_settings")
+        if raw:
+            dialin_settings = DailyDialinSettings(
+                call_id=raw.get("callId") or raw.get("call_id", ""),
+                call_domain=raw.get("callDomain") or raw.get("call_domain", ""),
+            )
+            logger.info("dialin ready")
+
+    @transport.event_handler("on_dialin_connected")
+    async def on_dialin_connected(transport, data):
+        logger.info(f"Dialin CONNECTED — data: {data}")
+
+    task = PipelineTask(
+        pipeline,
+        params=PipelineParams(
+            allow_interruptions=True,
+            enable_metrics=True,
+        ),
+    )
+"#,
+        )
+        .unwrap();
+
+        let analysis = analyze_entry_point(&entry, Framework::Pipecat).unwrap();
+        apply_entry_point_modifications(&entry, &analysis, Framework::Pipecat).unwrap();
+
+        let result = fs::read_to_string(&entry).unwrap();
+        assert!(result.contains("setup_coval_tracing()"));
+        assert!(result.contains("body.get(\"dialinSettings\")"));
+        assert!(result.contains("os.environ.get(\"COVAL_SIMULATION_ID\", \"\")"));
+        assert!(result.contains("data.get(\"sipHeaders\") or data.get(\"sip_headers\")"));
+        assert!(result.contains("enable_tracing=True,"));
     }
 }
