@@ -559,13 +559,13 @@ impl RunTemplatesClient<'_> {
         &self,
         params: models::ListParams,
     ) -> Result<models::ListRunTemplatesResponse, ApiError> {
-        let mut url = self.0.url("/v1/run_templates");
+        let mut url = self.0.url("/v1/run-templates");
         params.apply_to(&mut url);
         self.0.get(url).await
     }
 
     pub async fn get(&self, id: &str) -> Result<models::RunTemplate, ApiError> {
-        let url = self.0.url(&format!("/v1/run_templates/{id}"));
+        let url = self.0.url(&format!("/v1/run-templates/{id}"));
         let resp: models::GetRunTemplateResponse = self.0.get(url).await?;
         Ok(resp.run_template)
     }
@@ -574,7 +574,7 @@ impl RunTemplatesClient<'_> {
         &self,
         req: models::CreateRunTemplateRequest,
     ) -> Result<models::RunTemplate, ApiError> {
-        let url = self.0.url("/v1/run_templates");
+        let url = self.0.url("/v1/run-templates");
         let resp: models::CreateRunTemplateResponse = self.0.post(url, &req).await?;
         Ok(resp.run_template)
     }
@@ -584,13 +584,13 @@ impl RunTemplatesClient<'_> {
         id: &str,
         req: models::UpdateRunTemplateRequest,
     ) -> Result<models::RunTemplate, ApiError> {
-        let url = self.0.url(&format!("/v1/run_templates/{id}"));
+        let url = self.0.url(&format!("/v1/run-templates/{id}"));
         let resp: models::UpdateRunTemplateResponse = self.0.patch(url, &req).await?;
         Ok(resp.run_template)
     }
 
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
-        let url = self.0.url(&format!("/v1/run_templates/{id}"));
+        let url = self.0.url(&format!("/v1/run-templates/{id}"));
         self.0.delete(url).await
     }
 }
@@ -602,7 +602,7 @@ impl ScheduledRunsClient<'_> {
         enabled: Option<bool>,
         template_id: Option<&str>,
     ) -> Result<models::ListScheduledRunsResponse, ApiError> {
-        let mut url = self.0.url("/v1/scheduled_runs");
+        let mut url = self.0.url("/v1/scheduled-runs");
         params.apply_to(&mut url);
         {
             let mut pairs = url.query_pairs_mut();
@@ -617,7 +617,7 @@ impl ScheduledRunsClient<'_> {
     }
 
     pub async fn get(&self, id: &str) -> Result<models::ScheduledRun, ApiError> {
-        let url = self.0.url(&format!("/v1/scheduled_runs/{id}"));
+        let url = self.0.url(&format!("/v1/scheduled-runs/{id}"));
         let resp: models::GetScheduledRunResponse = self.0.get(url).await?;
         Ok(resp.scheduled_run)
     }
@@ -626,7 +626,7 @@ impl ScheduledRunsClient<'_> {
         &self,
         req: models::CreateScheduledRunRequest,
     ) -> Result<models::ScheduledRun, ApiError> {
-        let url = self.0.url("/v1/scheduled_runs");
+        let url = self.0.url("/v1/scheduled-runs");
         let resp: models::CreateScheduledRunResponse = self.0.post(url, &req).await?;
         Ok(resp.scheduled_run)
     }
@@ -636,13 +636,13 @@ impl ScheduledRunsClient<'_> {
         id: &str,
         req: models::UpdateScheduledRunRequest,
     ) -> Result<models::ScheduledRun, ApiError> {
-        let url = self.0.url(&format!("/v1/scheduled_runs/{id}"));
+        let url = self.0.url(&format!("/v1/scheduled-runs/{id}"));
         let resp: models::UpdateScheduledRunResponse = self.0.patch(url, &req).await?;
         Ok(resp.scheduled_run)
     }
 
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
-        let url = self.0.url(&format!("/v1/scheduled_runs/{id}"));
+        let url = self.0.url(&format!("/v1/scheduled-runs/{id}"));
         self.0.delete(url).await
     }
 }
