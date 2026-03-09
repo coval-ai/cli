@@ -104,11 +104,9 @@ pub async fn run(cli: Cli) -> anyhow::Result<()> {
         Commands::Config { command } => commands::config::execute(command),
         Commands::Traces {
             command: commands::traces::TraceCommands::Setup(args),
-        } if args.no_validate => commands::traces::execute(
-            commands::traces::TraceCommands::Setup(args),
-            None,
-        )
-        .await,
+        } if args.no_validate => {
+            commands::traces::execute(commands::traces::TraceCommands::Setup(args), None).await
+        }
         _ => {
             let api_key = api_key.ok_or_else(|| {
                 anyhow::anyhow!(

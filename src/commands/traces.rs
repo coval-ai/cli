@@ -163,8 +163,7 @@ async fn setup(args: SetupArgs, client: Option<&CovalClient>) -> Result<()> {
         Ok(existing) => existing != tracing_content,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => true,
         Err(err) => {
-            return Err(err)
-                .with_context(|| format!("Failed to read {}", tracing_file.display()));
+            return Err(err).with_context(|| format!("Failed to read {}", tracing_file.display()));
         }
     };
 
@@ -782,9 +781,9 @@ fn analyze_entry_point(path: &Path, framework: Framework) -> Result<EntryPointAn
     let has_instrument_call = lines
         .iter()
         .any(|line| line.contains("instrument_session("));
-    let has_pipecat_body_extraction = lines
-        .iter()
-        .any(|line| line.contains("# Coval tracing: extract simulation ID from SIP headers in body"));
+    let has_pipecat_body_extraction = lines.iter().any(|line| {
+        line.contains("# Coval tracing: extract simulation ID from SIP headers in body")
+    });
     let has_pipecat_dialin_extraction = lines
         .iter()
         .any(|line| line.contains("# Coval tracing: extract simulation ID from SIP headers"));
@@ -1806,10 +1805,7 @@ fn read_livekit_creds(dir: &Path) -> Option<LiveKitCreds> {
                     continue;
                 }
                 let (key, val) = match line.split_once('=') {
-                    Some((k, v)) => (
-                        k.trim(),
-                        v.trim().trim_matches(|c| c == '"' || c == '\''),
-                    ),
+                    Some((k, v)) => (k.trim(), v.trim().trim_matches(|c| c == '"' || c == '\'')),
                     None => continue,
                 };
                 match key {
@@ -2468,7 +2464,9 @@ mod tests {
 
     #[test]
     fn is_expected_validation_not_found_supports_plain_text_and_json() {
-        assert!(is_expected_validation_not_found("Simulation output not found"));
+        assert!(is_expected_validation_not_found(
+            "Simulation output not found"
+        ));
         assert!(is_expected_validation_not_found(
             r#"{"message":"Simulation output not found"}"#
         ));
