@@ -34,6 +34,8 @@ pub struct CreateArgs {
     #[arg(long)]
     name: String,
     #[arg(long)]
+    description: Option<String>,
+    #[arg(long)]
     agent_id: Option<String>,
     #[arg(long)]
     persona_id: Option<String>,
@@ -58,6 +60,8 @@ pub struct UpdateArgs {
     run_template_id: String,
     #[arg(long)]
     name: Option<String>,
+    #[arg(long)]
+    description: Option<String>,
     #[arg(long)]
     agent_id: Option<String>,
     #[arg(long)]
@@ -106,7 +110,7 @@ pub async fn execute(
         RunTemplateCommands::Create(args) => {
             let req = CreateRunTemplateRequest {
                 display_name: args.name,
-                description: None,
+                description: args.description,
                 agent_id: args.agent_id,
                 persona_id: args.persona_id,
                 test_set_id: args.test_set_id,
@@ -124,6 +128,7 @@ pub async fn execute(
         RunTemplateCommands::Update(args) => {
             let req = UpdateRunTemplateRequest {
                 display_name: args.name,
+                description: args.description,
                 agent_id: args.agent_id,
                 persona_id: args.persona_id,
                 test_set_id: args.test_set_id,
