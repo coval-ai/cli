@@ -382,3 +382,91 @@ async fn test_scheduled_runs_list_hyphenated_path() {
         .stdout(predicate::str::contains("sr123"))
         .stdout(predicate::str::contains("Daily Run"));
 }
+
+#[tokio::test]
+async fn test_agents_create_with_metadata() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/agents"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "agent": {
+                "id": "new123",
+                "display_name": "Bot",
+                "model_type": "MODEL_TYPE_CHAT",
+                "metadata": {"chat_endpoint": "https://example.com"},
+                "create_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("agents")
+        .arg("create")
+        .arg("--name")
+        .arg("Bot")
+        .arg("--type")
+        .arg("chat")
+        .arg("--metadata")
+        .arg(r#"{"chat_endpoint":"https://example.com"}"#)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("new123"));
+}
+
+#[tokio::test]
+async fn test_agents_update_with_metadata() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/agents/abc123"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "agent": {
+                "id": "abc123",
+                "display_name": "Updated Agent",
+                "model_type": "MODEL_TYPE_CHAT",
+                "metadata": {"key": "val"},
+                "create_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("agents")
+        .arg("update")
+        .arg("abc123")
+        .arg("--metadata")
+        .arg(r#"{"key":"val"}"#)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("abc123"));
+}
+
+#[test]
+fn test_agents_update_invalid_metadata_json() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg("http://localhost:1")
+        .arg("agents")
+        .arg("update")
+        .arg("abc123")
+        .arg("--metadata")
+        .arg("not valid json")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Invalid JSON for --metadata"));
+}
