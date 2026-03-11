@@ -22,6 +22,9 @@ pub struct ListArgs {
     page_size: u32,
     #[arg(long)]
     order_by: Option<String>,
+    /// Include built-in metrics (e.g. Turn Count, Audio Duration)
+    #[arg(long)]
+    include_builtin: bool,
 }
 
 #[derive(Args)]
@@ -122,7 +125,7 @@ pub async fn execute(
                 order_by: args.order_by,
                 ..Default::default()
             };
-            let response = client.metrics().list(params).await?;
+            let response = client.metrics().list(params, args.include_builtin).await?;
             print_list(&response.metrics, format);
         }
         MetricCommands::Get(args) => {
