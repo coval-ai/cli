@@ -45,6 +45,9 @@ pub struct CreateArgs {
     metric_ids: Option<Vec<String>>,
     #[arg(long, value_delimiter = ',')]
     test_set_ids: Option<Vec<String>>,
+    /// JSON string for metadata
+    #[arg(long)]
+    metadata: Option<String>,
 }
 
 #[derive(Args)]
@@ -64,6 +67,9 @@ pub struct UpdateArgs {
     metric_ids: Option<Vec<String>>,
     #[arg(long, value_delimiter = ',')]
     test_set_ids: Option<Vec<String>>,
+    /// JSON string for metadata
+    #[arg(long)]
+    metadata: Option<String>,
 }
 
 #[derive(Args)]
@@ -88,13 +94,19 @@ pub async fn execute(cmd: AgentCommands, client: &CovalClient, format: OutputFor
             print_one(&agent, format);
         }
         AgentCommands::Create(args) => {
+            let metadata = args
+                .metadata
+                .map(|s| serde_json::from_str(&s))
+                .transpose()
+                .map_err(|e| anyhow::anyhow!("Invalid JSON for --metadata: {e}"))?;
+
             let req = CreateAgentRequest {
                 display_name: args.name,
                 model_type: args.r#type,
                 phone_number: args.phone_number,
                 endpoint: args.endpoint,
                 prompt: args.prompt,
-                metadata: None,
+                metadata,
                 metric_ids: args.metric_ids,
                 test_set_ids: args.test_set_ids,
             };
@@ -102,15 +114,21 @@ pub async fn execute(cmd: AgentCommands, client: &CovalClient, format: OutputFor
             print_one(&agent, format);
         }
         AgentCommands::Update(args) => {
+            let metadata = args
+                .metadata
+                .map(|s| serde_json::from_str(&s))
+                .transpose()
+                .map_err(|e| anyhow::anyhow!("Invalid JSON for --metadata: {e}"))?;
+
             let req = UpdateAgentRequest {
                 display_name: args.name,
                 model_type: args.r#type,
                 phone_number: args.phone_number,
                 endpoint: args.endpoint,
                 prompt: args.prompt,
+                metadata,
                 metric_ids: args.metric_ids,
                 test_set_ids: args.test_set_ids,
-                ..Default::default()
             };
             let agent = client.agents().update(&args.agent_id, req).await?;
             print_one(&agent, format);
