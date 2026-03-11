@@ -445,9 +445,13 @@ impl MetricsClient<'_> {
     pub async fn list(
         &self,
         params: models::ListParams,
+        include_builtin: bool,
     ) -> Result<models::ListMetricsResponse, ApiError> {
         let mut url = self.0.url("/v1/metrics");
         params.apply_to(&mut url);
+        if include_builtin {
+            url.query_pairs_mut().append_pair("include_builtin", "true");
+        }
         self.0.get(url).await
     }
 
