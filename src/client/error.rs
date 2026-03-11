@@ -31,7 +31,6 @@ impl ApiError {
     pub fn from_response(_status: StatusCode, resp: ErrorResponse) -> Self {
         let field = resp.error.details.first().and_then(|d| d.field.clone());
 
-        // Append detail descriptions to the message so users see what's actually wrong
         let detail_descriptions: Vec<String> = resp
             .error
             .details
