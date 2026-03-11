@@ -16,10 +16,13 @@ pub enum MetricCommands {
 
 #[derive(Args)]
 pub struct ListArgs {
+    /// Filter expression (supports metric_type, metric_name, create_time)
     #[arg(long)]
     filter: Option<String>,
+    /// Results per page (1-100, default 50)
     #[arg(long, default_value = "50")]
     page_size: u32,
+    /// Sort field, prefix with - for descending (default: -create_time)
     #[arg(long)]
     order_by: Option<String>,
 }
@@ -30,38 +33,54 @@ pub struct GetArgs {
 }
 
 #[derive(Args)]
+#[command(
+    after_help = "Required fields by metric type:\n  llm-binary          --prompt\n  categorical         --prompt --categories\n  numerical           --prompt --min-value --max-value\n  audio-binary        --prompt\n  audio-categorical   --prompt --categories\n  audio-numerical     --prompt --min-value --max-value\n  toolcall            --prompt\n  metadata            --metadata-field-type --metadata-field-key\n  regex               --regex-pattern\n  pause               --min-pause-duration"
+)]
 pub struct CreateArgs {
+    /// Metric name (1-200 characters)
     #[arg(long)]
     name: String,
+    /// Metric description (1-1000 characters)
     #[arg(long)]
     description: String,
+    /// Metric type (determines required fields, see below)
     #[arg(long, value_enum)]
     r#type: MetricType,
+    /// LLM evaluation prompt
     #[arg(long)]
     prompt: Option<String>,
+    /// Comma-separated category values (min 2, max 50)
     #[arg(long, value_delimiter = ',')]
     categories: Option<Vec<String>>,
+    /// Minimum value for numerical metrics
     #[arg(long)]
     min_value: Option<f64>,
+    /// Maximum value for numerical metrics
     #[arg(long)]
     max_value: Option<f64>,
+    /// Regex pattern for transcript matching
     #[arg(long)]
     regex_pattern: Option<String>,
+    /// Transcript role to evaluate (agent or user)
     #[arg(long)]
     role: Option<String>,
     #[arg(long)]
     match_mode: Option<String>,
     #[arg(long)]
     position: Option<String>,
+    /// Case-insensitive regex matching
     #[arg(long)]
     case_insensitive: Option<bool>,
+    /// Field type (STRING, NUMBER, or BOOLEAN)
     #[arg(long)]
     metadata_field_type: Option<String>,
+    /// Metadata field key to extract
     #[arg(long)]
     metadata_field_key: Option<String>,
+    /// Minimum pause duration in seconds (>= 0.5)
     #[arg(long)]
     min_pause_duration: Option<f64>,
-    /// JSON string for target condition
+    /// JSON string for pass/fail target condition
     #[arg(long)]
     target_condition: Option<String>,
 }
@@ -69,37 +88,50 @@ pub struct CreateArgs {
 #[derive(Args)]
 pub struct UpdateArgs {
     metric_id: String,
+    /// Metric name (1-200 characters)
     #[arg(long)]
     name: Option<String>,
+    /// Metric description (1-1000 characters)
     #[arg(long)]
     description: Option<String>,
+    /// Metric type
     #[arg(long, value_enum)]
     r#type: Option<MetricType>,
+    /// LLM evaluation prompt
     #[arg(long)]
     prompt: Option<String>,
+    /// Comma-separated category values (min 2, max 50)
     #[arg(long, value_delimiter = ',')]
     categories: Option<Vec<String>>,
+    /// Minimum value for numerical metrics
     #[arg(long)]
     min_value: Option<f64>,
+    /// Maximum value for numerical metrics
     #[arg(long)]
     max_value: Option<f64>,
+    /// Field type (STRING, NUMBER, or BOOLEAN)
     #[arg(long)]
     metadata_field_type: Option<String>,
+    /// Metadata field key to extract
     #[arg(long)]
     metadata_field_key: Option<String>,
+    /// Regex pattern for transcript matching
     #[arg(long)]
     regex_pattern: Option<String>,
+    /// Transcript role to evaluate (agent or user)
     #[arg(long)]
     role: Option<String>,
     #[arg(long)]
     match_mode: Option<String>,
     #[arg(long)]
     position: Option<String>,
+    /// Case-insensitive regex matching
     #[arg(long)]
     case_insensitive: Option<bool>,
+    /// Minimum pause duration in seconds (>= 0.5)
     #[arg(long)]
     min_pause_duration: Option<f64>,
-    /// JSON string for target condition
+    /// JSON string for pass/fail target condition
     #[arg(long)]
     target_condition: Option<String>,
 }
