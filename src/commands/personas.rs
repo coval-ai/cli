@@ -18,10 +18,13 @@ pub enum PersonaCommands {
 
 #[derive(Args)]
 pub struct ListArgs {
+    /// Filter expression (supports name, create_time, update_time)
     #[arg(long)]
     filter: Option<String>,
+    /// Results per page (1-100, default 50)
     #[arg(long, default_value = "50")]
     page_size: u32,
+    /// Sort field, prefix with - for descending (default: -create_time)
     #[arg(long)]
     order_by: Option<String>,
 }
@@ -33,16 +36,22 @@ pub struct GetArgs {
 
 #[derive(Args)]
 pub struct CreateArgs {
+    /// Persona name (1-200 characters)
     #[arg(long)]
     name: String,
+    /// Voice name for speech synthesis
     #[arg(long)]
     voice: String,
+    /// Language code in BCP-47 format (e.g. en-US)
     #[arg(long)]
     language: String,
+    /// Persona behavior instructions
     #[arg(long)]
     prompt: Option<String>,
+    /// Background sound (e.g. office, cafe, airport)
     #[arg(long)]
     background: Option<String>,
+    /// Seconds to wait before speaking (0.1-2.0)
     #[arg(long)]
     wait_seconds: Option<f32>,
 }
@@ -50,16 +59,22 @@ pub struct CreateArgs {
 #[derive(Args)]
 pub struct UpdateArgs {
     persona_id: String,
+    /// Persona name (1-200 characters)
     #[arg(long)]
     name: Option<String>,
+    /// Voice name for speech synthesis
     #[arg(long)]
     voice: Option<String>,
+    /// Language code in BCP-47 format (e.g. en-US)
     #[arg(long)]
     language: Option<String>,
+    /// Persona behavior instructions
     #[arg(long)]
     prompt: Option<String>,
+    /// Background sound (e.g. office, cafe, airport)
     #[arg(long)]
     background: Option<String>,
+    /// Seconds to wait before speaking (0.1-2.0)
     #[arg(long)]
     wait_seconds: Option<f32>,
 }
