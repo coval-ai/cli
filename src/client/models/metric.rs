@@ -98,7 +98,7 @@ impl std::fmt::Display for MetricType {
             Self::Regex => write!(f, "REGEX"),
             Self::Pause => write!(f, "PAUSE"),
             Self::CompositeEvaluation => write!(f, "COMPOSITE"),
-            Self::Unknown => write!(f, "UNKNOWN"),
+            Self::Unknown => write!(f, "BUILT_IN"),
         }
     }
 }
