@@ -16,14 +16,17 @@ pub enum MutationCommands {
 
 #[derive(Args)]
 pub struct ListArgs {
+    /// Parent agent ID (22-char ID)
     #[arg(long)]
     agent_id: String,
+    /// Results per page (1-100, default 50)
     #[arg(long, default_value = "50")]
     page_size: u32,
 }
 
 #[derive(Args)]
 pub struct GetArgs {
+    /// Parent agent ID (22-char ID)
     #[arg(long)]
     agent_id: String,
     mutation_id: String,
@@ -31,31 +34,40 @@ pub struct GetArgs {
 
 #[derive(Args)]
 pub struct CreateArgs {
+    /// Parent agent ID (22-char ID)
     #[arg(long)]
     agent_id: String,
+    /// Mutation name, unique per agent (1-200 characters)
     #[arg(long)]
     name: String,
+    /// Mutation description (max 2000 characters)
     #[arg(long)]
     description: Option<String>,
+    /// JSON string of config overrides to deep-merge with parent agent (max 10KB)
     #[arg(long)]
     config: Option<String>,
 }
 
 #[derive(Args)]
 pub struct UpdateArgs {
+    /// Parent agent ID (22-char ID)
     #[arg(long)]
     agent_id: String,
     mutation_id: String,
+    /// Mutation name, unique per agent (1-200 characters)
     #[arg(long)]
     name: Option<String>,
+    /// Mutation description (max 2000 characters)
     #[arg(long)]
     description: Option<String>,
+    /// JSON string of config overrides to deep-merge with parent agent (max 10KB)
     #[arg(long)]
     config: Option<String>,
 }
 
 #[derive(Args)]
 pub struct DeleteArgs {
+    /// Parent agent ID (22-char ID)
     #[arg(long)]
     agent_id: String,
     mutation_id: String,
