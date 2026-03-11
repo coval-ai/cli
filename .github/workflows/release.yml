@@ -99,3 +99,83 @@ jobs:
             artifacts/*/*.tar.gz
             SHA256SUMS
           generate_release_notes: true
+
+  update-homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download SHA256SUMS from release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern SHA256SUMS
+
+      - name: Parse checksums
+        id: sha
+        run: |
+          echo "macos_arm64=$(grep 'coval-macos-arm64' SHA256SUMS | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "macos_x64=$(grep 'coval-macos-x64' SHA256SUMS | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "linux_arm64=$(grep 'coval-linux-arm64' SHA256SUMS | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "linux_x64=$(grep 'coval-linux-x64' SHA256SUMS | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA_MACOS_ARM64: ${{ steps.sha.outputs.macos_arm64 }}
+          SHA_MACOS_X64: ${{ steps.sha.outputs.macos_x64 }}
+          SHA_LINUX_ARM64: ${{ steps.sha.outputs.linux_arm64 }}
+          SHA_LINUX_X64: ${{ steps.sha.outputs.linux_x64 }}
+        run: |
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/coval-ai/homebrew-tap.git" tap
+          cd tap
+
+          cat > Formula/coval.rb << FORMULA
+          class Coval < Formula
+            desc "CLI for Coval AI agent evaluation platform"
+            homepage "https://coval.dev"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/coval-ai/cli/releases/download/v${VERSION}/coval-macos-arm64.tar.gz"
+                sha256 "${SHA_MACOS_ARM64}"
+              else
+                url "https://github.com/coval-ai/cli/releases/download/v${VERSION}/coval-macos-x64.tar.gz"
+                sha256 "${SHA_MACOS_X64}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/coval-ai/cli/releases/download/v${VERSION}/coval-linux-arm64.tar.gz"
+                sha256 "${SHA_LINUX_ARM64}"
+              else
+                url "https://github.com/coval-ai/cli/releases/download/v${VERSION}/coval-linux-x64.tar.gz"
+                sha256 "${SHA_LINUX_X64}"
+              end
+            end
+
+            def install
+              bin.install "coval"
+            end
+
+            test do
+              system "#{bin}/coval", "--version"
+            end
+          end
+          FORMULA
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/coval.rb
+          git commit -m "chore: update coval to ${VERSION}"
+          git push origin main
