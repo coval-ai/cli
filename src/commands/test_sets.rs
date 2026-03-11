@@ -16,10 +16,13 @@ pub enum TestSetCommands {
 
 #[derive(Args)]
 pub struct ListArgs {
+    /// Filter expression (e.g. test_set_type=SCENARIO)
     #[arg(long)]
     filter: Option<String>,
+    /// Results per page (1-100, default 50)
     #[arg(long, default_value = "50")]
     page_size: u32,
+    /// Sort field, prefix with - for descending (default: -update_time)
     #[arg(long)]
     order_by: Option<String>,
 }
@@ -31,12 +34,16 @@ pub struct GetArgs {
 
 #[derive(Args)]
 pub struct CreateArgs {
+    /// Test set name (1-100 characters)
     #[arg(long)]
     name: String,
+    /// URL-friendly identifier; auto-generated if omitted
     #[arg(long)]
     slug: Option<String>,
+    /// Human-readable description
     #[arg(long)]
     description: Option<String>,
+    /// Test set type (e.g. DEFAULT, SCENARIO, TRANSCRIPT, WORKFLOW)
     #[arg(long)]
     r#type: Option<String>,
 }
@@ -44,10 +51,13 @@ pub struct CreateArgs {
 #[derive(Args)]
 pub struct UpdateArgs {
     test_set_id: String,
+    /// Test set name (1-100 characters)
     #[arg(long)]
     name: Option<String>,
+    /// URL-friendly identifier
     #[arg(long)]
     slug: Option<String>,
+    /// Human-readable description
     #[arg(long)]
     description: Option<String>,
 }
