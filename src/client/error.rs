@@ -29,8 +29,14 @@ pub enum ApiError {
 
 impl ApiError {
     pub fn from_response(_status: StatusCode, resp: ErrorResponse) -> Self {
-        let message = resp.error.message;
-        let field = resp.error.details.first().and_then(|d| d.field.clone());
+        let detail = resp.error.details.first();
+        let field = detail.and_then(|d| d.field.clone());
+        let description = detail.and_then(|d| d.description.clone());
+
+        let message = match description {
+            Some(desc) => format!("{}: {}", resp.error.message, desc),
+            None => resp.error.message,
+        };
 
         match resp.error.code.as_str() {
             "UNAUTHENTICATED" => Self::Unauthenticated { message },
