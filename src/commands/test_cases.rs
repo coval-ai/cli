@@ -19,12 +19,16 @@ pub enum TestCaseCommands {
 
 #[derive(Args)]
 pub struct ListArgs {
+    /// Filter expression (e.g. test_set_id=abc12345)
     #[arg(long)]
     filter: Option<String>,
+    /// Filter by test set ID (8-char ID)
     #[arg(long)]
     test_set_id: Option<String>,
+    /// Results per page (1-100, default 50)
     #[arg(long, default_value = "50")]
     page_size: u32,
+    /// Sort field, prefix with - for descending (default: -create_time)
     #[arg(long)]
     order_by: Option<String>,
 }
@@ -36,14 +40,19 @@ pub struct GetArgs {
 
 #[derive(Args)]
 pub struct CreateArgs {
+    /// Test set to add this case to (8-char ID)
     #[arg(long)]
     test_set_id: String,
+    /// Test case input text
     #[arg(long, required_unless_present = "stdin")]
     input: Option<String>,
+    /// Expected output text
     #[arg(long)]
     expected: Option<String>,
+    /// Human-readable description
     #[arg(long)]
     description: Option<String>,
+    /// Read JSON lines from stdin for bulk creation
     #[arg(long, conflicts_with_all = ["input", "expected", "description"])]
     stdin: bool,
 }
@@ -60,10 +69,13 @@ struct StdinTestCase {
 #[derive(Args)]
 pub struct UpdateArgs {
     test_case_id: String,
+    /// Updated test case input text
     #[arg(long)]
     input: Option<String>,
+    /// Updated expected output text
     #[arg(long)]
     expected: Option<String>,
+    /// Updated description
     #[arg(long)]
     description: Option<String>,
 }
