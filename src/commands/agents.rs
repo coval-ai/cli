@@ -30,22 +30,32 @@ pub struct GetArgs {
 }
 
 #[derive(Args)]
+#[command(
+    after_help = "Required fields by agent type:\n  voice           --phone-number (E.164, e.g. +12345678901)\n  outbound-voice  --endpoint (webhook URL)\n  chat            --metadata '{\"chat_endpoint\": \"https://...\"}'\n  sms             --phone-number (E.164)\n  websocket       --metadata '{\"endpoint\": \"wss://...\", \"initialization_json\": \"...\"}'"
+)]
 pub struct CreateArgs {
+    /// Human-readable agent name
     #[arg(long)]
     name: String,
+    /// Agent type (determines required fields, see below)
     #[arg(long, value_enum)]
     r#type: AgentType,
+    /// Phone number in E.164 format; required for voice and sms
     #[arg(long)]
     phone_number: Option<String>,
+    /// Webhook URL; required for outbound-voice
     #[arg(long)]
     endpoint: Option<String>,
+    /// Agent instructions / system prompt
     #[arg(long)]
     prompt: Option<String>,
+    /// Comma-separated metric IDs to attach
     #[arg(long, value_delimiter = ',')]
     metric_ids: Option<Vec<String>>,
+    /// Comma-separated test set IDs to attach
     #[arg(long, value_delimiter = ',')]
     test_set_ids: Option<Vec<String>>,
-    /// JSON string for metadata
+    /// JSON string for type-specific config (see required fields below)
     #[arg(long)]
     metadata: Option<String>,
 }
