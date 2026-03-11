@@ -29,8 +29,21 @@ pub enum ApiError {
 
 impl ApiError {
     pub fn from_response(_status: StatusCode, resp: ErrorResponse) -> Self {
-        let message = resp.error.message;
         let field = resp.error.details.first().and_then(|d| d.field.clone());
+
+        let detail_descriptions: Vec<String> = resp
+            .error
+            .details
+            .iter()
+            .filter_map(|d| d.description.as_ref())
+            .map(|s| s.to_string())
+            .collect();
+
+        let message = if detail_descriptions.is_empty() {
+            resp.error.message
+        } else {
+            format!("{}: {}", resp.error.message, detail_descriptions.join("; "))
+        };
 
         match resp.error.code.as_str() {
             "UNAUTHENTICATED" => Self::Unauthenticated { message },
