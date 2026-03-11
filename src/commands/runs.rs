@@ -21,10 +21,13 @@ pub enum RunCommands {
 
 #[derive(Args)]
 pub struct ListArgs {
+    /// Filter expression (supports status, agent_id, persona_id, test_set_id, create_time)
     #[arg(long)]
     filter: Option<String>,
+    /// Results per page (1-1000, default 50)
     #[arg(long, default_value = "50")]
     page_size: u32,
+    /// Sort field, prefix with - for descending (default: -create_time)
     #[arg(long)]
     order_by: Option<String>,
 }
@@ -36,26 +39,37 @@ pub struct GetArgs {
 
 #[derive(Args)]
 pub struct LaunchArgs {
+    /// Agent to evaluate (22-char ID)
     #[arg(long)]
     agent_id: String,
+    /// Simulated persona for the run (22-char ID)
     #[arg(long)]
     persona_id: String,
+    /// Test cases to run against (8-char ID)
     #[arg(long)]
     test_set_id: String,
+    /// Comma-separated metric IDs; defaults to agent's metrics
     #[arg(long, value_delimiter = ',')]
     metric_ids: Option<Vec<String>>,
+    /// Times to repeat each test case (1-50, default 1)
     #[arg(long)]
     iterations: Option<u32>,
+    /// Parallel simulations (1-100, default 1)
     #[arg(long)]
     concurrency: Option<u32>,
+    /// Random subset of test cases to run (0 = all)
     #[arg(long)]
     sub_sample_size: Option<u32>,
+    /// Seed for reproducible sub-sampling
     #[arg(long)]
     sub_sample_seed: Option<u64>,
+    /// Display name for the run
     #[arg(long)]
     name: Option<String>,
+    /// Single mutation to apply (26-char ULID)
     #[arg(long)]
     mutation_id: Option<String>,
+    /// Comma-separated mutation IDs for multi-mutation runs
     #[arg(long, value_delimiter = ',')]
     mutation_ids: Option<Vec<String>>,
 }
@@ -63,6 +77,7 @@ pub struct LaunchArgs {
 #[derive(Args)]
 pub struct WatchArgs {
     run_id: String,
+    /// Polling interval in seconds
     #[arg(long, default_value = "2")]
     interval: u64,
 }
