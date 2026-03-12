@@ -79,6 +79,9 @@ pub enum MetricType {
     #[serde(rename = "METRIC_COMPOSITE_EVALUATION")]
     #[value(name = "composite")]
     CompositeEvaluation,
+    #[serde(other)]
+    #[value(skip)]
+    Unknown,
 }
 
 impl std::fmt::Display for MetricType {
@@ -95,6 +98,7 @@ impl std::fmt::Display for MetricType {
             Self::Regex => write!(f, "REGEX"),
             Self::Pause => write!(f, "PAUSE"),
             Self::CompositeEvaluation => write!(f, "COMPOSITE"),
+            Self::Unknown => write!(f, "BUILT_IN"),
         }
     }
 }
