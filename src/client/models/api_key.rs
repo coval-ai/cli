@@ -31,6 +31,8 @@ pub struct ApiKey {
     pub create_time: DateTime<Utc>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub update_time: Option<DateTime<Utc>>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ValueEnum)]
