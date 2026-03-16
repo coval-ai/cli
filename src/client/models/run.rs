@@ -22,6 +22,8 @@ pub struct Run {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub results: Option<RunResults>,
     #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
     pub metadata: serde_json::Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
@@ -114,6 +116,8 @@ pub struct LaunchMetadata {
     pub created_by: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub customer: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
