@@ -21,7 +21,7 @@ pub enum RunCommands {
 
 #[derive(Args)]
 pub struct ListArgs {
-    /// Filter expression (supports status, agent_id, persona_id, test_set_id, create_time)
+    /// Filter expression (supports status, agent_id, persona_id, test_set_id, create_time, tag)
     #[arg(long)]
     filter: Option<String>,
     /// Results per page (1-1000, default 50)
@@ -72,6 +72,9 @@ pub struct LaunchArgs {
     /// Comma-separated mutation IDs for multi-mutation runs
     #[arg(long, value_delimiter = ',')]
     mutation_ids: Option<Vec<String>>,
+    /// Comma-separated tags for categorizing the run
+    #[arg(long, value_delimiter = ',')]
+    tags: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -119,10 +122,15 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, format: OutputForma
                 None
             };
 
-            let metadata = args.name.map(|name| LaunchMetadata {
-                display_name: Some(name),
-                ..Default::default()
-            });
+            let metadata = if args.name.is_some() || args.tags.is_some() {
+                Some(LaunchMetadata {
+                    display_name: args.name,
+                    tags: args.tags,
+                    ..Default::default()
+                })
+            } else {
+                None
+            };
 
             let req = LaunchRunRequest {
                 agent_id: args.agent_id,
