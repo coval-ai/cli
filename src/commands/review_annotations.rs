@@ -2,8 +2,8 @@ use anyhow::Result;
 use clap::{Args, Subcommand};
 
 use crate::client::models::{
-    AnnotationPriority, CompletionStatus, CreateReviewAnnotationRequest, ListParams,
-    UpdateReviewAnnotationRequest,
+    AnnotationPriority, AnnotationStatus, CompletionStatus, CreateReviewAnnotationRequest,
+    ListParams, UpdateReviewAnnotationRequest,
 };
 use crate::client::CovalClient;
 use crate::output::{print_list, print_one, print_success, OutputFormat};
@@ -78,6 +78,9 @@ pub struct UpdateArgs {
     /// Completion status
     #[arg(long, value_enum)]
     completion_status: Option<CompletionStatus>,
+    /// Annotation status (active or archived)
+    #[arg(long, value_enum)]
+    status: Option<AnnotationStatus>,
 }
 
 #[derive(Args)]
@@ -126,6 +129,7 @@ pub async fn execute(
                 priority: args.priority,
                 assignee: args.assignee,
                 completion_status: args.completion_status,
+                status: args.status,
             };
             let annotation = client
                 .review_annotations()

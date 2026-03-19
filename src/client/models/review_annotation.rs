@@ -113,6 +113,8 @@ pub struct UpdateReviewAnnotationRequest {
     pub assignee: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completion_status: Option<CompletionStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<AnnotationStatus>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -161,9 +163,10 @@ impl Tabular for ReviewAnnotation {
 }
 
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    if s.chars().count() <= max {
         s.to_string()
     } else {
-        format!("{}...", &s[..max - 3])
+        let end: String = s.chars().take(max - 3).collect();
+        format!("{}...", end)
     }
 }

@@ -18,6 +18,8 @@ pub enum ReviewProjectCommands {
 
 #[derive(Args)]
 pub struct ListArgs {
+    #[arg(long)]
+    filter: Option<String>,
     #[arg(long, default_value = "50")]
     page_size: u32,
     #[arg(long)]
@@ -75,6 +77,9 @@ pub struct UpdateArgs {
     /// Updated notification setting
     #[arg(long)]
     notifications: Option<bool>,
+    /// Comma-separated emails of assignees to opt out
+    #[arg(long, value_delimiter = ',')]
+    opted_out_assignees: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -90,6 +95,7 @@ pub async fn execute(
     match cmd {
         ReviewProjectCommands::List(args) => {
             let params = ListParams {
+                filter: args.filter,
                 page_size: Some(args.page_size),
                 order_by: args.order_by,
                 ..Default::default()
@@ -122,7 +128,7 @@ pub async fn execute(
                 linked_simulation_ids: args.simulation_ids,
                 linked_metric_ids: args.metric_ids,
                 notifications: args.notifications,
-                opted_out_assignees: None,
+                opted_out_assignees: args.opted_out_assignees,
             };
             let project = client
                 .review_projects()
