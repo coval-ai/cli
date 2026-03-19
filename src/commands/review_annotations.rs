@@ -102,10 +102,7 @@ pub async fn execute(
             print_list(&response.review_annotations, format);
         }
         ReviewAnnotationCommands::Get(args) => {
-            let annotation = client
-                .review_annotations()
-                .get(&args.annotation_id)
-                .await?;
+            let annotation = client.review_annotations().get(&args.annotation_id).await?;
             print_one(&annotation, format);
         }
         ReviewAnnotationCommands::Create(args) => {

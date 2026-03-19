@@ -138,7 +138,14 @@ pub struct UpdateReviewAnnotationResponse {
 
 impl Tabular for ReviewAnnotation {
     fn headers() -> Vec<&'static str> {
-        vec!["ID", "ASSIGNEE", "STATUS", "COMPLETION", "PRIORITY", "CREATED"]
+        vec![
+            "ID",
+            "ASSIGNEE",
+            "STATUS",
+            "COMPLETION",
+            "PRIORITY",
+            "CREATED",
+        ]
     }
 
     fn row(&self) -> Vec<String> {
