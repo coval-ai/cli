@@ -13,6 +13,8 @@ pub struct ReviewProject {
     #[serde(default)]
     pub assignees: Vec<String>,
     #[serde(default)]
+    pub opted_out_assignees: Vec<String>,
+    #[serde(default)]
     pub linked_simulation_ids: Vec<String>,
     #[serde(default)]
     pub linked_metric_ids: Vec<String>,
