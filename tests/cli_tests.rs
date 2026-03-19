@@ -470,3 +470,369 @@ fn test_agents_update_invalid_metadata_json() {
         .failure()
         .stderr(predicate::str::contains("Invalid JSON for --metadata"));
 }
+
+// ── Review Annotations ──────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_review_annotations_list() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/review-annotations"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "review_annotations": [
+                {
+                    "id": "ann123",
+                    "simulation_output_id": "so123",
+                    "metric_id": "met123",
+                    "assignee": "reviewer@example.com",
+                    "status": "ACTIVE",
+                    "completion_status": "PENDING",
+                    "priority": "PRIORITY_STANDARD",
+                    "create_time": "2025-01-15T10:30:00Z",
+                    "update_time": "2025-01-15T10:30:00Z"
+                }
+            ],
+            "next_page_token": null
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("review-annotations")
+        .arg("list")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ann123"))
+        .stdout(predicate::str::contains("reviewer@example.com"));
+}
+
+#[tokio::test]
+async fn test_review_annotations_get() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/review-annotations/ann123"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "review_annotation": {
+                "id": "ann123",
+                "simulation_output_id": "so123",
+                "metric_id": "met123",
+                "assignee": "reviewer@example.com",
+                "status": "ACTIVE",
+                "completion_status": "PENDING",
+                "priority": "PRIORITY_STANDARD",
+                "create_time": "2025-01-15T10:30:00Z",
+                "update_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("review-annotations")
+        .arg("get")
+        .arg("ann123")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ann123"));
+}
+
+#[tokio::test]
+async fn test_review_annotations_create() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/review-annotations"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "review_annotation": {
+                "id": "ann456",
+                "simulation_output_id": "so123",
+                "metric_id": "met123",
+                "assignee": "reviewer@example.com",
+                "status": "ACTIVE",
+                "completion_status": "PENDING",
+                "priority": "PRIORITY_STANDARD",
+                "create_time": "2025-01-15T10:30:00Z",
+                "update_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("review-annotations")
+        .arg("create")
+        .arg("--simulation-output-id")
+        .arg("so123")
+        .arg("--metric-id")
+        .arg("met123")
+        .arg("--assignee")
+        .arg("reviewer@example.com")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ann456"));
+}
+
+#[tokio::test]
+async fn test_review_annotations_update() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/review-annotations/ann123"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "review_annotation": {
+                "id": "ann123",
+                "simulation_output_id": "so123",
+                "metric_id": "met123",
+                "assignee": "reviewer@example.com",
+                "status": "ACTIVE",
+                "completion_status": "COMPLETED",
+                "priority": "PRIORITY_PRIMARY",
+                "create_time": "2025-01-15T10:30:00Z",
+                "update_time": "2025-01-15T11:00:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("review-annotations")
+        .arg("update")
+        .arg("ann123")
+        .arg("--priority")
+        .arg("primary")
+        .arg("--completion-status")
+        .arg("completed")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ann123"));
+}
+
+#[tokio::test]
+async fn test_review_annotations_delete() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("DELETE"))
+        .and(path("/v1/review-annotations/ann123"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("review-annotations")
+        .arg("delete")
+        .arg("ann123")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("deleted"));
+}
+
+// ── Review Projects ─────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_review_projects_list() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/review-projects"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "review_projects": [
+                {
+                    "id": "proj123",
+                    "display_name": "Q1 Review",
+                    "assignees": ["alice@example.com"],
+                    "linked_simulation_ids": [],
+                    "linked_metric_ids": [],
+                    "project_type": "PROJECT_COLLABORATIVE",
+                    "notifications": true,
+                    "create_time": "2025-01-15T10:30:00Z",
+                    "update_time": "2025-01-15T10:30:00Z"
+                }
+            ],
+            "next_page_token": null
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("review-projects")
+        .arg("list")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("proj123"))
+        .stdout(predicate::str::contains("Q1 Review"));
+}
+
+#[tokio::test]
+async fn test_review_projects_get() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/review-projects/proj123"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "review_project": {
+                "id": "proj123",
+                "display_name": "Q1 Review",
+                "assignees": ["alice@example.com"],
+                "linked_simulation_ids": [],
+                "linked_metric_ids": [],
+                "project_type": "PROJECT_COLLABORATIVE",
+                "notifications": true,
+                "create_time": "2025-01-15T10:30:00Z",
+                "update_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("review-projects")
+        .arg("get")
+        .arg("proj123")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("proj123"));
+}
+
+#[tokio::test]
+async fn test_review_projects_create() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/review-projects"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "review_project": {
+                "id": "proj456",
+                "display_name": "New Project",
+                "assignees": ["alice@example.com", "bob@example.com"],
+                "linked_simulation_ids": ["sim1"],
+                "linked_metric_ids": ["met1"],
+                "project_type": "PROJECT_COLLABORATIVE",
+                "notifications": true,
+                "create_time": "2025-01-15T10:30:00Z",
+                "update_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("review-projects")
+        .arg("create")
+        .arg("--name")
+        .arg("New Project")
+        .arg("--assignees")
+        .arg("alice@example.com,bob@example.com")
+        .arg("--simulation-ids")
+        .arg("sim1")
+        .arg("--metric-ids")
+        .arg("met1")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("proj456"));
+}
+
+#[tokio::test]
+async fn test_review_projects_update() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/review-projects/proj123"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "review_project": {
+                "id": "proj123",
+                "display_name": "Updated Project",
+                "assignees": ["alice@example.com"],
+                "linked_simulation_ids": [],
+                "linked_metric_ids": [],
+                "project_type": "PROJECT_COLLABORATIVE",
+                "notifications": false,
+                "create_time": "2025-01-15T10:30:00Z",
+                "update_time": "2025-01-15T11:00:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("review-projects")
+        .arg("update")
+        .arg("proj123")
+        .arg("--name")
+        .arg("Updated Project")
+        .arg("--notifications")
+        .arg("false")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("proj123"));
+}
+
+#[tokio::test]
+async fn test_review_projects_delete() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("DELETE"))
+        .and(path("/v1/review-projects/proj123"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("review-projects")
+        .arg("delete")
+        .arg("proj123")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("deleted"));
+}
