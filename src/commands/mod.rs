@@ -6,6 +6,8 @@ pub mod dashboards;
 pub mod metrics;
 pub mod mutations;
 pub mod personas;
+pub mod review_annotations;
+pub mod review_projects;
 pub mod run_templates;
 pub mod runs;
 pub mod scheduled_runs;

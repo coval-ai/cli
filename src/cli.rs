@@ -84,6 +84,16 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::dashboards::DashboardCommands,
     },
+    #[command(name = "review-annotations")]
+    ReviewAnnotations {
+        #[command(subcommand)]
+        command: commands::review_annotations::ReviewAnnotationCommands,
+    },
+    #[command(name = "review-projects")]
+    ReviewProjects {
+        #[command(subcommand)]
+        command: commands::review_projects::ReviewProjectCommands,
+    },
 }
 
 pub async fn run(cli: Cli) -> anyhow::Result<()> {
@@ -142,6 +152,12 @@ pub async fn run(cli: Cli) -> anyhow::Result<()> {
                 }
                 Commands::Dashboards { command } => {
                     commands::dashboards::execute(command, &client, cli.format).await
+                }
+                Commands::ReviewAnnotations { command } => {
+                    commands::review_annotations::execute(command, &client, cli.format).await
+                }
+                Commands::ReviewProjects { command } => {
+                    commands::review_projects::execute(command, &client, cli.format).await
                 }
                 _ => unreachable!(),
             }
