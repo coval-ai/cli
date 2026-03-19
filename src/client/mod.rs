@@ -172,6 +172,14 @@ impl CovalClient {
         DashboardsClient(self)
     }
 
+    pub fn review_annotations(&self) -> ReviewAnnotationsClient<'_> {
+        ReviewAnnotationsClient(self)
+    }
+
+    pub fn review_projects(&self) -> ReviewProjectsClient<'_> {
+        ReviewProjectsClient(self)
+    }
+
     pub fn widgets(&self, dashboard_id: &str) -> WidgetsClient<'_> {
         WidgetsClient {
             client: self,
@@ -195,6 +203,8 @@ pub struct ApiKeysClient<'a>(&'a CovalClient);
 pub struct RunTemplatesClient<'a>(&'a CovalClient);
 pub struct ScheduledRunsClient<'a>(&'a CovalClient);
 pub struct DashboardsClient<'a>(&'a CovalClient);
+pub struct ReviewAnnotationsClient<'a>(&'a CovalClient);
+pub struct ReviewProjectsClient<'a>(&'a CovalClient);
 pub struct WidgetsClient<'a> {
     client: &'a CovalClient,
     dashboard_id: String,
@@ -713,6 +723,88 @@ impl DashboardsClient<'_> {
 
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
         let url = self.0.url(&format!("/v1/dashboards/{id}"));
+        self.0.delete(url).await
+    }
+}
+
+impl ReviewAnnotationsClient<'_> {
+    pub async fn list(
+        &self,
+        params: models::ListParams,
+    ) -> Result<models::ListReviewAnnotationsResponse, ApiError> {
+        let mut url = self.0.url("/v1/review-annotations");
+        params.apply_to(&mut url);
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::ReviewAnnotation, ApiError> {
+        let url = self.0.url(&format!("/v1/review-annotations/{id}"));
+        let resp: models::GetReviewAnnotationResponse = self.0.get(url).await?;
+        Ok(resp.review_annotation)
+    }
+
+    pub async fn create(
+        &self,
+        req: models::CreateReviewAnnotationRequest,
+    ) -> Result<models::ReviewAnnotation, ApiError> {
+        let url = self.0.url("/v1/review-annotations");
+        let resp: models::CreateReviewAnnotationResponse = self.0.post(url, &req).await?;
+        Ok(resp.review_annotation)
+    }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        req: models::UpdateReviewAnnotationRequest,
+    ) -> Result<models::ReviewAnnotation, ApiError> {
+        let url = self.0.url(&format!("/v1/review-annotations/{id}"));
+        let resp: models::UpdateReviewAnnotationResponse = self.0.patch(url, &req).await?;
+        Ok(resp.review_annotation)
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/review-annotations/{id}"));
+        self.0.delete(url).await
+    }
+}
+
+impl ReviewProjectsClient<'_> {
+    pub async fn list(
+        &self,
+        params: models::ListParams,
+    ) -> Result<models::ListReviewProjectsResponse, ApiError> {
+        let mut url = self.0.url("/v1/review-projects");
+        params.apply_to(&mut url);
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::ReviewProject, ApiError> {
+        let url = self.0.url(&format!("/v1/review-projects/{id}"));
+        let resp: models::GetReviewProjectResponse = self.0.get(url).await?;
+        Ok(resp.review_project)
+    }
+
+    pub async fn create(
+        &self,
+        req: models::CreateReviewProjectRequest,
+    ) -> Result<models::ReviewProject, ApiError> {
+        let url = self.0.url("/v1/review-projects");
+        let resp: models::CreateReviewProjectResponse = self.0.post(url, &req).await?;
+        Ok(resp.review_project)
+    }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        req: models::UpdateReviewProjectRequest,
+    ) -> Result<models::ReviewProject, ApiError> {
+        let url = self.0.url(&format!("/v1/review-projects/{id}"));
+        let resp: models::UpdateReviewProjectResponse = self.0.patch(url, &req).await?;
+        Ok(resp.review_project)
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/review-projects/{id}"));
         self.0.delete(url).await
     }
 }

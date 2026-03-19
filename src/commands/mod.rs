@@ -11,4 +11,6 @@ pub mod runs;
 pub mod scheduled_runs;
 pub mod simulations;
 pub mod test_cases;
+pub mod review_annotations;
+pub mod review_projects;
 pub mod test_sets;

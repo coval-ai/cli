@@ -13,6 +13,8 @@ mod scheduled_run;
 mod simulation;
 mod test_case;
 mod test_set;
+mod review_annotation;
+mod review_project;
 mod widget;
 
 pub use agent::*;
@@ -28,4 +30,6 @@ pub use scheduled_run::*;
 pub use simulation::*;
 pub use test_case::*;
 pub use test_set::*;
+pub use review_annotation::*;
+pub use review_project::*;
 pub use widget::*;
