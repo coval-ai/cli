@@ -120,6 +120,21 @@ fn truncate(s: &str, max: usize) -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubvalueByTimestamp {
+    pub start_offset: f64,
+    pub end_offset: f64,
+    pub output_type: String,
+    #[serde(default)]
+    pub float_value: f64,
+    #[serde(default)]
+    pub string_value: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_index: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimpleMetricOutput {
     pub metric_output_id: String,
     pub metric_id: String,
@@ -127,6 +142,8 @@ pub struct SimpleMetricOutput {
     pub status: Option<String>,
     #[serde(default)]
     pub value: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subvalues_by_timestamp: Option<Vec<SubvalueByTimestamp>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -141,7 +158,7 @@ pub struct GetSimulationMetricResponse {
 
 impl Tabular for SimpleMetricOutput {
     fn headers() -> Vec<&'static str> {
-        vec!["OUTPUT ID", "METRIC ID", "STATUS", "VALUE"]
+        vec!["OUTPUT ID", "METRIC ID", "STATUS", "VALUE", "SUBVALUES"]
     }
 
     fn row(&self) -> Vec<String> {
@@ -152,6 +169,10 @@ impl Tabular for SimpleMetricOutput {
             self.value
                 .as_ref()
                 .map(|v| truncate(&v.to_string(), 30))
+                .unwrap_or_else(|| "-".into()),
+            self.subvalues_by_timestamp
+                .as_ref()
+                .map(|sv| format!("{}", sv.len()))
                 .unwrap_or_else(|| "-".into()),
         ]
     }
