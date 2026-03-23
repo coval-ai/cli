@@ -275,6 +275,97 @@ async fn test_simulations_audio_url() {
 }
 
 #[tokio::test]
+async fn test_simulations_metrics_with_subvalues() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/simulations/sim123/metrics"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "metrics": [
+                {
+                    "metric_output_id": "mo123",
+                    "metric_id": "met456",
+                    "status": "COMPLETED",
+                    "value": 0.95,
+                    "subvalues_by_timestamp": [
+                        {
+                            "start_offset": 0.0,
+                            "end_offset": 5.0,
+                            "output_type": "float",
+                            "float_value": 0.8,
+                            "string_value": "",
+                            "role": "agent",
+                            "message_index": 1
+                        },
+                        {
+                            "start_offset": 5.0,
+                            "end_offset": 10.0,
+                            "output_type": "float",
+                            "float_value": 0.9,
+                            "string_value": "",
+                            "role": null,
+                            "message_index": null
+                        }
+                    ]
+                }
+            ]
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("simulations")
+        .arg("metrics")
+        .arg("sim123")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("mo123"))
+        .stdout(predicate::str::contains("met456"))
+        .stdout(predicate::str::contains("COMPLETED"))
+        .stdout(predicate::str::contains("2"));
+}
+
+#[tokio::test]
+async fn test_simulations_metrics_without_subvalues() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/simulations/sim456/metrics"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "metrics": [
+                {
+                    "metric_output_id": "mo789",
+                    "metric_id": "met101",
+                    "status": "COMPLETED",
+                    "value": 0.75
+                }
+            ]
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("simulations")
+        .arg("metrics")
+        .arg("sim456")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("mo789"))
+        .stdout(predicate::str::contains("met101"))
+        .stdout(predicate::str::contains("-"));
+}
+
+#[tokio::test]
 async fn test_mutations_list() {
     let mock_server = MockServer::start().await;
 
