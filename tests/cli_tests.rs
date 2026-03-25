@@ -1,7 +1,7 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
 use serde_json::json;
-use wiremock::matchers::{header, method, path};
+use wiremock::matchers::{body_partial_json, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn coval() -> Command {
@@ -718,6 +718,161 @@ async fn test_review_annotations_update() {
         .assert()
         .success()
         .stdout(predicate::str::contains("ann123"));
+}
+
+#[tokio::test]
+async fn test_review_annotations_create_with_subvalues() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/review-annotations"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "ground_truth_subvalues_by_timestamp": [
+                {
+                    "start_offset": 10.5,
+                    "end_offset": 12.3,
+                    "output_type": "float",
+                    "float_value": 1.0
+                }
+            ]
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "review_annotation": {
+                "id": "ann789",
+                "simulation_output_id": "so123",
+                "metric_id": "met123",
+                "assignee": "reviewer@example.com",
+                "ground_truth_subvalues_by_timestamp": [
+                    {
+                        "start_offset": 10.5,
+                        "end_offset": 12.3,
+                        "output_type": "float",
+                        "float_value": 1.0
+                    }
+                ],
+                "status": "ACTIVE",
+                "completion_status": "COMPLETED",
+                "priority": "PRIORITY_STANDARD",
+                "create_time": "2025-01-15T10:30:00Z",
+                "update_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("review-annotations")
+        .arg("create")
+        .arg("--simulation-output-id")
+        .arg("so123")
+        .arg("--metric-id")
+        .arg("met123")
+        .arg("--assignee")
+        .arg("reviewer@example.com")
+        .arg("--ground-truth-subvalues")
+        .arg(r#"[{"start_offset":10.5,"end_offset":12.3,"output_type":"float","float_value":1.0}]"#)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ann789"));
+}
+
+#[tokio::test]
+async fn test_review_annotations_update_with_subvalues() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/review-annotations/ann123"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "ground_truth_subvalues_by_timestamp": [
+                {
+                    "start_offset": 5.0,
+                    "end_offset": 8.0,
+                    "output_type": "string",
+                    "string_value": "Neutral",
+                    "role": "agent"
+                },
+                {
+                    "start_offset": 12.0,
+                    "end_offset": 15.5,
+                    "output_type": "string",
+                    "string_value": "Positive",
+                    "role": "persona"
+                }
+            ]
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "review_annotation": {
+                "id": "ann123",
+                "simulation_output_id": "so123",
+                "metric_id": "met123",
+                "assignee": "reviewer@example.com",
+                "ground_truth_subvalues_by_timestamp": [
+                    {
+                        "start_offset": 5.0,
+                        "end_offset": 8.0,
+                        "output_type": "string",
+                        "string_value": "Neutral",
+                        "role": "agent"
+                    },
+                    {
+                        "start_offset": 12.0,
+                        "end_offset": 15.5,
+                        "output_type": "string",
+                        "string_value": "Positive",
+                        "role": "persona"
+                    }
+                ],
+                "status": "ACTIVE",
+                "completion_status": "COMPLETED",
+                "priority": "PRIORITY_STANDARD",
+                "create_time": "2025-01-15T10:30:00Z",
+                "update_time": "2025-01-15T11:00:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("review-annotations")
+        .arg("update")
+        .arg("ann123")
+        .arg("--ground-truth-subvalues")
+        .arg(r#"[{"start_offset":5.0,"end_offset":8.0,"output_type":"string","string_value":"Neutral","role":"agent"},{"start_offset":12.0,"end_offset":15.5,"output_type":"string","string_value":"Positive","role":"persona"}]"#)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ann123"));
+}
+
+#[tokio::test]
+async fn test_review_annotations_create_with_invalid_subvalues_json() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg("http://localhost:1")
+        .arg("review-annotations")
+        .arg("create")
+        .arg("--simulation-output-id")
+        .arg("so123")
+        .arg("--metric-id")
+        .arg("met123")
+        .arg("--assignee")
+        .arg("reviewer@example.com")
+        .arg("--ground-truth-subvalues")
+        .arg("not valid json")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("expected ident"));
 }
 
 #[tokio::test]
