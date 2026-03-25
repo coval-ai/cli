@@ -1,7 +1,7 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
 use serde_json::json;
-use wiremock::matchers::{header, method, path};
+use wiremock::matchers::{body_partial_json, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn coval() -> Command {
@@ -727,6 +727,16 @@ async fn test_review_annotations_create_with_subvalues() {
     Mock::given(method("POST"))
         .and(path("/v1/review-annotations"))
         .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "ground_truth_subvalues_by_timestamp": [
+                {
+                    "start_offset": 10.5,
+                    "end_offset": 12.3,
+                    "output_type": "float",
+                    "float_value": 1.0
+                }
+            ]
+        })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "review_annotation": {
                 "id": "ann789",
@@ -778,6 +788,24 @@ async fn test_review_annotations_update_with_subvalues() {
     Mock::given(method("PATCH"))
         .and(path("/v1/review-annotations/ann123"))
         .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "ground_truth_subvalues_by_timestamp": [
+                {
+                    "start_offset": 5.0,
+                    "end_offset": 8.0,
+                    "output_type": "string",
+                    "string_value": "Neutral",
+                    "role": "agent"
+                },
+                {
+                    "start_offset": 12.0,
+                    "end_offset": 15.5,
+                    "output_type": "string",
+                    "string_value": "Positive",
+                    "role": "persona"
+                }
+            ]
+        })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "review_annotation": {
                 "id": "ann123",
@@ -843,7 +871,8 @@ async fn test_review_annotations_create_with_invalid_subvalues_json() {
         .arg("--ground-truth-subvalues")
         .arg("not valid json")
         .assert()
-        .failure();
+        .failure()
+        .stderr(predicate::str::contains("expected ident"));
 }
 
 #[tokio::test]
