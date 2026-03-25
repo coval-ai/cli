@@ -49,6 +49,9 @@ pub struct CreateArgs {
     /// Ground truth string value (auto-completes annotation)
     #[arg(long)]
     ground_truth_string: Option<String>,
+    /// Ground truth subvalues by timestamp as JSON array (auto-completes annotation)
+    #[arg(long)]
+    ground_truth_subvalues: Option<String>,
     /// Reviewer notes
     #[arg(long)]
     notes: Option<String>,
@@ -66,6 +69,9 @@ pub struct UpdateArgs {
     /// Ground truth string value (auto-completes annotation)
     #[arg(long)]
     ground_truth_string: Option<String>,
+    /// Ground truth subvalues by timestamp as JSON array (auto-completes annotation)
+    #[arg(long)]
+    ground_truth_subvalues: Option<String>,
     /// Reviewer notes
     #[arg(long)]
     notes: Option<String>,
@@ -109,12 +115,17 @@ pub async fn execute(
             print_one(&annotation, format);
         }
         ReviewAnnotationCommands::Create(args) => {
+            let subvalues = args
+                .ground_truth_subvalues
+                .map(|s| serde_json::from_str(&s))
+                .transpose()?;
             let req = CreateReviewAnnotationRequest {
                 simulation_output_id: args.simulation_output_id,
                 metric_id: args.metric_id,
                 assignee: args.assignee,
                 ground_truth_float_value: args.ground_truth_float,
                 ground_truth_string_value: args.ground_truth_string,
+                ground_truth_subvalues_by_timestamp: subvalues,
                 reviewer_notes: args.notes,
                 priority: args.priority,
             };
@@ -122,9 +133,14 @@ pub async fn execute(
             print_one(&annotation, format);
         }
         ReviewAnnotationCommands::Update(args) => {
+            let subvalues = args
+                .ground_truth_subvalues
+                .map(|s| serde_json::from_str(&s))
+                .transpose()?;
             let req = UpdateReviewAnnotationRequest {
                 ground_truth_float_value: args.ground_truth_float,
                 ground_truth_string_value: args.ground_truth_string,
+                ground_truth_subvalues_by_timestamp: subvalues,
                 reviewer_notes: args.notes,
                 priority: args.priority,
                 assignee: args.assignee,
