@@ -133,6 +133,10 @@ impl CovalClient {
         SimulationsClient(self)
     }
 
+    pub fn conversations(&self) -> ConversationsClient<'_> {
+        ConversationsClient(self)
+    }
+
     pub fn test_sets(&self) -> TestSetsClient<'_> {
         TestSetsClient(self)
     }
@@ -189,6 +193,7 @@ impl CovalClient {
 }
 
 pub struct AgentsClient<'a>(&'a CovalClient);
+pub struct ConversationsClient<'a>(&'a CovalClient);
 pub struct RunsClient<'a>(&'a CovalClient);
 pub struct SimulationsClient<'a>(&'a CovalClient);
 pub struct TestSetsClient<'a>(&'a CovalClient);
@@ -273,6 +278,53 @@ impl RunsClient<'_> {
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
         let url = self.0.url(&format!("/v1/runs/{id}"));
         self.0.delete(url).await
+    }
+}
+
+impl ConversationsClient<'_> {
+    pub async fn list(
+        &self,
+        params: models::ListParams,
+    ) -> Result<models::ListConversationsResponse, ApiError> {
+        let mut url = self.0.url("/v1/conversations");
+        params.apply_to(&mut url);
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::Conversation, ApiError> {
+        let url = self.0.url(&format!("/v1/conversations/{id}"));
+        let resp: models::GetConversationResponse = self.0.get(url).await?;
+        Ok(resp.conversation)
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/conversations/{id}"));
+        self.0.delete(url).await
+    }
+
+    pub async fn audio(&self, id: &str) -> Result<models::ConversationAudioUrlResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/conversations/{id}/audio"));
+        self.0.get(url).await
+    }
+
+    pub async fn list_metrics(
+        &self,
+        id: &str,
+    ) -> Result<models::ListConversationMetricsResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/conversations/{id}/metrics"));
+        self.0.get(url).await
+    }
+
+    pub async fn get_metric(
+        &self,
+        id: &str,
+        metric_output_id: &str,
+    ) -> Result<models::SimpleMetricOutput, ApiError> {
+        let url = self.0.url(&format!(
+            "/v1/conversations/{id}/metrics/{metric_output_id}"
+        ));
+        let resp: models::GetConversationMetricResponse = self.0.get(url).await?;
+        Ok(resp.metric)
     }
 }
 

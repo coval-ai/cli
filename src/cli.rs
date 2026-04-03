@@ -35,6 +35,10 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::agents::AgentCommands,
     },
+    Conversations {
+        #[command(subcommand)]
+        command: commands::conversations::ConversationCommands,
+    },
     Runs {
         #[command(subcommand)]
         command: commands::runs::RunCommands,
@@ -119,6 +123,9 @@ pub async fn run(cli: Cli) -> anyhow::Result<()> {
             match cli.command {
                 Commands::Agents { command } => {
                     commands::agents::execute(command, &client, cli.format).await
+                }
+                Commands::Conversations { command } => {
+                    commands::conversations::execute(command, &client, cli.format).await
                 }
                 Commands::Runs { command } => {
                     commands::runs::execute(command, &client, cli.format).await
