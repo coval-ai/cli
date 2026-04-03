@@ -4,6 +4,7 @@ use anyhow::Result;
 use clap::{Args, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 
+use crate::client::error::ApiError;
 use crate::client::models::ListParams;
 use crate::client::CovalClient;
 use crate::output::{print_list, print_one, print_success, OutputFormat};
@@ -29,16 +30,25 @@ pub struct ListArgs {
     page_size: u32,
     #[arg(long)]
     order_by: Option<String>,
+    /// Query monitoring conversations instead of simulations
+    #[arg(long)]
+    monitoring: bool,
 }
 
 #[derive(Args)]
 pub struct GetArgs {
     simulation_id: String,
+    /// Query monitoring conversations instead of simulations
+    #[arg(long)]
+    monitoring: bool,
 }
 
 #[derive(Args)]
 pub struct DeleteArgs {
     simulation_id: String,
+    /// Query monitoring conversations instead of simulations
+    #[arg(long)]
+    monitoring: bool,
 }
 
 #[derive(Args)]
@@ -46,17 +56,26 @@ pub struct AudioArgs {
     simulation_id: String,
     #[arg(short, long)]
     output: Option<PathBuf>,
+    /// Query monitoring conversations instead of simulations
+    #[arg(long)]
+    monitoring: bool,
 }
 
 #[derive(Args)]
 pub struct MetricsArgs {
     simulation_id: String,
+    /// Query monitoring conversations instead of simulations
+    #[arg(long)]
+    monitoring: bool,
 }
 
 #[derive(Args)]
 pub struct MetricDetailArgs {
     simulation_id: String,
     metric_output_id: String,
+    /// Query monitoring conversations instead of simulations
+    #[arg(long)]
+    monitoring: bool,
 }
 
 pub async fn execute(
@@ -79,33 +98,103 @@ pub async fn execute(
                 order_by: args.order_by,
                 ..Default::default()
             };
-            let response = client.simulations().list(params).await?;
-            print_list(&response.simulations, format);
+
+            if args.monitoring {
+                let response = client.conversations().list(params).await?;
+                print_list(&response.conversations, format);
+            } else {
+                let response = client.simulations().list(params).await?;
+                print_list(&response.simulations, format);
+            }
         }
         SimulationCommands::Get(args) => {
-            let simulation = client.simulations().get(&args.simulation_id).await?;
-            print_one(&simulation, format);
+            if args.monitoring {
+                let conversation = client.conversations().get(&args.simulation_id).await?;
+                print_one(&conversation, format);
+            } else {
+                match client.simulations().get(&args.simulation_id).await {
+                    Ok(simulation) => print_one(&simulation, format),
+                    Err(ApiError::NotFound { .. }) => {
+                        let conversation = client.conversations().get(&args.simulation_id).await?;
+                        print_one(&conversation, format);
+                    }
+                    Err(e) => return Err(e.into()),
+                }
+            }
         }
         SimulationCommands::Delete(args) => {
-            client.simulations().delete(&args.simulation_id).await?;
-            print_success("Simulation deleted.");
+            if args.monitoring {
+                client.conversations().delete(&args.simulation_id).await?;
+                print_success("Conversation deleted.");
+            } else {
+                match client.simulations().delete(&args.simulation_id).await {
+                    Ok(()) => print_success("Simulation deleted."),
+                    Err(ApiError::NotFound { .. }) => {
+                        client.conversations().delete(&args.simulation_id).await?;
+                        print_success("Conversation deleted.");
+                    }
+                    Err(e) => return Err(e.into()),
+                }
+            }
         }
         SimulationCommands::Metrics(args) => {
-            let response = client
-                .simulations()
-                .list_metrics(&args.simulation_id)
-                .await?;
-            print_list(&response.metrics, format);
+            if args.monitoring {
+                let response = client
+                    .conversations()
+                    .list_metrics(&args.simulation_id)
+                    .await?;
+                print_list(&response.metrics, format);
+            } else {
+                match client.simulations().list_metrics(&args.simulation_id).await {
+                    Ok(response) => print_list(&response.metrics, format),
+                    Err(ApiError::NotFound { .. }) => {
+                        let response = client
+                            .conversations()
+                            .list_metrics(&args.simulation_id)
+                            .await?;
+                        print_list(&response.metrics, format);
+                    }
+                    Err(e) => return Err(e.into()),
+                }
+            }
         }
         SimulationCommands::MetricDetail(args) => {
-            let metric = client
-                .simulations()
-                .get_metric(&args.simulation_id, &args.metric_output_id)
-                .await?;
-            print_one(&metric, format);
+            if args.monitoring {
+                let metric = client
+                    .conversations()
+                    .get_metric(&args.simulation_id, &args.metric_output_id)
+                    .await?;
+                print_one(&metric, format);
+            } else {
+                match client
+                    .simulations()
+                    .get_metric(&args.simulation_id, &args.metric_output_id)
+                    .await
+                {
+                    Ok(metric) => print_one(&metric, format),
+                    Err(ApiError::NotFound { .. }) => {
+                        let metric = client
+                            .conversations()
+                            .get_metric(&args.simulation_id, &args.metric_output_id)
+                            .await?;
+                        print_one(&metric, format);
+                    }
+                    Err(e) => return Err(e.into()),
+                }
+            }
         }
         SimulationCommands::Audio(args) => {
-            let audio = client.simulations().audio(&args.simulation_id).await?;
+            let audio = if args.monitoring {
+                client.conversations().audio(&args.simulation_id).await?
+            } else {
+                match client.simulations().audio(&args.simulation_id).await {
+                    Ok(audio) => audio,
+                    Err(ApiError::NotFound { .. }) => {
+                        client.conversations().audio(&args.simulation_id).await?
+                    }
+                    Err(e) => return Err(e.into()),
+                }
+            };
 
             match args.output {
                 Some(path) => {
