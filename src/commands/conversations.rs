@@ -10,7 +10,7 @@ use crate::client::CovalClient;
 use crate::output::{print_list, print_one, print_success, OutputFormat};
 
 #[derive(Subcommand)]
-pub enum SimulationCommands {
+pub enum ConversationCommands {
     List(ListArgs),
     Get(GetArgs),
     Delete(DeleteArgs),
@@ -24,8 +24,6 @@ pub enum SimulationCommands {
 pub struct ListArgs {
     #[arg(long)]
     filter: Option<String>,
-    #[arg(long)]
-    run_id: Option<String>,
     #[arg(long, default_value = "50")]
     page_size: u32,
     #[arg(long)]
@@ -34,99 +32,92 @@ pub struct ListArgs {
 
 #[derive(Args)]
 pub struct GetArgs {
-    simulation_id: String,
+    conversation_id: String,
 }
 
 #[derive(Args)]
 pub struct DeleteArgs {
-    simulation_id: String,
+    conversation_id: String,
 }
 
 #[derive(Args)]
 pub struct AudioArgs {
-    simulation_id: String,
+    conversation_id: String,
     #[arg(short, long)]
     output: Option<PathBuf>,
 }
 
 #[derive(Args)]
 pub struct MetricsArgs {
-    simulation_id: String,
+    conversation_id: String,
 }
 
 #[derive(Args)]
 pub struct MetricDetailArgs {
-    simulation_id: String,
+    conversation_id: String,
     metric_output_id: String,
 }
 
 pub async fn execute(
-    cmd: SimulationCommands,
+    cmd: ConversationCommands,
     client: &CovalClient,
     format: OutputFormat,
 ) -> Result<()> {
     match cmd {
-        SimulationCommands::List(args) => {
-            let filter = match (args.filter, args.run_id) {
-                (Some(f), Some(run_id)) => Some(format!("{f} AND run_id=\"{run_id}\"")),
-                (Some(f), None) => Some(f),
-                (None, Some(run_id)) => Some(format!("run_id=\"{run_id}\"")),
-                (None, None) => None,
-            };
-
+        ConversationCommands::List(args) => {
             let params = ListParams {
-                filter,
+                filter: args.filter,
                 page_size: Some(args.page_size),
                 order_by: args.order_by,
                 ..Default::default()
             };
-            let response = client.simulations().list(params).await?;
-            print_list(&response.simulations, format);
+            let response = client.conversations().list(params).await?;
+            print_list(&response.conversations, format);
         }
-        SimulationCommands::Get(args) => {
-            let result = client.simulations().get(&args.simulation_id).await;
+        ConversationCommands::Get(args) => {
+            let result = client.conversations().get(&args.conversation_id).await;
             match result {
-                Ok(simulation) => print_one(&simulation, format),
+                Ok(conversation) => print_one(&conversation, format),
                 Err(ApiError::NotFound { .. }) => {
-                    print_not_found_hint(&args.simulation_id, "conversations");
+                    print_not_found_hint(&args.conversation_id, "simulations");
                     return Err(ApiError::NotFound {
-                        resource: format!("Simulation '{}'", args.simulation_id),
+                        resource: format!("Conversation '{}'", args.conversation_id),
                     }
                     .into());
                 }
                 Err(e) => return Err(e.into()),
             }
         }
-        SimulationCommands::Delete(args) => {
-            let result = client.simulations().delete(&args.simulation_id).await;
+        ConversationCommands::Delete(args) => {
+            let result = client.conversations().delete(&args.conversation_id).await;
             match result {
-                Ok(()) => print_success("Simulation deleted."),
+                Ok(()) => print_success("Conversation deleted."),
                 Err(ApiError::NotFound { .. }) => {
-                    print_not_found_hint(&args.simulation_id, "conversations");
+                    print_not_found_hint(&args.conversation_id, "simulations");
                     return Err(ApiError::NotFound {
-                        resource: format!("Simulation '{}'", args.simulation_id),
+                        resource: format!("Conversation '{}'", args.conversation_id),
                     }
                     .into());
                 }
                 Err(e) => return Err(e.into()),
             }
         }
-        SimulationCommands::Metrics(args) => {
+        ConversationCommands::Metrics(args) => {
             let response = client
-                .simulations()
-                .list_metrics(&args.simulation_id)
+                .conversations()
+                .list_metrics(&args.conversation_id)
                 .await?;
             print_list(&response.metrics, format);
         }
-        SimulationCommands::MetricDetail(args) => {
+        ConversationCommands::MetricDetail(args) => {
             let metric = client
-                .simulations()
-                .get_metric(&args.simulation_id, &args.metric_output_id)
+                .conversations()
+                .get_metric(&args.conversation_id, &args.metric_output_id)
                 .await?;
             print_one(&metric, format);
         }
-        SimulationCommands::Audio(args) => {
-            let audio = client.simulations().audio(&args.simulation_id).await?;
+        ConversationCommands::Audio(args) => {
+            let audio = client.conversations().audio(&args.conversation_id).await?;
 
             match args.output {
                 Some(path) => {
@@ -143,7 +134,7 @@ pub async fn execute(
 }
 
 fn print_not_found_hint(id: &str, try_command: &str) {
-    eprintln!("hint: not found as a simulation. Try `coval {try_command} get {id}` instead.");
+    eprintln!("hint: not found as a conversation. Try `coval {try_command} get {id}` instead.");
 }
 
 async fn download_audio(url: &str, path: &Path) -> Result<()> {

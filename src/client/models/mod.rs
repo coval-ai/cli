@@ -3,6 +3,7 @@
 mod agent;
 mod api_key;
 mod common;
+mod conversation;
 mod dashboard;
 mod metric;
 mod mutation;
@@ -20,6 +21,7 @@ mod widget;
 pub use agent::*;
 pub use api_key::*;
 pub use common::*;
+pub use conversation::*;
 pub use dashboard::*;
 pub use metric::*;
 pub use mutation::*;

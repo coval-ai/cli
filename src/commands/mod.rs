@@ -2,6 +2,7 @@ pub mod agents;
 pub mod api_keys;
 pub mod auth;
 pub mod config;
+pub mod conversations;
 pub mod dashboards;
 pub mod metrics;
 pub mod mutations;
