@@ -18,7 +18,6 @@ pub enum SimulationCommands {
     Metrics(MetricsArgs),
     #[command(name = "metric-detail")]
     MetricDetail(MetricDetailArgs),
-    Resimulate(ResimulateArgs),
     Update(UpdateArgs),
 }
 
@@ -60,11 +59,6 @@ pub struct MetricsArgs {
 pub struct MetricDetailArgs {
     simulation_id: String,
     metric_output_id: String,
-}
-
-#[derive(Args)]
-pub struct ResimulateArgs {
-    simulation_id: String,
 }
 
 #[derive(Args)]
@@ -142,13 +136,6 @@ pub async fn execute(
                 .get_metric(&args.simulation_id, &args.metric_output_id)
                 .await?;
             print_one(&metric, format);
-        }
-        SimulationCommands::Resimulate(args) => {
-            let result = client
-                .simulations()
-                .resimulate(&args.simulation_id)
-                .await?;
-            print_one(&result, format);
         }
         SimulationCommands::Update(args) => {
             let mut body = serde_json::Map::new();

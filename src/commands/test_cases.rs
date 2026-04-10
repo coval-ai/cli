@@ -15,10 +15,6 @@ pub enum TestCaseCommands {
     Create(CreateArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
-    #[command(name = "batch-create")]
-    BatchCreate(BatchCreateArgs),
-    #[command(name = "media-upload-url")]
-    MediaUploadUrl(MediaUploadUrlArgs),
 }
 
 #[derive(Args)]
@@ -87,27 +83,6 @@ pub struct UpdateArgs {
 #[derive(Args)]
 pub struct DeleteArgs {
     test_case_id: String,
-}
-
-#[derive(Args)]
-pub struct BatchCreateArgs {
-    /// Test set ID to add test cases to
-    test_set_id: String,
-    /// Path to JSON file containing test cases
-    #[arg(long)]
-    file: String,
-}
-
-#[derive(Args)]
-pub struct MediaUploadUrlArgs {
-    /// Test case ID to upload media for
-    test_case_id: String,
-    /// Original filename (alphanumeric, underscore, hyphen, dot, space)
-    #[arg(long)]
-    filename: String,
-    /// MIME type (image/png or image/jpeg)
-    #[arg(long)]
-    mime_type: String,
 }
 
 pub async fn execute(
@@ -202,28 +177,6 @@ pub async fn execute(
         TestCaseCommands::Delete(args) => {
             client.test_cases().delete(&args.test_case_id).await?;
             print_success("Test case deleted.");
-        }
-        TestCaseCommands::BatchCreate(args) => {
-            let file_content = std::fs::read_to_string(&args.file)
-                .map_err(|e| anyhow::anyhow!("Failed to read file '{}': {e}", args.file))?;
-            let body: serde_json::Value = serde_json::from_str(&file_content)
-                .map_err(|e| anyhow::anyhow!("Invalid JSON in file: {e}"))?;
-            let result = client
-                .test_cases()
-                .batch_create(&args.test_set_id, &body)
-                .await?;
-            print_one(&result, format);
-        }
-        TestCaseCommands::MediaUploadUrl(args) => {
-            let body = serde_json::json!({
-                "filename": args.filename,
-                "mime_type": args.mime_type,
-            });
-            let result: serde_json::Value = client
-                .test_cases()
-                .media_upload_url(&args.test_case_id, &body)
-                .await?;
-            print_one(&result, format);
         }
     }
     Ok(())

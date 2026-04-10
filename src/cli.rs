@@ -35,21 +35,13 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::agents::AgentCommands,
     },
-    Audio {
+    Conversations {
         #[command(subcommand)]
-        command: commands::audio::AudioCommands,
-    },
-    Baselines {
-        #[command(subcommand)]
-        command: commands::baselines::BaselineCommands,
+        command: commands::conversations::ConversationCommands,
     },
     Comments {
         #[command(subcommand)]
         command: commands::comments::CommentCommands,
-    },
-    Conversations {
-        #[command(subcommand)]
-        command: commands::conversations::ConversationCommands,
     },
     Runs {
         #[command(subcommand)]
@@ -77,17 +69,9 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::metrics::MetricCommands,
     },
-    Monitors {
-        #[command(subcommand)]
-        command: commands::monitors::MonitorCommands,
-    },
     Mutations {
         #[command(subcommand)]
         command: commands::mutations::MutationCommands,
-    },
-    Organization {
-        #[command(subcommand)]
-        command: commands::organization::OrganizationCommands,
     },
     #[command(name = "api-keys")]
     ApiKeys {
@@ -118,18 +102,9 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::review_projects::ReviewProjectCommands,
     },
-    #[command(name = "saved-views")]
-    SavedViews {
-        #[command(subcommand)]
-        command: commands::saved_views::SavedViewCommands,
-    },
     Webhooks {
         #[command(subcommand)]
         command: commands::webhooks::WebhookCommands,
-    },
-    Integrations {
-        #[command(subcommand)]
-        command: commands::integrations::IntegrationCommands,
     },
 }
 
@@ -157,17 +132,11 @@ pub async fn run(cli: Cli) -> anyhow::Result<()> {
                 Commands::Agents { command } => {
                     commands::agents::execute(command, &client, cli.format).await
                 }
-                Commands::Audio { command } => {
-                    commands::audio::execute(command, &client, cli.format).await
-                }
-                Commands::Baselines { command } => {
-                    commands::baselines::execute(command, &client, cli.format).await
+                Commands::Conversations { command } => {
+                    commands::conversations::execute(command, &client, cli.format).await
                 }
                 Commands::Comments { command } => {
                     commands::comments::execute(command, &client, cli.format).await
-                }
-                Commands::Conversations { command } => {
-                    commands::conversations::execute(command, &client, cli.format).await
                 }
                 Commands::Runs { command } => {
                     commands::runs::execute(command, &client, cli.format).await
@@ -187,14 +156,8 @@ pub async fn run(cli: Cli) -> anyhow::Result<()> {
                 Commands::Metrics { command } => {
                     commands::metrics::execute(command, &client, cli.format).await
                 }
-                Commands::Monitors { command } => {
-                    commands::monitors::execute(command, &client, cli.format).await
-                }
                 Commands::Mutations { command } => {
                     commands::mutations::execute(command, &client, cli.format).await
-                }
-                Commands::Organization { command } => {
-                    commands::organization::execute(command, &client, cli.format).await
                 }
                 Commands::ApiKeys { command } => {
                     commands::api_keys::execute(command, &client, cli.format).await
@@ -214,14 +177,8 @@ pub async fn run(cli: Cli) -> anyhow::Result<()> {
                 Commands::ReviewProjects { command } => {
                     commands::review_projects::execute(command, &client, cli.format).await
                 }
-                Commands::SavedViews { command } => {
-                    commands::saved_views::execute(command, &client, cli.format).await
-                }
                 Commands::Webhooks { command } => {
                     commands::webhooks::execute(command, &client, cli.format).await
-                }
-                Commands::Integrations { command } => {
-                    commands::integrations::execute(command, &client, cli.format).await
                 }
                 _ => unreachable!(),
             }
