@@ -83,6 +83,19 @@ impl CovalClient {
         self.handle_response(resp).await
     }
 
+    pub async fn post_empty<T: serde::de::DeserializeOwned>(
+        &self,
+        url: Url,
+    ) -> Result<T, ApiError> {
+        let resp = self
+            .http
+            .post(url)
+            .header("X-API-Key", &self.api_key)
+            .send()
+            .await?;
+        self.handle_response(resp).await
+    }
+
     pub async fn delete(&self, url: Url) -> Result<(), ApiError> {
         let resp = self
             .http
@@ -190,6 +203,38 @@ impl CovalClient {
             dashboard_id: dashboard_id.to_string(),
         }
     }
+
+    pub fn audio(&self) -> AudioClient<'_> {
+        AudioClient(self)
+    }
+
+    pub fn baselines(&self) -> BaselinesClient<'_> {
+        BaselinesClient(self)
+    }
+
+    pub fn comments(&self) -> CommentsClient<'_> {
+        CommentsClient(self)
+    }
+
+    pub fn monitors(&self) -> MonitorsClient<'_> {
+        MonitorsClient(self)
+    }
+
+    pub fn organization(&self) -> OrganizationClient<'_> {
+        OrganizationClient(self)
+    }
+
+    pub fn saved_views(&self) -> SavedViewsClient<'_> {
+        SavedViewsClient(self)
+    }
+
+    pub fn webhooks(&self) -> WebhooksClient<'_> {
+        WebhooksClient(self)
+    }
+
+    pub fn integrations(&self) -> IntegrationsClient<'_> {
+        IntegrationsClient(self)
+    }
 }
 
 pub struct AgentsClient<'a>(&'a CovalClient);
@@ -214,6 +259,14 @@ pub struct WidgetsClient<'a> {
     client: &'a CovalClient,
     dashboard_id: String,
 }
+pub struct AudioClient<'a>(&'a CovalClient);
+pub struct BaselinesClient<'a>(&'a CovalClient);
+pub struct CommentsClient<'a>(&'a CovalClient);
+pub struct MonitorsClient<'a>(&'a CovalClient);
+pub struct OrganizationClient<'a>(&'a CovalClient);
+pub struct SavedViewsClient<'a>(&'a CovalClient);
+pub struct WebhooksClient<'a>(&'a CovalClient);
+pub struct IntegrationsClient<'a>(&'a CovalClient);
 
 impl AgentsClient<'_> {
     pub async fn list(
@@ -250,6 +303,32 @@ impl AgentsClient<'_> {
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
         let url = self.0.url(&format!("/v1/agents/{id}"));
         self.0.delete(url).await
+    }
+
+    pub async fn duplicate(&self, id: &str) -> Result<models::Agent, ApiError> {
+        let url = self.0.url(&format!("/v1/agents/{id}:duplicate"));
+        let resp: models::CreateAgentResponse = self.0.post_empty(url).await?;
+        Ok(resp.agent)
+    }
+
+    pub async fn manage_metrics(
+        &self,
+        id: &str,
+        req: &serde_json::Value,
+    ) -> Result<models::Agent, ApiError> {
+        let url = self.0.url(&format!("/v1/agents/{id}/metrics"));
+        let resp: models::UpdateAgentResponse = self.0.patch(url, req).await?;
+        Ok(resp.agent)
+    }
+
+    pub async fn manage_test_sets(
+        &self,
+        id: &str,
+        req: &serde_json::Value,
+    ) -> Result<models::Agent, ApiError> {
+        let url = self.0.url(&format!("/v1/agents/{id}/test-sets"));
+        let resp: models::UpdateAgentResponse = self.0.patch(url, req).await?;
+        Ok(resp.agent)
     }
 }
 
@@ -373,6 +452,11 @@ impl SimulationsClient<'_> {
         let resp: models::GetSimulationMetricResponse = self.0.get(url).await?;
         Ok(resp.metric)
     }
+
+    pub async fn resimulate(&self, id: &str) -> Result<serde_json::Value, ApiError> {
+        let url = self.0.url(&format!("/v1/simulations/{id}/resimulate"));
+        self.0.post_empty(url).await
+    }
 }
 
 impl TestSetsClient<'_> {
@@ -414,6 +498,34 @@ impl TestSetsClient<'_> {
         let url = self.0.url(&format!("/v1/test-sets/{id}"));
         self.0.delete(url).await
     }
+
+    pub async fn duplicate(&self, id: &str) -> Result<models::TestSet, ApiError> {
+        let url = self.0.url(&format!("/v1/test-sets/{id}/duplicate"));
+        let resp: models::CreateTestSetResponse = self.0.post_empty(url).await?;
+        Ok(resp.test_set)
+    }
+
+    pub async fn add_agents(
+        &self,
+        id: &str,
+        agent_ids: Vec<String>,
+    ) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/test-sets/{id}/agents/add"));
+        let body = serde_json::json!({ "agent_ids": agent_ids });
+        let _: serde_json::Value = self.0.post(url, &body).await?;
+        Ok(())
+    }
+
+    pub async fn remove_agent(
+        &self,
+        id: &str,
+        agent_id: &str,
+    ) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/test-sets/{id}/agents/remove"));
+        let body = serde_json::json!({ "agent_id": agent_id });
+        let _: serde_json::Value = self.0.post(url, &body).await?;
+        Ok(())
+    }
 }
 
 impl TestCasesClient<'_> {
@@ -454,6 +566,17 @@ impl TestCasesClient<'_> {
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
         let url = self.0.url(&format!("/v1/test-cases/{id}"));
         self.0.delete(url).await
+    }
+
+    pub async fn batch_create(
+        &self,
+        test_set_id: &str,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/test-sets/{test_set_id}/test-cases/batch-create"));
+        self.0.post(url, body).await
     }
 }
 
@@ -501,6 +624,12 @@ impl PersonasClient<'_> {
         let url = self.0.url("/v1/personas/phone-numbers");
         self.0.get(url).await
     }
+
+    pub async fn duplicate(&self, id: &str) -> Result<models::Persona, ApiError> {
+        let url = self.0.url(&format!("/v1/personas/{id}:duplicate"));
+        let resp: models::CreatePersonaResponse = self.0.post_empty(url).await?;
+        Ok(resp.persona)
+    }
 }
 
 impl MetricsClient<'_> {
@@ -544,6 +673,54 @@ impl MetricsClient<'_> {
 
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
         let url = self.0.url(&format!("/v1/metrics/{id}"));
+        self.0.delete(url).await
+    }
+
+    pub async fn list_thresholds(
+        &self,
+        metric_id: &str,
+    ) -> Result<models::ListMetricThresholdsResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/thresholds"));
+        self.0.get(url).await
+    }
+
+    pub async fn get_threshold(
+        &self,
+        metric_id: &str,
+    ) -> Result<models::MetricThreshold, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/threshold"));
+        let resp: models::GetMetricThresholdResponse = self.0.get(url).await?;
+        Ok(resp.threshold)
+    }
+
+    pub async fn create_threshold(
+        &self,
+        metric_id: &str,
+        config: &serde_json::Value,
+    ) -> Result<models::MetricThreshold, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/thresholds"));
+        let resp: models::CreateMetricThresholdResponse = self.0.post(url, config).await?;
+        Ok(resp.threshold)
+    }
+
+    pub async fn update_threshold(
+        &self,
+        metric_id: &str,
+        config: &serde_json::Value,
+    ) -> Result<models::MetricThreshold, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/threshold"));
+        let resp: models::UpdateMetricThresholdResponse = self.0.patch(url, config).await?;
+        Ok(resp.threshold)
+    }
+
+    pub async fn delete_threshold(
+        &self,
+        metric_id: &str,
+        threshold_id: &str,
+    ) -> Result<(), ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/metrics/{metric_id}/thresholds/{threshold_id}"));
         self.0.delete(url).await
     }
 }
@@ -912,5 +1089,284 @@ impl WidgetsClient<'_> {
             self.dashboard_id
         ));
         self.client.delete(url).await
+    }
+}
+
+impl AudioClient<'_> {
+    pub async fn signed_url(
+        &self,
+        id: &str,
+    ) -> Result<models::AudioSignedUrlResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/audio/{id}:signed-url"));
+        self.0.get(url).await
+    }
+
+    pub async fn peaks_url(
+        &self,
+        id: &str,
+    ) -> Result<models::AudioSignedUrlResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/audio/{id}:peaks-url"));
+        self.0.get(url).await
+    }
+}
+
+impl BaselinesClient<'_> {
+    pub async fn list(
+        &self,
+        params: models::ListParams,
+    ) -> Result<models::ListBaselinesResponse, ApiError> {
+        let mut url = self.0.url("/v1/baselines");
+        params.apply_to(&mut url);
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::Baseline, ApiError> {
+        let url = self.0.url(&format!("/v1/baselines/{id}"));
+        let resp: models::GetBaselineResponse = self.0.get(url).await?;
+        Ok(resp.baseline)
+    }
+
+    pub async fn create(
+        &self,
+        req: models::CreateBaselineRequest,
+    ) -> Result<models::Baseline, ApiError> {
+        let url = self.0.url("/v1/baselines");
+        let resp: models::CreateBaselineResponse = self.0.post(url, &req).await?;
+        Ok(resp.baseline)
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/baselines/{id}"));
+        self.0.delete(url).await
+    }
+
+    pub async fn archive(&self, id: &str) -> Result<models::Baseline, ApiError> {
+        let url = self.0.url(&format!("/v1/baselines/{id}:archive"));
+        let resp: models::GetBaselineResponse = self.0.post_empty(url).await?;
+        Ok(resp.baseline)
+    }
+}
+
+impl CommentsClient<'_> {
+    pub async fn list(
+        &self,
+        simulation_output_id: &str,
+    ) -> Result<models::ListCommentsResponse, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/simulation-outputs/{simulation_output_id}/comments"));
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::Comment, ApiError> {
+        let url = self.0.url(&format!("/v1/comments/{id}"));
+        let resp: models::GetCommentResponse = self.0.get(url).await?;
+        Ok(resp.comment)
+    }
+
+    pub async fn create(
+        &self,
+        simulation_output_id: &str,
+        req: models::CreateCommentRequest,
+    ) -> Result<models::Comment, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/simulation-outputs/{simulation_output_id}/comments"));
+        let resp: models::CreateCommentResponse = self.0.post(url, &req).await?;
+        Ok(resp.comment)
+    }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        req: models::UpdateCommentRequest,
+    ) -> Result<models::Comment, ApiError> {
+        let url = self.0.url(&format!("/v1/comments/{id}"));
+        let resp: models::UpdateCommentResponse = self.0.patch(url, &req).await?;
+        Ok(resp.comment)
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/comments/{id}"));
+        self.0.delete(url).await
+    }
+}
+
+impl MonitorsClient<'_> {
+    pub async fn list(
+        &self,
+        params: models::ListParams,
+    ) -> Result<models::ListMonitorsResponse, ApiError> {
+        let mut url = self.0.url("/v1/monitors");
+        params.apply_to(&mut url);
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::Monitor, ApiError> {
+        let url = self.0.url(&format!("/v1/monitors/{id}"));
+        let resp: models::GetMonitorResponse = self.0.get(url).await?;
+        Ok(resp.monitor)
+    }
+
+    pub async fn create(
+        &self,
+        config: &serde_json::Value,
+    ) -> Result<models::Monitor, ApiError> {
+        let url = self.0.url("/v1/monitors");
+        let resp: models::CreateMonitorResponse = self.0.post(url, config).await?;
+        Ok(resp.monitor)
+    }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        config: &serde_json::Value,
+    ) -> Result<models::Monitor, ApiError> {
+        let url = self.0.url(&format!("/v1/monitors/{id}"));
+        let resp: models::UpdateMonitorResponse = self.0.patch(url, config).await?;
+        Ok(resp.monitor)
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/monitors/{id}"));
+        self.0.delete(url).await
+    }
+
+    pub async fn events(
+        &self,
+        id: &str,
+    ) -> Result<models::ListMonitorEventsResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/monitors/{id}/events"));
+        self.0.get(url).await
+    }
+
+    pub async fn test_evaluate(
+        &self,
+        id: &str,
+        run_id: &str,
+    ) -> Result<models::TestEvaluateResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/monitors/{id}/test-evaluate"));
+        let body = serde_json::json!({ "run_id": run_id });
+        self.0.post(url, &body).await
+    }
+}
+
+impl OrganizationClient<'_> {
+    pub async fn get(&self) -> Result<models::Organization, ApiError> {
+        let url = self.0.url("/v1/organization");
+        let resp: models::GetOrganizationResponse = self.0.get(url).await?;
+        Ok(resp.organization)
+    }
+
+    pub async fn update(
+        &self,
+        req: models::UpdateOrganizationRequest,
+    ) -> Result<models::Organization, ApiError> {
+        let url = self.0.url("/v1/organization");
+        let resp: models::UpdateOrganizationResponse = self.0.patch(url, &req).await?;
+        Ok(resp.organization)
+    }
+}
+
+impl SavedViewsClient<'_> {
+    pub async fn list(
+        &self,
+        params: models::ListParams,
+    ) -> Result<models::ListSavedViewsResponse, ApiError> {
+        let mut url = self.0.url("/v1/saved-views");
+        params.apply_to(&mut url);
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::SavedView, ApiError> {
+        let url = self.0.url(&format!("/v1/saved-views/{id}"));
+        let resp: models::GetSavedViewResponse = self.0.get(url).await?;
+        Ok(resp.saved_view)
+    }
+
+    pub async fn create(
+        &self,
+        req: models::CreateSavedViewRequest,
+    ) -> Result<models::SavedView, ApiError> {
+        let url = self.0.url("/v1/saved-views");
+        let resp: models::CreateSavedViewResponse = self.0.post(url, &req).await?;
+        Ok(resp.saved_view)
+    }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        req: models::UpdateSavedViewRequest,
+    ) -> Result<models::SavedView, ApiError> {
+        let url = self.0.url(&format!("/v1/saved-views/{id}"));
+        let resp: models::UpdateSavedViewResponse = self.0.patch(url, &req).await?;
+        Ok(resp.saved_view)
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/saved-views/{id}"));
+        self.0.delete(url).await
+    }
+
+    pub async fn set_default(&self, id: &str) -> Result<models::SavedView, ApiError> {
+        let url = self.0.url(&format!("/v1/saved-views/{id}:set-default"));
+        let resp: models::GetSavedViewResponse = self.0.post_empty(url).await?;
+        Ok(resp.saved_view)
+    }
+}
+
+impl WebhooksClient<'_> {
+    pub async fn list(
+        &self,
+        params: models::ListParams,
+    ) -> Result<models::ListWebhooksResponse, ApiError> {
+        let mut url = self.0.url("/v1/webhooks");
+        params.apply_to(&mut url);
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::Webhook, ApiError> {
+        let url = self.0.url(&format!("/v1/webhooks/{id}"));
+        let resp: models::GetWebhookResponse = self.0.get(url).await?;
+        Ok(resp.webhook)
+    }
+
+    pub async fn create(
+        &self,
+        req: models::CreateWebhookRequest,
+    ) -> Result<models::Webhook, ApiError> {
+        let url = self.0.url("/v1/webhooks");
+        let resp: models::CreateWebhookResponse = self.0.post(url, &req).await?;
+        Ok(resp.webhook)
+    }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        req: models::UpdateWebhookRequest,
+    ) -> Result<models::Webhook, ApiError> {
+        let url = self.0.url(&format!("/v1/webhooks/{id}"));
+        let resp: models::UpdateWebhookResponse = self.0.patch(url, &req).await?;
+        Ok(resp.webhook)
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/webhooks/{id}"));
+        self.0.delete(url).await
+    }
+}
+
+impl IntegrationsClient<'_> {
+    pub async fn connect_slack(
+        &self,
+        req: models::ConnectSlackRequest,
+    ) -> Result<models::ConnectSlackResponse, ApiError> {
+        let url = self.0.url("/v1/integrations/slack/connect");
+        self.0.post(url, &req).await
+    }
+
+    pub async fn disconnect_slack(&self) -> Result<(), ApiError> {
+        let url = self.0.url("/v1/integrations/slack");
+        self.0.delete(url).await
     }
 }

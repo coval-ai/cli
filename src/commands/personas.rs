@@ -12,6 +12,7 @@ pub enum PersonaCommands {
     Create(CreateArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
+    Duplicate(DuplicateArgs),
     #[command(name = "phone-numbers")]
     PhoneNumbers,
 }
@@ -84,6 +85,11 @@ pub struct DeleteArgs {
     persona_id: String,
 }
 
+#[derive(Args)]
+pub struct DuplicateArgs {
+    persona_id: String,
+}
+
 pub async fn execute(
     cmd: PersonaCommands,
     client: &CovalClient,
@@ -133,6 +139,10 @@ pub async fn execute(
         PersonaCommands::Delete(args) => {
             client.personas().delete(&args.persona_id).await?;
             print_success("Persona deleted.");
+        }
+        PersonaCommands::Duplicate(args) => {
+            let persona = client.personas().duplicate(&args.persona_id).await?;
+            print_one(&persona, format);
         }
         PersonaCommands::PhoneNumbers => {
             let response = client.personas().list_phone_numbers().await?;

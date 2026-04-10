@@ -12,6 +12,11 @@ pub enum AgentCommands {
     Create(CreateArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
+    Duplicate(DuplicateArgs),
+    #[command(name = "manage-metrics")]
+    ManageMetrics(ManageMetricsArgs),
+    #[command(name = "manage-test-sets")]
+    ManageTestSets(ManageTestSetsArgs),
 }
 
 #[derive(Args)]
@@ -87,6 +92,33 @@ pub struct DeleteArgs {
     agent_id: String,
 }
 
+#[derive(Args)]
+pub struct DuplicateArgs {
+    agent_id: String,
+}
+
+#[derive(Args)]
+pub struct ManageMetricsArgs {
+    agent_id: String,
+    /// Action to perform: set, add, or remove
+    #[arg(long)]
+    action: String,
+    /// Comma-separated metric IDs
+    #[arg(long, value_delimiter = ',')]
+    metric_ids: Vec<String>,
+}
+
+#[derive(Args)]
+pub struct ManageTestSetsArgs {
+    agent_id: String,
+    /// Action to perform: set, add, or remove
+    #[arg(long)]
+    action: String,
+    /// Comma-separated test set IDs
+    #[arg(long, value_delimiter = ',')]
+    test_set_ids: Vec<String>,
+}
+
 pub async fn execute(cmd: AgentCommands, client: &CovalClient, format: OutputFormat) -> Result<()> {
     match cmd {
         AgentCommands::List(args) => {
@@ -146,6 +178,29 @@ pub async fn execute(cmd: AgentCommands, client: &CovalClient, format: OutputFor
         AgentCommands::Delete(args) => {
             client.agents().delete(&args.agent_id).await?;
             print_success("Agent deleted.");
+        }
+        AgentCommands::Duplicate(args) => {
+            let agent = client.agents().duplicate(&args.agent_id).await?;
+            print_one(&agent, format);
+        }
+        AgentCommands::ManageMetrics(args) => {
+            let body = serde_json::json!({
+                "action": args.action,
+                "metric_ids": args.metric_ids,
+            });
+            let agent = client.agents().manage_metrics(&args.agent_id, &body).await?;
+            print_one(&agent, format);
+        }
+        AgentCommands::ManageTestSets(args) => {
+            let body = serde_json::json!({
+                "action": args.action,
+                "test_set_ids": args.test_set_ids,
+            });
+            let agent = client
+                .agents()
+                .manage_test_sets(&args.agent_id, &body)
+                .await?;
+            print_one(&agent, format);
         }
     }
     Ok(())

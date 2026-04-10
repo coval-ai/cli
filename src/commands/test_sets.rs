@@ -12,6 +12,11 @@ pub enum TestSetCommands {
     Create(CreateArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
+    Duplicate(DuplicateArgs),
+    #[command(name = "add-agents")]
+    AddAgents(AddAgentsArgs),
+    #[command(name = "remove-agent")]
+    RemoveAgent(RemoveAgentArgs),
 }
 
 #[derive(Args)]
@@ -67,6 +72,27 @@ pub struct DeleteArgs {
     test_set_id: String,
 }
 
+#[derive(Args)]
+pub struct DuplicateArgs {
+    test_set_id: String,
+}
+
+#[derive(Args)]
+pub struct AddAgentsArgs {
+    test_set_id: String,
+    /// Comma-separated agent IDs to add
+    #[arg(long, value_delimiter = ',')]
+    agent_ids: Vec<String>,
+}
+
+#[derive(Args)]
+pub struct RemoveAgentArgs {
+    test_set_id: String,
+    /// Agent ID to remove
+    #[arg(long)]
+    agent_id: String,
+}
+
 pub async fn execute(
     cmd: TestSetCommands,
     client: &CovalClient,
@@ -112,6 +138,24 @@ pub async fn execute(
         TestSetCommands::Delete(args) => {
             client.test_sets().delete(&args.test_set_id).await?;
             print_success("Test set deleted.");
+        }
+        TestSetCommands::Duplicate(args) => {
+            let test_set = client.test_sets().duplicate(&args.test_set_id).await?;
+            print_one(&test_set, format);
+        }
+        TestSetCommands::AddAgents(args) => {
+            client
+                .test_sets()
+                .add_agents(&args.test_set_id, args.agent_ids)
+                .await?;
+            print_success("Agents added to test set.");
+        }
+        TestSetCommands::RemoveAgent(args) => {
+            client
+                .test_sets()
+                .remove_agent(&args.test_set_id, &args.agent_id)
+                .await?;
+            print_success("Agent removed from test set.");
         }
     }
     Ok(())

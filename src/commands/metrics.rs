@@ -12,6 +12,51 @@ pub enum MetricCommands {
     Create(CreateArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
+    Thresholds {
+        #[command(subcommand)]
+        command: ThresholdCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ThresholdCommands {
+    List(ThresholdListArgs),
+    Get(ThresholdGetArgs),
+    Create(ThresholdCreateArgs),
+    Update(ThresholdUpdateArgs),
+    Delete(ThresholdDeleteArgs),
+}
+
+#[derive(Args)]
+pub struct ThresholdListArgs {
+    metric_id: String,
+}
+
+#[derive(Args)]
+pub struct ThresholdGetArgs {
+    metric_id: String,
+}
+
+#[derive(Args)]
+pub struct ThresholdCreateArgs {
+    metric_id: String,
+    /// JSON configuration for the threshold
+    #[arg(long)]
+    config: String,
+}
+
+#[derive(Args)]
+pub struct ThresholdUpdateArgs {
+    metric_id: String,
+    /// JSON configuration for the threshold update
+    #[arg(long)]
+    config: String,
+}
+
+#[derive(Args)]
+pub struct ThresholdDeleteArgs {
+    metric_id: String,
+    threshold_id: String,
 }
 
 #[derive(Args)]
@@ -224,6 +269,41 @@ pub async fn execute(
             client.metrics().delete(&args.metric_id).await?;
             print_success("Metric deleted.");
         }
+        MetricCommands::Thresholds { command } => match command {
+            ThresholdCommands::List(args) => {
+                let response = client.metrics().list_thresholds(&args.metric_id).await?;
+                print_list(&response.thresholds, format);
+            }
+            ThresholdCommands::Get(args) => {
+                let threshold = client.metrics().get_threshold(&args.metric_id).await?;
+                print_one(&threshold, format);
+            }
+            ThresholdCommands::Create(args) => {
+                let config: serde_json::Value = serde_json::from_str(&args.config)
+                    .map_err(|e| anyhow::anyhow!("Invalid JSON for --config: {e}"))?;
+                let threshold = client
+                    .metrics()
+                    .create_threshold(&args.metric_id, &config)
+                    .await?;
+                print_one(&threshold, format);
+            }
+            ThresholdCommands::Update(args) => {
+                let config: serde_json::Value = serde_json::from_str(&args.config)
+                    .map_err(|e| anyhow::anyhow!("Invalid JSON for --config: {e}"))?;
+                let threshold = client
+                    .metrics()
+                    .update_threshold(&args.metric_id, &config)
+                    .await?;
+                print_one(&threshold, format);
+            }
+            ThresholdCommands::Delete(args) => {
+                client
+                    .metrics()
+                    .delete_threshold(&args.metric_id, &args.threshold_id)
+                    .await?;
+                print_success("Threshold deleted.");
+            }
+        },
     }
     Ok(())
 }
