@@ -330,6 +330,16 @@ impl AgentsClient<'_> {
         let resp: models::UpdateAgentResponse = self.0.patch(url, req).await?;
         Ok(resp.agent)
     }
+
+    pub async fn manage_workflows(
+        &self,
+        id: &str,
+        req: &serde_json::Value,
+    ) -> Result<models::Agent, ApiError> {
+        let url = self.0.url(&format!("/v1/agents/{id}/workflows"));
+        let resp: models::UpdateAgentResponse = self.0.patch(url, req).await?;
+        Ok(resp.agent)
+    }
 }
 
 impl RunsClient<'_> {
@@ -457,6 +467,15 @@ impl SimulationsClient<'_> {
         let url = self.0.url(&format!("/v1/simulations/{id}/resimulate"));
         self.0.post_empty(url).await
     }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        req: &serde_json::Value,
+    ) -> Result<serde_json::Value, ApiError> {
+        let url = self.0.url(&format!("/v1/simulations/{id}"));
+        self.0.patch(url, req).await
+    }
 }
 
 impl TestSetsClient<'_> {
@@ -576,6 +595,17 @@ impl TestCasesClient<'_> {
         let url = self
             .0
             .url(&format!("/v1/test-sets/{test_set_id}/test-cases/batch-create"));
+        self.0.post(url, body).await
+    }
+
+    pub async fn media_upload_url(
+        &self,
+        test_case_id: &str,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/test-cases/{test_case_id}/media:upload-url"));
         self.0.post(url, body).await
     }
 }

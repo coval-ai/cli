@@ -17,6 +17,8 @@ pub enum AgentCommands {
     ManageMetrics(ManageMetricsArgs),
     #[command(name = "manage-test-sets")]
     ManageTestSets(ManageTestSetsArgs),
+    #[command(name = "manage-workflows")]
+    ManageWorkflows(ManageWorkflowsArgs),
 }
 
 #[derive(Args)]
@@ -119,6 +121,14 @@ pub struct ManageTestSetsArgs {
     test_set_ids: Vec<String>,
 }
 
+#[derive(Args)]
+pub struct ManageWorkflowsArgs {
+    agent_id: String,
+    /// Workflows JSON object (replaces entire workflows field)
+    #[arg(long)]
+    workflows: String,
+}
+
 pub async fn execute(cmd: AgentCommands, client: &CovalClient, format: OutputFormat) -> Result<()> {
     match cmd {
         AgentCommands::List(args) => {
@@ -199,6 +209,16 @@ pub async fn execute(cmd: AgentCommands, client: &CovalClient, format: OutputFor
             let agent = client
                 .agents()
                 .manage_test_sets(&args.agent_id, &body)
+                .await?;
+            print_one(&agent, format);
+        }
+        AgentCommands::ManageWorkflows(args) => {
+            let workflows: serde_json::Value = serde_json::from_str(&args.workflows)
+                .map_err(|e| anyhow::anyhow!("Invalid JSON for --workflows: {e}"))?;
+            let body = serde_json::json!({ "workflows": workflows });
+            let agent = client
+                .agents()
+                .manage_workflows(&args.agent_id, &body)
                 .await?;
             print_one(&agent, format);
         }

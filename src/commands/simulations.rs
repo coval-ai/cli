@@ -19,6 +19,7 @@ pub enum SimulationCommands {
     #[command(name = "metric-detail")]
     MetricDetail(MetricDetailArgs),
     Resimulate(ResimulateArgs),
+    Update(UpdateArgs),
 }
 
 #[derive(Args)]
@@ -64,6 +65,17 @@ pub struct MetricDetailArgs {
 #[derive(Args)]
 pub struct ResimulateArgs {
     simulation_id: String,
+}
+
+#[derive(Args)]
+pub struct UpdateArgs {
+    simulation_id: String,
+    /// Set public visibility
+    #[arg(long)]
+    is_public: Option<bool>,
+    /// Update notes (max 500 chars)
+    #[arg(long)]
+    notes: Option<String>,
 }
 
 pub async fn execute(
@@ -135,6 +147,20 @@ pub async fn execute(
             let result = client
                 .simulations()
                 .resimulate(&args.simulation_id)
+                .await?;
+            print_one(&result, format);
+        }
+        SimulationCommands::Update(args) => {
+            let mut body = serde_json::Map::new();
+            if let Some(is_public) = args.is_public {
+                body.insert("is_public".into(), serde_json::Value::Bool(is_public));
+            }
+            if let Some(notes) = args.notes {
+                body.insert("notes".into(), serde_json::Value::String(notes));
+            }
+            let result: serde_json::Value = client
+                .simulations()
+                .update(&args.simulation_id, &serde_json::Value::Object(body))
                 .await?;
             print_one(&result, format);
         }
