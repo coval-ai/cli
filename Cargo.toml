@@ -1,6 +1,6 @@
 [package]
 name = "coval"
-version = "0.3.8"
+version = "0.3.9"
 edition = "2021"
 description = "CLI for Coval AI agent evaluation platform"
 license = "MIT"
@@ -14,7 +14,7 @@ rust-version = "1.75"
 [dependencies]
 clap = { version = "4.5", features = ["derive", "env", "wrap_help"] }
 tokio = { version = "1.36", features = ["rt-multi-thread", "macros"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots", "rustls-tls-webpki-roots"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
