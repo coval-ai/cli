@@ -136,6 +136,16 @@ pub struct LaunchRunResponse {
     pub run: Run,
 }
 
+#[derive(Debug, Serialize)]
+pub struct UpdateRunRequest {
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateRunResponse {
+    pub run: Run,
+}
+
 impl Tabular for Run {
     fn headers() -> Vec<&'static str> {
         vec!["ID", "STATUS", "PROGRESS", "CREATED"]

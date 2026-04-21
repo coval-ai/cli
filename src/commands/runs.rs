@@ -5,7 +5,7 @@ use clap::{Args, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::client::models::{
-    LaunchMetadata, LaunchOptions, LaunchRunRequest, ListParams, RunStatus,
+    LaunchMetadata, LaunchOptions, LaunchRunRequest, ListParams, RunStatus, UpdateRunRequest,
 };
 use crate::client::CovalClient;
 use crate::output::{print_list, print_one, print_success, OutputFormat};
@@ -15,6 +15,7 @@ pub enum RunCommands {
     List(ListArgs),
     Get(GetArgs),
     Launch(LaunchArgs),
+    Update(UpdateArgs),
     Watch(WatchArgs),
     Delete(DeleteArgs),
 }
@@ -75,6 +76,14 @@ pub struct LaunchArgs {
     /// Comma-separated tags for categorizing the run
     #[arg(long, value_delimiter = ',')]
     tags: Option<Vec<String>>,
+}
+
+#[derive(Args)]
+pub struct UpdateArgs {
+    run_id: String,
+    /// Comma-separated tags; replaces existing tags. Pass an empty string to clear.
+    #[arg(long, value_delimiter = ',', required = true)]
+    tags: Vec<String>,
 }
 
 #[derive(Args)]
@@ -144,6 +153,18 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, format: OutputForma
                 metadata,
             };
             let run = client.runs().launch(req).await?;
+            print_one(&run, format);
+        }
+        RunCommands::Update(args) => {
+            let tags = args
+                .tags
+                .into_iter()
+                .filter(|t| !t.trim().is_empty())
+                .collect();
+            let run = client
+                .runs()
+                .update(&args.run_id, UpdateRunRequest { tags })
+                .await?;
             print_one(&run, format);
         }
         RunCommands::Watch(args) => {

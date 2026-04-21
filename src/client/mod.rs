@@ -275,6 +275,16 @@ impl RunsClient<'_> {
         Ok(resp.run)
     }
 
+    pub async fn update(
+        &self,
+        id: &str,
+        req: models::UpdateRunRequest,
+    ) -> Result<models::Run, ApiError> {
+        let url = self.0.url(&format!("/v1/runs/{id}"));
+        let resp: models::UpdateRunResponse = self.0.patch(url, &req).await?;
+        Ok(resp.run)
+    }
+
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
         let url = self.0.url(&format!("/v1/runs/{id}"));
         self.0.delete(url).await
