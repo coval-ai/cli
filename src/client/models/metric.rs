@@ -218,3 +218,57 @@ fn truncate(s: &str, max: usize) -> String {
         format!("{}...", end)
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetricThreshold {
+    pub id: String,
+    pub metric_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub test_set_id: Option<String>,
+    #[serde(default)]
+    pub config: serde_json::Value,
+    pub create_time: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub update_time: Option<DateTime<Utc>>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListMetricThresholdsResponse {
+    pub thresholds: Vec<MetricThreshold>,
+    pub next_page_token: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetMetricThresholdResponse {
+    pub threshold: MetricThreshold,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateMetricThresholdResponse {
+    pub threshold: MetricThreshold,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateMetricThresholdResponse {
+    pub threshold: MetricThreshold,
+}
+
+impl Tabular for MetricThreshold {
+    fn headers() -> Vec<&'static str> {
+        vec!["ID", "METRIC", "AGENT", "TEST SET", "CREATED"]
+    }
+
+    fn row(&self) -> Vec<String> {
+        vec![
+            self.id.clone(),
+            self.metric_id.clone(),
+            self.agent_id.clone().unwrap_or_else(|| "-".into()),
+            self.test_set_id.clone().unwrap_or_else(|| "-".into()),
+            self.create_time.format("%Y-%m-%d %H:%M").to_string(),
+        ]
+    }
+}

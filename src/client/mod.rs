@@ -137,6 +137,10 @@ impl CovalClient {
         ConversationsClient(self)
     }
 
+    pub fn comments(&self) -> CommentsClient<'_> {
+        CommentsClient(self)
+    }
+
     pub fn test_sets(&self) -> TestSetsClient<'_> {
         TestSetsClient(self)
     }
@@ -184,6 +188,10 @@ impl CovalClient {
         ReviewProjectsClient(self)
     }
 
+    pub fn webhooks(&self) -> WebhooksClient<'_> {
+        WebhooksClient(self)
+    }
+
     pub fn widgets(&self, dashboard_id: &str) -> WidgetsClient<'_> {
         WidgetsClient {
             client: self,
@@ -194,6 +202,7 @@ impl CovalClient {
 
 pub struct AgentsClient<'a>(&'a CovalClient);
 pub struct ConversationsClient<'a>(&'a CovalClient);
+pub struct CommentsClient<'a>(&'a CovalClient);
 pub struct RunsClient<'a>(&'a CovalClient);
 pub struct SimulationsClient<'a>(&'a CovalClient);
 pub struct TestSetsClient<'a>(&'a CovalClient);
@@ -210,6 +219,7 @@ pub struct ScheduledRunsClient<'a>(&'a CovalClient);
 pub struct DashboardsClient<'a>(&'a CovalClient);
 pub struct ReviewAnnotationsClient<'a>(&'a CovalClient);
 pub struct ReviewProjectsClient<'a>(&'a CovalClient);
+pub struct WebhooksClient<'a>(&'a CovalClient);
 pub struct WidgetsClient<'a> {
     client: &'a CovalClient,
     dashboard_id: String,
@@ -328,6 +338,51 @@ impl ConversationsClient<'_> {
     }
 }
 
+impl CommentsClient<'_> {
+    pub async fn list(
+        &self,
+        simulation_output_id: &str,
+    ) -> Result<models::ListCommentsResponse, ApiError> {
+        let url = self.0.url(&format!(
+            "/v1/simulation-outputs/{simulation_output_id}/comments"
+        ));
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::Comment, ApiError> {
+        let url = self.0.url(&format!("/v1/comments/{id}"));
+        let resp: models::GetCommentResponse = self.0.get(url).await?;
+        Ok(resp.comment)
+    }
+
+    pub async fn create(
+        &self,
+        simulation_output_id: &str,
+        req: models::CreateCommentRequest,
+    ) -> Result<models::Comment, ApiError> {
+        let url = self.0.url(&format!(
+            "/v1/simulation-outputs/{simulation_output_id}/comments"
+        ));
+        let resp: models::CreateCommentResponse = self.0.post(url, &req).await?;
+        Ok(resp.comment)
+    }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        req: models::UpdateCommentRequest,
+    ) -> Result<models::Comment, ApiError> {
+        let url = self.0.url(&format!("/v1/comments/{id}"));
+        let resp: models::UpdateCommentResponse = self.0.patch(url, &req).await?;
+        Ok(resp.comment)
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/comments/{id}"));
+        self.0.delete(url).await
+    }
+}
+
 impl SimulationsClient<'_> {
     pub async fn list(
         &self,
@@ -372,6 +427,15 @@ impl SimulationsClient<'_> {
             .url(&format!("/v1/simulations/{id}/metrics/{metric_output_id}"));
         let resp: models::GetSimulationMetricResponse = self.0.get(url).await?;
         Ok(resp.metric)
+    }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        req: &serde_json::Value,
+    ) -> Result<serde_json::Value, ApiError> {
+        let url = self.0.url(&format!("/v1/simulations/{id}"));
+        self.0.patch(url, req).await
     }
 }
 
@@ -544,6 +608,54 @@ impl MetricsClient<'_> {
 
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
         let url = self.0.url(&format!("/v1/metrics/{id}"));
+        self.0.delete(url).await
+    }
+
+    pub async fn list_thresholds(
+        &self,
+        metric_id: &str,
+    ) -> Result<models::ListMetricThresholdsResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/thresholds"));
+        self.0.get(url).await
+    }
+
+    pub async fn get_threshold(
+        &self,
+        metric_id: &str,
+    ) -> Result<models::MetricThreshold, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/threshold"));
+        let resp: models::GetMetricThresholdResponse = self.0.get(url).await?;
+        Ok(resp.threshold)
+    }
+
+    pub async fn create_threshold(
+        &self,
+        metric_id: &str,
+        config: &serde_json::Value,
+    ) -> Result<models::MetricThreshold, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/thresholds"));
+        let resp: models::CreateMetricThresholdResponse = self.0.post(url, config).await?;
+        Ok(resp.threshold)
+    }
+
+    pub async fn update_threshold(
+        &self,
+        metric_id: &str,
+        config: &serde_json::Value,
+    ) -> Result<models::MetricThreshold, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/threshold"));
+        let resp: models::UpdateMetricThresholdResponse = self.0.patch(url, config).await?;
+        Ok(resp.threshold)
+    }
+
+    pub async fn delete_threshold(
+        &self,
+        metric_id: &str,
+        threshold_id: &str,
+    ) -> Result<(), ApiError> {
+        let url = self.0.url(&format!(
+            "/v1/metrics/{metric_id}/thresholds/{threshold_id}"
+        ));
         self.0.delete(url).await
     }
 }
@@ -857,6 +969,47 @@ impl ReviewProjectsClient<'_> {
 
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
         let url = self.0.url(&format!("/v1/review-projects/{id}"));
+        self.0.delete(url).await
+    }
+}
+
+impl WebhooksClient<'_> {
+    pub async fn list(
+        &self,
+        params: models::ListParams,
+    ) -> Result<models::ListWebhooksResponse, ApiError> {
+        let mut url = self.0.url("/v1/webhooks");
+        params.apply_to(&mut url);
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::Webhook, ApiError> {
+        let url = self.0.url(&format!("/v1/webhooks/{id}"));
+        let resp: models::GetWebhookResponse = self.0.get(url).await?;
+        Ok(resp.webhook)
+    }
+
+    pub async fn create(
+        &self,
+        req: models::CreateWebhookRequest,
+    ) -> Result<models::Webhook, ApiError> {
+        let url = self.0.url("/v1/webhooks");
+        let resp: models::CreateWebhookResponse = self.0.post(url, &req).await?;
+        Ok(resp.webhook)
+    }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        req: models::UpdateWebhookRequest,
+    ) -> Result<models::Webhook, ApiError> {
+        let url = self.0.url(&format!("/v1/webhooks/{id}"));
+        let resp: models::UpdateWebhookResponse = self.0.patch(url, &req).await?;
+        Ok(resp.webhook)
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/webhooks/{id}"));
         self.0.delete(url).await
     }
 }

@@ -1,6 +1,7 @@
 pub mod agents;
 pub mod api_keys;
 pub mod auth;
+pub mod comments;
 pub mod config;
 pub mod conversations;
 pub mod dashboards;
@@ -15,3 +16,4 @@ pub mod scheduled_runs;
 pub mod simulations;
 pub mod test_cases;
 pub mod test_sets;
+pub mod webhooks;

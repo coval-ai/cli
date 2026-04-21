@@ -2,6 +2,7 @@
 
 mod agent;
 mod api_key;
+mod comment;
 mod common;
 mod conversation;
 mod dashboard;
@@ -16,10 +17,12 @@ mod scheduled_run;
 mod simulation;
 mod test_case;
 mod test_set;
+mod webhook;
 mod widget;
 
 pub use agent::*;
 pub use api_key::*;
+pub use comment::*;
 pub use common::*;
 pub use conversation::*;
 pub use dashboard::*;
@@ -34,4 +37,5 @@ pub use scheduled_run::*;
 pub use simulation::*;
 pub use test_case::*;
 pub use test_set::*;
+pub use webhook::*;
 pub use widget::*;

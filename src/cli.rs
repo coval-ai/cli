@@ -39,6 +39,10 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::conversations::ConversationCommands,
     },
+    Comments {
+        #[command(subcommand)]
+        command: commands::comments::CommentCommands,
+    },
     Runs {
         #[command(subcommand)]
         command: commands::runs::RunCommands,
@@ -98,6 +102,10 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::review_projects::ReviewProjectCommands,
     },
+    Webhooks {
+        #[command(subcommand)]
+        command: commands::webhooks::WebhookCommands,
+    },
 }
 
 pub async fn run(cli: Cli) -> anyhow::Result<()> {
@@ -126,6 +134,9 @@ pub async fn run(cli: Cli) -> anyhow::Result<()> {
                 }
                 Commands::Conversations { command } => {
                     commands::conversations::execute(command, &client, cli.format).await
+                }
+                Commands::Comments { command } => {
+                    commands::comments::execute(command, &client, cli.format).await
                 }
                 Commands::Runs { command } => {
                     commands::runs::execute(command, &client, cli.format).await
@@ -165,6 +176,9 @@ pub async fn run(cli: Cli) -> anyhow::Result<()> {
                 }
                 Commands::ReviewProjects { command } => {
                     commands::review_projects::execute(command, &client, cli.format).await
+                }
+                Commands::Webhooks { command } => {
+                    commands::webhooks::execute(command, &client, cli.format).await
                 }
                 _ => unreachable!(),
             }
