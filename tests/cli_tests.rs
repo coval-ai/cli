@@ -215,6 +215,40 @@ async fn test_runs_list() {
 }
 
 #[tokio::test]
+async fn test_runs_update_tags() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/runs/run123"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "run": {
+                "name": "Test Run",
+                "run_id": "run123",
+                "status": "COMPLETED",
+                "create_time": "2025-01-15T10:30:00Z",
+                "tags": ["baseline", "prod"]
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("runs")
+        .arg("update")
+        .arg("run123")
+        .arg("--tags")
+        .arg("baseline,prod")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("run123"));
+}
+
+#[tokio::test]
 async fn test_api_error_handling() {
     let mock_server = MockServer::start().await;
 

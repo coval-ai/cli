@@ -1,6 +1,6 @@
 [package]
 name = "coval"
-version = "0.3.9"
+version = "0.3.10"
 edition = "2021"
 description = "CLI for Coval AI agent evaluation platform"
 license = "MIT"
