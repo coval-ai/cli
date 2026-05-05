@@ -317,6 +317,15 @@ impl ConversationsClient<'_> {
         self.0.get(url).await
     }
 
+    pub async fn submit(
+        &self,
+        req: models::SubmitConversationRequest,
+    ) -> Result<models::Conversation, ApiError> {
+        let url = self.0.url("/v1/conversations:submit");
+        let resp: models::SubmitConversationResponse = self.0.post(url, &req).await?;
+        Ok(resp.conversation)
+    }
+
     pub async fn list_metrics(
         &self,
         id: &str,

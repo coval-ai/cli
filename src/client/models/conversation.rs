@@ -79,6 +79,33 @@ pub struct ConversationProgress {
     pub in_progress_metrics: i32,
 }
 
+#[derive(Debug, Default, Serialize)]
+pub struct SubmitConversationRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transcript: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upload_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<std::collections::BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub external_conversation_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub occurred_at: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubmitConversationResponse {
+    pub conversation: Conversation,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ListConversationsResponse {
     pub conversations: Vec<Conversation>,
