@@ -106,6 +106,8 @@ pub struct LaunchOptions {
     pub sub_sample_size: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sub_sample_seed: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub test_case_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, Serialize)]
