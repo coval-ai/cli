@@ -440,7 +440,9 @@ async fn test_simulations_metric_detail_by_metric_id() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("GET"))
-        .and(path("/v1/simulations/sim123/metrics/29BlkepvvX19ebbLDB0y6Q"))
+        .and(path(
+            "/v1/simulations/sim123/metrics/29BlkepvvX19ebbLDB0y6Q",
+        ))
         .and(header("X-API-Key", "test_key"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "metric_outputs": [
@@ -481,7 +483,9 @@ async fn test_conversations_metric_detail_by_metric_id() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("GET"))
-        .and(path("/v1/conversations/conv123/metrics/4HTX6gnqXtpexWSLNaKdC4"))
+        .and(path(
+            "/v1/conversations/conv123/metrics/4HTX6gnqXtpexWSLNaKdC4",
+        ))
         .and(header("X-API-Key", "test_key"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "metric_outputs": [
