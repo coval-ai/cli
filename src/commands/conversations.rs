@@ -9,7 +9,7 @@ use clap::{Args, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::client::error::ApiError;
-use crate::client::models::{ListParams, SubmitConversationRequest};
+use crate::client::models::{ListParams, MetricDetailResponse, SubmitConversationRequest};
 use crate::client::CovalClient;
 use crate::output::{print_list, print_one, print_success, OutputFormat};
 
@@ -101,7 +101,7 @@ pub struct MetricsArgs {
 #[derive(Args)]
 pub struct MetricDetailArgs {
     conversation_id: String,
-    metric_output_id: String,
+    metric_id: String,
 }
 
 pub async fn execute(
@@ -156,11 +156,16 @@ pub async fn execute(
             print_list(&response.metrics, format);
         }
         ConversationCommands::MetricDetail(args) => {
-            let metric = client
+            let response = client
                 .conversations()
-                .get_metric(&args.conversation_id, &args.metric_output_id)
+                .get_metric(&args.conversation_id, &args.metric_id)
                 .await?;
-            print_one(&metric, format);
+            match response {
+                MetricDetailResponse::Single { metric } => print_one(&metric, format),
+                MetricDetailResponse::Collection { metric_outputs } => {
+                    print_list(&metric_outputs, format)
+                }
+            }
         }
         ConversationCommands::Submit(args) => {
             let req = build_submit_request(args)?;

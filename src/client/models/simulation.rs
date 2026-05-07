@@ -156,6 +156,17 @@ pub struct GetSimulationMetricResponse {
     pub metric: SimpleMetricOutput,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum MetricDetailResponse {
+    Single {
+        metric: SimpleMetricOutput,
+    },
+    Collection {
+        metric_outputs: Vec<SimpleMetricOutput>,
+    },
+}
+
 impl Tabular for SimpleMetricOutput {
     fn headers() -> Vec<&'static str> {
         vec!["OUTPUT ID", "METRIC ID", "STATUS", "VALUE", "SUBVALUES"]
