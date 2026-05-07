@@ -64,6 +64,9 @@ pub struct LaunchArgs {
     /// Seed for reproducible sub-sampling
     #[arg(long)]
     sub_sample_seed: Option<u64>,
+    /// Specific test case IDs to run from the test set (1-100, comma-separated)
+    #[arg(long, value_delimiter = ',')]
+    test_cases: Option<Vec<String>>,
     /// Display name for the run
     #[arg(long)]
     name: Option<String>,
@@ -120,12 +123,14 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, format: OutputForma
                 || args.concurrency.is_some()
                 || args.sub_sample_size.is_some()
                 || args.sub_sample_seed.is_some()
+                || args.test_cases.is_some()
             {
                 Some(LaunchOptions {
                     iteration_count: args.iterations,
                     concurrency: args.concurrency,
                     sub_sample_size: args.sub_sample_size,
                     sub_sample_seed: args.sub_sample_seed,
+                    test_case_ids: args.test_cases,
                 })
             } else {
                 None
