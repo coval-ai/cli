@@ -337,13 +337,12 @@ impl ConversationsClient<'_> {
     pub async fn get_metric(
         &self,
         id: &str,
-        metric_output_id: &str,
-    ) -> Result<models::SimpleMetricOutput, ApiError> {
-        let url = self.0.url(&format!(
-            "/v1/conversations/{id}/metrics/{metric_output_id}"
-        ));
-        let resp: models::GetConversationMetricResponse = self.0.get(url).await?;
-        Ok(resp.metric)
+        metric_path_id: &str,
+    ) -> Result<models::MetricDetailResponse, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/conversations/{id}/metrics/{metric_path_id}"));
+        self.0.get(url).await
     }
 }
 
@@ -384,13 +383,12 @@ impl SimulationsClient<'_> {
     pub async fn get_metric(
         &self,
         id: &str,
-        metric_output_id: &str,
-    ) -> Result<models::SimpleMetricOutput, ApiError> {
+        metric_path_id: &str,
+    ) -> Result<models::MetricDetailResponse, ApiError> {
         let url = self
             .0
-            .url(&format!("/v1/simulations/{id}/metrics/{metric_output_id}"));
-        let resp: models::GetSimulationMetricResponse = self.0.get(url).await?;
-        Ok(resp.metric)
+            .url(&format!("/v1/simulations/{id}/metrics/{metric_path_id}"));
+        self.0.get(url).await
     }
 }
 

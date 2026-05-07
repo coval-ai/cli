@@ -400,6 +400,119 @@ async fn test_simulations_metrics_without_subvalues() {
 }
 
 #[tokio::test]
+async fn test_simulations_metric_detail_by_ulid() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path(
+            "/v1/simulations/sim123/metrics/01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        ))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "metric": {
+                "metric_output_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+                "metric_id": "29BlkepvvX19ebbLDB0y6Q",
+                "status": "COMPLETED",
+                "value": 2.35
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("simulations")
+        .arg("metric-detail")
+        .arg("sim123")
+        .arg("01ARZ3NDEKTSV4RRFFQ69G5FAV")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("01ARZ3NDEKTSV4RRFFQ69G5FAV"))
+        .stdout(predicate::str::contains("29BlkepvvX19ebbLDB0y6Q"))
+        .stdout(predicate::str::contains("COMPLETED"));
+}
+
+#[tokio::test]
+async fn test_simulations_metric_detail_by_metric_id() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/simulations/sim123/metrics/29BlkepvvX19ebbLDB0y6Q"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "metric_outputs": [
+                {
+                    "metric_output_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+                    "metric_id": "29BlkepvvX19ebbLDB0y6Q",
+                    "status": "COMPLETED",
+                    "value": 2.35
+                },
+                {
+                    "metric_output_id": "01ARZ3NDEKTSV4RRFFQ69OTHER",
+                    "metric_id": "29BlkepvvX19ebbLDB0y6Q",
+                    "status": "COMPLETED",
+                    "value": 2.41
+                }
+            ]
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("simulations")
+        .arg("metric-detail")
+        .arg("sim123")
+        .arg("29BlkepvvX19ebbLDB0y6Q")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("01ARZ3NDEKTSV4RRFFQ69G5FAV"))
+        .stdout(predicate::str::contains("01ARZ3NDEKTSV4RRFFQ69OTHER"));
+}
+
+#[tokio::test]
+async fn test_conversations_metric_detail_by_metric_id() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/conversations/conv123/metrics/4HTX6gnqXtpexWSLNaKdC4"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "metric_outputs": [
+                {
+                    "metric_output_id": "01KKWQYSF737ZN6X1Q1RYX8M2D",
+                    "metric_id": "4HTX6gnqXtpexWSLNaKdC4",
+                    "status": "COMPLETED",
+                    "value": "YES"
+                }
+            ]
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("conversations")
+        .arg("metric-detail")
+        .arg("conv123")
+        .arg("4HTX6gnqXtpexWSLNaKdC4")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("01KKWQYSF737ZN6X1Q1RYX8M2D"))
+        .stdout(predicate::str::contains("4HTX6gnqXtpexWSLNaKdC4"))
+        .stdout(predicate::str::contains("YES"));
+}
+
+#[tokio::test]
 async fn test_mutations_list() {
     let mock_server = MockServer::start().await;
 

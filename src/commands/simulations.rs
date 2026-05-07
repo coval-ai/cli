@@ -5,7 +5,7 @@ use clap::{Args, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::client::error::ApiError;
-use crate::client::models::ListParams;
+use crate::client::models::{ListParams, MetricDetailResponse};
 use crate::client::CovalClient;
 use crate::output::{print_list, print_one, print_success, OutputFormat};
 
@@ -57,7 +57,7 @@ pub struct MetricsArgs {
 #[derive(Args)]
 pub struct MetricDetailArgs {
     simulation_id: String,
-    metric_output_id: String,
+    metric_id: String,
 }
 
 pub async fn execute(
@@ -119,11 +119,16 @@ pub async fn execute(
             print_list(&response.metrics, format);
         }
         SimulationCommands::MetricDetail(args) => {
-            let metric = client
+            let response = client
                 .simulations()
-                .get_metric(&args.simulation_id, &args.metric_output_id)
+                .get_metric(&args.simulation_id, &args.metric_id)
                 .await?;
-            print_one(&metric, format);
+            match response {
+                MetricDetailResponse::Single { metric } => print_one(&metric, format),
+                MetricDetailResponse::Collection { metric_outputs } => {
+                    print_list(&metric_outputs, format)
+                }
+            }
         }
         SimulationCommands::Audio(args) => {
             let audio = client.simulations().audio(&args.simulation_id).await?;
