@@ -3,7 +3,7 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{CreatePersonaRequest, ListParams, UpdatePersonaRequest};
 use crate::client::CovalClient;
-use crate::output::{print_list, print_one, print_success, OutputFormat};
+use crate::output::{emit_list, emit_one, emit_success, OutputContext};
 
 #[derive(Subcommand)]
 pub enum PersonaCommands {
@@ -14,6 +14,19 @@ pub enum PersonaCommands {
     Delete(DeleteArgs),
     #[command(name = "phone-numbers")]
     PhoneNumbers,
+}
+
+impl PersonaCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::List(_) => "list",
+            Self::Get(_) => "get",
+            Self::Create(_) => "create",
+            Self::Update(_) => "update",
+            Self::Delete(_) => "delete",
+            Self::PhoneNumbers => "phone-numbers",
+        }
+    }
 }
 
 #[derive(Args)]
@@ -87,8 +100,9 @@ pub struct DeleteArgs {
 pub async fn execute(
     cmd: PersonaCommands,
     client: &CovalClient,
-    format: OutputFormat,
+    ctx: &OutputContext,
 ) -> Result<()> {
+    let operation = cmd.operation();
     match cmd {
         PersonaCommands::List(args) => {
             let params = ListParams {
@@ -98,11 +112,11 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.personas().list(params).await?;
-            print_list(&response.personas, format);
+            emit_list(ctx, "personas", operation, &response.personas);
         }
         PersonaCommands::Get(args) => {
             let persona = client.personas().get(&args.persona_id).await?;
-            print_one(&persona, format);
+            emit_one(ctx, "personas", operation, &persona);
         }
         PersonaCommands::Create(args) => {
             let req = CreatePersonaRequest {
@@ -115,7 +129,7 @@ pub async fn execute(
                 conversation_initiation: None,
             };
             let persona = client.personas().create(req).await?;
-            print_one(&persona, format);
+            emit_one(ctx, "personas", operation, &persona);
         }
         PersonaCommands::Update(args) => {
             let req = UpdatePersonaRequest {
@@ -128,15 +142,15 @@ pub async fn execute(
                 ..Default::default()
             };
             let persona = client.personas().update(&args.persona_id, req).await?;
-            print_one(&persona, format);
+            emit_one(ctx, "personas", operation, &persona);
         }
         PersonaCommands::Delete(args) => {
             client.personas().delete(&args.persona_id).await?;
-            print_success("Persona deleted.");
+            emit_success(ctx, "personas", operation, "Persona deleted.");
         }
         PersonaCommands::PhoneNumbers => {
             let response = client.personas().list_phone_numbers().await?;
-            print_list(&response.phone_numbers, format);
+            emit_list(ctx, "personas", operation, &response.phone_numbers);
         }
     }
     Ok(())

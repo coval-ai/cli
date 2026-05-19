@@ -6,7 +6,9 @@ use crate::client::models::{
     UpdateApiKeyRequest,
 };
 use crate::client::CovalClient;
-use crate::output::{print_list, print_one, print_success, OutputFormat};
+use crate::output::{
+    emit_list, emit_one, emit_one_with_warnings, emit_success, AgentWarning, OutputContext,
+};
 
 #[derive(Subcommand)]
 pub enum ApiKeyCommands {
@@ -14,6 +16,17 @@ pub enum ApiKeyCommands {
     Create(CreateArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
+}
+
+impl ApiKeyCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::List(_) => "list",
+            Self::Create(_) => "create",
+            Self::Update(_) => "update",
+            Self::Delete(_) => "delete",
+        }
+    }
 }
 
 #[derive(Args)]
@@ -58,11 +71,8 @@ pub struct DeleteArgs {
     api_key_id: String,
 }
 
-pub async fn execute(
-    cmd: ApiKeyCommands,
-    client: &CovalClient,
-    format: OutputFormat,
-) -> Result<()> {
+pub async fn execute(cmd: ApiKeyCommands, client: &CovalClient, ctx: &OutputContext) -> Result<()> {
+    let operation = cmd.operation();
     match cmd {
         ApiKeyCommands::List(args) => {
             let params = ListParams {
@@ -75,7 +85,7 @@ pub async fn execute(
                 .api_keys()
                 .list(params, args.status, args.environment)
                 .await?;
-            print_list(&response.api_keys, format);
+            emit_list(ctx, "api-keys", operation, &response.api_keys);
         }
         ApiKeyCommands::Create(args) => {
             let req = CreateApiKeyRequest {
@@ -87,10 +97,25 @@ pub async fn execute(
             };
             let api_key = client.api_keys().create(req).await?;
             if !api_key.key.is_empty() && !api_key.key.contains("***") {
-                eprintln!("WARNING: Store this key now. It will not be shown again.");
-                eprintln!("Key: {}", api_key.key);
+                if ctx.agent {
+                    emit_one_with_warnings(
+                        ctx,
+                        "api-keys",
+                        operation,
+                        &api_key,
+                        vec![AgentWarning::new(
+                            "store_api_key",
+                            "Store this key now. It will not be shown again.",
+                        )],
+                    );
+                } else {
+                    eprintln!("WARNING: Store this key now. It will not be shown again.");
+                    eprintln!("Key: {}", api_key.key);
+                    emit_one(ctx, "api-keys", operation, &api_key);
+                }
+            } else {
+                emit_one(ctx, "api-keys", operation, &api_key);
             }
-            print_one(&api_key, format);
         }
         ApiKeyCommands::Update(args) => {
             let req = UpdateApiKeyRequest {
@@ -98,11 +123,11 @@ pub async fn execute(
                 reason: args.reason,
             };
             let api_key = client.api_keys().update(&args.api_key_id, req).await?;
-            print_one(&api_key, format);
+            emit_one(ctx, "api-keys", operation, &api_key);
         }
         ApiKeyCommands::Delete(args) => {
             client.api_keys().delete(&args.api_key_id).await?;
-            print_success("API key deleted.");
+            emit_success(ctx, "api-keys", operation, "API key deleted.");
         }
     }
     Ok(())

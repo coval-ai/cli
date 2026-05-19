@@ -5,7 +5,7 @@ use crate::client::models::{
     CreateReviewProjectRequest, ListParams, ProjectType, UpdateReviewProjectRequest,
 };
 use crate::client::CovalClient;
-use crate::output::{print_list, print_one, print_success, OutputFormat};
+use crate::output::{emit_list, emit_one, emit_success, OutputContext};
 
 #[derive(Subcommand)]
 pub enum ReviewProjectCommands {
@@ -14,6 +14,18 @@ pub enum ReviewProjectCommands {
     Create(CreateArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
+}
+
+impl ReviewProjectCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::List(_) => "list",
+            Self::Get(_) => "get",
+            Self::Create(_) => "create",
+            Self::Update(_) => "update",
+            Self::Delete(_) => "delete",
+        }
+    }
 }
 
 #[derive(Args)]
@@ -90,8 +102,9 @@ pub struct DeleteArgs {
 pub async fn execute(
     cmd: ReviewProjectCommands,
     client: &CovalClient,
-    format: OutputFormat,
+    ctx: &OutputContext,
 ) -> Result<()> {
+    let operation = cmd.operation();
     match cmd {
         ReviewProjectCommands::List(args) => {
             let params = ListParams {
@@ -101,11 +114,11 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.review_projects().list(params).await?;
-            print_list(&response.review_projects, format);
+            emit_list(ctx, "review-projects", operation, &response.review_projects);
         }
         ReviewProjectCommands::Get(args) => {
             let project = client.review_projects().get(&args.project_id).await?;
-            print_one(&project, format);
+            emit_one(ctx, "review-projects", operation, &project);
         }
         ReviewProjectCommands::Create(args) => {
             let req = CreateReviewProjectRequest {
@@ -118,7 +131,7 @@ pub async fn execute(
                 notifications: args.notifications,
             };
             let project = client.review_projects().create(req).await?;
-            print_one(&project, format);
+            emit_one(ctx, "review-projects", operation, &project);
         }
         ReviewProjectCommands::Update(args) => {
             let req = UpdateReviewProjectRequest {
@@ -134,11 +147,11 @@ pub async fn execute(
                 .review_projects()
                 .update(&args.project_id, req)
                 .await?;
-            print_one(&project, format);
+            emit_one(ctx, "review-projects", operation, &project);
         }
         ReviewProjectCommands::Delete(args) => {
             client.review_projects().delete(&args.project_id).await?;
-            print_success("Review project deleted.");
+            emit_success(ctx, "review-projects", operation, "Review project deleted.");
         }
     }
     Ok(())

@@ -7,7 +7,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use crate::client::error::ApiError;
 use crate::client::models::{ListParams, MetricDetailResponse};
 use crate::client::CovalClient;
-use crate::output::{print_list, print_one, print_success, OutputFormat};
+use crate::output::{emit_list, emit_one, emit_success, OutputContext};
 
 #[derive(Subcommand)]
 pub enum SimulationCommands {
@@ -18,6 +18,19 @@ pub enum SimulationCommands {
     Metrics(MetricsArgs),
     #[command(name = "metric-detail")]
     MetricDetail(MetricDetailArgs),
+}
+
+impl SimulationCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::List(_) => "list",
+            Self::Get(_) => "get",
+            Self::Delete(_) => "delete",
+            Self::Audio(_) => "audio",
+            Self::Metrics(_) => "metrics",
+            Self::MetricDetail(_) => "metric-detail",
+        }
+    }
 }
 
 #[derive(Args)]
@@ -63,8 +76,9 @@ pub struct MetricDetailArgs {
 pub async fn execute(
     cmd: SimulationCommands,
     client: &CovalClient,
-    format: OutputFormat,
+    ctx: &OutputContext,
 ) -> Result<()> {
+    let operation = cmd.operation();
     match cmd {
         SimulationCommands::List(args) => {
             let filter = match (args.filter, args.run_id) {
@@ -81,14 +95,16 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.simulations().list(params).await?;
-            print_list(&response.simulations, format);
+            emit_list(ctx, "simulations", operation, &response.simulations);
         }
         SimulationCommands::Get(args) => {
             let result = client.simulations().get(&args.simulation_id).await;
             match result {
-                Ok(simulation) => print_one(&simulation, format),
+                Ok(simulation) => emit_one(ctx, "simulations", operation, &simulation),
                 Err(ApiError::NotFound { .. }) => {
-                    print_not_found_hint(&args.simulation_id, "conversations");
+                    if !ctx.agent {
+                        print_not_found_hint(&args.simulation_id, "conversations");
+                    }
                     return Err(ApiError::NotFound {
                         resource: format!("Simulation '{}'", args.simulation_id),
                     }
@@ -100,9 +116,11 @@ pub async fn execute(
         SimulationCommands::Delete(args) => {
             let result = client.simulations().delete(&args.simulation_id).await;
             match result {
-                Ok(()) => print_success("Simulation deleted."),
+                Ok(()) => emit_success(ctx, "simulations", operation, "Simulation deleted."),
                 Err(ApiError::NotFound { .. }) => {
-                    print_not_found_hint(&args.simulation_id, "conversations");
+                    if !ctx.agent {
+                        print_not_found_hint(&args.simulation_id, "conversations");
+                    }
                     return Err(ApiError::NotFound {
                         resource: format!("Simulation '{}'", args.simulation_id),
                     }
@@ -116,7 +134,7 @@ pub async fn execute(
                 .simulations()
                 .list_metrics(&args.simulation_id)
                 .await?;
-            print_list(&response.metrics, format);
+            emit_list(ctx, "simulations", operation, &response.metrics);
         }
         SimulationCommands::MetricDetail(args) => {
             let response = client
@@ -124,9 +142,11 @@ pub async fn execute(
                 .get_metric(&args.simulation_id, &args.metric_id)
                 .await?;
             match response {
-                MetricDetailResponse::Single { metric } => print_one(&metric, format),
+                MetricDetailResponse::Single { metric } => {
+                    emit_one(ctx, "simulations", operation, &metric)
+                }
                 MetricDetailResponse::Collection { metric_outputs } => {
-                    print_list(&metric_outputs, format)
+                    emit_list(ctx, "simulations", operation, &metric_outputs)
                 }
             }
         }
@@ -135,11 +155,20 @@ pub async fn execute(
 
             match args.output {
                 Some(path) => {
-                    download_audio(&audio.audio_url, &path).await?;
-                    print_success(&format!("Audio saved to {}", path.display()));
+                    download_audio(&audio.audio_url, &path, !ctx.agent).await?;
+                    emit_success(
+                        ctx,
+                        "simulations",
+                        operation,
+                        &format!("Audio saved to {}", path.display()),
+                    );
                 }
                 None => {
-                    println!("{}", audio.audio_url);
+                    if ctx.agent {
+                        emit_one(ctx, "simulations", operation, &audio);
+                    } else {
+                        println!("{}", audio.audio_url);
+                    }
                 }
             }
         }
@@ -151,7 +180,7 @@ fn print_not_found_hint(id: &str, try_command: &str) {
     eprintln!("hint: not found as a simulation. Try `coval {try_command} get {id}` instead.");
 }
 
-async fn download_audio(url: &str, path: &Path) -> Result<()> {
+async fn download_audio(url: &str, path: &Path, show_progress: bool) -> Result<()> {
     let client = reqwest::Client::new();
     let resp = client.get(url).send().await?;
 
@@ -160,16 +189,17 @@ async fn download_audio(url: &str, path: &Path) -> Result<()> {
     }
 
     let total = resp.content_length().unwrap_or(0);
-    let pb = ProgressBar::new(total);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template("{spinner:.green} [{bar:40.cyan/blue}] {bytes}/{total_bytes}")?
-            .progress_chars("=>-"),
-    );
-
     let bytes = resp.bytes().await?;
-    pb.set_position(bytes.len() as u64);
-    pb.finish_and_clear();
+    if show_progress {
+        let pb = ProgressBar::new(total);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{spinner:.green} [{bar:40.cyan/blue}] {bytes}/{total_bytes}")?
+                .progress_chars("=>-"),
+        );
+        pb.set_position(bytes.len() as u64);
+        pb.finish_and_clear();
+    }
 
     std::fs::write(path, &bytes)?;
     Ok(())

@@ -6,7 +6,7 @@ use crate::client::models::{
     ListParams, UpdateReviewAnnotationRequest,
 };
 use crate::client::CovalClient;
-use crate::output::{print_list, print_one, print_success, OutputFormat};
+use crate::output::{emit_list, emit_one, emit_success, OutputContext};
 
 #[derive(Subcommand)]
 pub enum ReviewAnnotationCommands {
@@ -15,6 +15,18 @@ pub enum ReviewAnnotationCommands {
     Create(CreateArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
+}
+
+impl ReviewAnnotationCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::List(_) => "list",
+            Self::Get(_) => "get",
+            Self::Create(_) => "create",
+            Self::Update(_) => "update",
+            Self::Delete(_) => "delete",
+        }
+    }
 }
 
 #[derive(Args)]
@@ -97,8 +109,9 @@ pub struct DeleteArgs {
 pub async fn execute(
     cmd: ReviewAnnotationCommands,
     client: &CovalClient,
-    format: OutputFormat,
+    ctx: &OutputContext,
 ) -> Result<()> {
+    let operation = cmd.operation();
     match cmd {
         ReviewAnnotationCommands::List(args) => {
             let params = ListParams {
@@ -108,11 +121,16 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.review_annotations().list(params).await?;
-            print_list(&response.review_annotations, format);
+            emit_list(
+                ctx,
+                "review-annotations",
+                operation,
+                &response.review_annotations,
+            );
         }
         ReviewAnnotationCommands::Get(args) => {
             let annotation = client.review_annotations().get(&args.annotation_id).await?;
-            print_one(&annotation, format);
+            emit_one(ctx, "review-annotations", operation, &annotation);
         }
         ReviewAnnotationCommands::Create(args) => {
             let subvalues = args
@@ -130,7 +148,7 @@ pub async fn execute(
                 priority: args.priority,
             };
             let annotation = client.review_annotations().create(req).await?;
-            print_one(&annotation, format);
+            emit_one(ctx, "review-annotations", operation, &annotation);
         }
         ReviewAnnotationCommands::Update(args) => {
             let subvalues = args
@@ -151,14 +169,19 @@ pub async fn execute(
                 .review_annotations()
                 .update(&args.annotation_id, req)
                 .await?;
-            print_one(&annotation, format);
+            emit_one(ctx, "review-annotations", operation, &annotation);
         }
         ReviewAnnotationCommands::Delete(args) => {
             client
                 .review_annotations()
                 .delete(&args.annotation_id)
                 .await?;
-            print_success("Review annotation deleted.");
+            emit_success(
+                ctx,
+                "review-annotations",
+                operation,
+                "Review annotation deleted.",
+            );
         }
     }
     Ok(())

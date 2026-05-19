@@ -3,7 +3,7 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{AgentType, CreateAgentRequest, ListParams, UpdateAgentRequest};
 use crate::client::CovalClient;
-use crate::output::{print_list, print_one, print_success, OutputFormat};
+use crate::output::{emit_list, emit_one, emit_success, OutputContext};
 
 #[derive(Subcommand)]
 pub enum AgentCommands {
@@ -12,6 +12,18 @@ pub enum AgentCommands {
     Create(CreateArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
+}
+
+impl AgentCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::List(_) => "list",
+            Self::Get(_) => "get",
+            Self::Create(_) => "create",
+            Self::Update(_) => "update",
+            Self::Delete(_) => "delete",
+        }
+    }
 }
 
 #[derive(Args)]
@@ -87,7 +99,8 @@ pub struct DeleteArgs {
     agent_id: String,
 }
 
-pub async fn execute(cmd: AgentCommands, client: &CovalClient, format: OutputFormat) -> Result<()> {
+pub async fn execute(cmd: AgentCommands, client: &CovalClient, ctx: &OutputContext) -> Result<()> {
+    let operation = cmd.operation();
     match cmd {
         AgentCommands::List(args) => {
             let params = ListParams {
@@ -97,11 +110,11 @@ pub async fn execute(cmd: AgentCommands, client: &CovalClient, format: OutputFor
                 ..Default::default()
             };
             let response = client.agents().list(params).await?;
-            print_list(&response.agents, format);
+            emit_list(ctx, "agents", operation, &response.agents);
         }
         AgentCommands::Get(args) => {
             let agent = client.agents().get(&args.agent_id).await?;
-            print_one(&agent, format);
+            emit_one(ctx, "agents", operation, &agent);
         }
         AgentCommands::Create(args) => {
             let metadata = args
@@ -121,7 +134,7 @@ pub async fn execute(cmd: AgentCommands, client: &CovalClient, format: OutputFor
                 test_set_ids: args.test_set_ids,
             };
             let agent = client.agents().create(req).await?;
-            print_one(&agent, format);
+            emit_one(ctx, "agents", operation, &agent);
         }
         AgentCommands::Update(args) => {
             let metadata = args
@@ -141,11 +154,11 @@ pub async fn execute(cmd: AgentCommands, client: &CovalClient, format: OutputFor
                 test_set_ids: args.test_set_ids,
             };
             let agent = client.agents().update(&args.agent_id, req).await?;
-            print_one(&agent, format);
+            emit_one(ctx, "agents", operation, &agent);
         }
         AgentCommands::Delete(args) => {
             client.agents().delete(&args.agent_id).await?;
-            print_success("Agent deleted.");
+            emit_success(ctx, "agents", operation, "Agent deleted.");
         }
     }
     Ok(())

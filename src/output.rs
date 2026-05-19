@@ -1,12 +1,139 @@
 use clap::ValueEnum;
 use serde::Serialize;
+use serde_json::json;
 use tabled::settings::Style;
+
+use crate::client::error::ApiError;
+
+pub const ACI_VERSION: &str = "0.1";
 
 #[derive(Debug, Clone, Copy, Default, ValueEnum)]
 pub enum OutputFormat {
     #[default]
     Table,
     Json,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct OutputContext {
+    pub format: OutputFormat,
+    pub agent: bool,
+}
+
+impl OutputContext {
+    pub fn new(format: OutputFormat, agent: bool) -> Self {
+        Self { format, agent }
+    }
+
+    pub fn human(&self) -> bool {
+        !self.agent && matches!(self.format, OutputFormat::Table)
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct AgentWarning {
+    pub code: String,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remedy: Option<String>,
+}
+
+impl AgentWarning {
+    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
+            remedy: None,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct NextAction {
+    pub id: String,
+    pub label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub argv: Vec<String>,
+    pub safe: bool,
+    pub primary: bool,
+    pub requires_confirmation: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AgentError {
+    pub code: String,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remedy: Option<String>,
+    pub retryable: bool,
+}
+
+impl AgentError {
+    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
+            remedy: None,
+            retryable: false,
+        }
+    }
+
+    pub fn with_remedy(mut self, remedy: impl Into<String>) -> Self {
+        self.remedy = Some(remedy.into());
+        self
+    }
+
+    pub fn retryable(mut self, retryable: bool) -> Self {
+        self.retryable = retryable;
+        self
+    }
+
+    pub fn from_anyhow(err: &anyhow::Error) -> Self {
+        if let Some(api_error) = err.downcast_ref::<ApiError>() {
+            return match api_error {
+                ApiError::Unauthenticated { message } => Self::new("unauthenticated", message)
+                    .with_remedy("Run `coval login`, pass `--api-key`, or set COVAL_API_KEY."),
+                ApiError::NotFound { resource } => Self::new("not_found", resource),
+                ApiError::InvalidArgument { message, .. } => Self::new("validation_error", message),
+                ApiError::PermissionDenied { message } => Self::new("permission_denied", message),
+                ApiError::Internal { message } => Self::new("server_error", message),
+                ApiError::Network(network_error) => {
+                    Self::new("network_error", network_error.to_string()).retryable(true)
+                }
+            };
+        }
+
+        let message = err.to_string();
+        if message.starts_with("Not authenticated.") {
+            return Self::new("unauthenticated", message)
+                .with_remedy("Run `coval login`, pass `--api-key`, or set COVAL_API_KEY.");
+        }
+
+        Self::new("cli_error", message)
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct AgentEnvelope<'a, T: Serialize> {
+    aci: &'static str,
+    ok: bool,
+    resource: &'a str,
+    operation: &'a str,
+    data: T,
+    warnings: Vec<AgentWarning>,
+    next_actions: Vec<NextAction>,
+}
+
+#[derive(Debug, Serialize)]
+struct AgentErrorEnvelope<'a> {
+    aci: &'static str,
+    ok: bool,
+    resource: &'a str,
+    operation: &'a str,
+    error: AgentError,
+    warnings: Vec<AgentWarning>,
+    next_actions: Vec<NextAction>,
 }
 
 pub trait Tabular {
@@ -50,4 +177,125 @@ pub fn print_id(id: &str) {
 
 pub fn print_success(message: &str) {
     println!("{message}");
+}
+
+pub fn emit_list<T: Serialize + Tabular>(
+    ctx: &OutputContext,
+    resource: &'static str,
+    operation: &'static str,
+    items: &[T],
+) {
+    if ctx.agent {
+        emit_agent_data(resource, operation, items, Vec::new(), Vec::new());
+    } else {
+        print_list(items, ctx.format);
+    }
+}
+
+pub fn emit_one<T: Serialize>(
+    ctx: &OutputContext,
+    resource: &'static str,
+    operation: &'static str,
+    item: &T,
+) {
+    if ctx.agent {
+        emit_agent_data(resource, operation, item, Vec::new(), Vec::new());
+    } else {
+        print_one(item, ctx.format);
+    }
+}
+
+pub fn emit_one_with_warnings<T: Serialize>(
+    ctx: &OutputContext,
+    resource: &'static str,
+    operation: &'static str,
+    item: &T,
+    warnings: Vec<AgentWarning>,
+) {
+    if ctx.agent {
+        emit_agent_data(resource, operation, item, warnings, Vec::new());
+    } else {
+        print_one(item, ctx.format);
+    }
+}
+
+pub fn emit_success(
+    ctx: &OutputContext,
+    resource: &'static str,
+    operation: &'static str,
+    message: &str,
+) {
+    if ctx.agent {
+        emit_agent_data(
+            resource,
+            operation,
+            json!({ "message": message }),
+            Vec::new(),
+            Vec::new(),
+        );
+    } else {
+        print_success(message);
+    }
+}
+
+pub fn emit_error(
+    resource: &'static str,
+    operation: &'static str,
+    error: AgentError,
+    warnings: Vec<AgentWarning>,
+    next_actions: Vec<NextAction>,
+) {
+    let envelope = AgentErrorEnvelope {
+        aci: ACI_VERSION,
+        ok: false,
+        resource,
+        operation,
+        error,
+        warnings,
+        next_actions,
+    };
+    print_agent_json(&envelope);
+}
+
+fn emit_agent_data<T: Serialize>(
+    resource: &'static str,
+    operation: &'static str,
+    data: T,
+    warnings: Vec<AgentWarning>,
+    next_actions: Vec<NextAction>,
+) {
+    let envelope = AgentEnvelope {
+        aci: ACI_VERSION,
+        ok: true,
+        resource,
+        operation,
+        data,
+        warnings,
+        next_actions,
+    };
+    print_agent_json(&envelope);
+}
+
+fn print_agent_json<T: Serialize>(value: &T) {
+    match serde_json::to_string_pretty(value) {
+        Ok(json) => println!("{json}"),
+        Err(error) => {
+            let envelope = AgentErrorEnvelope {
+                aci: ACI_VERSION,
+                ok: false,
+                resource: "cli",
+                operation: "serialize",
+                error: AgentError::new(
+                    "serialization_error",
+                    format!("Failed to serialize output: {error}"),
+                ),
+                warnings: Vec::new(),
+                next_actions: Vec::new(),
+            };
+            let json = serde_json::to_string_pretty(&envelope).unwrap_or_else(|_| {
+                r#"{"aci":"0.1","ok":false,"resource":"cli","operation":"serialize","error":{"code":"serialization_error","message":"Failed to serialize output","retryable":false},"warnings":[],"next_actions":[]}"#.to_string()
+            });
+            println!("{json}");
+        }
+    }
 }

@@ -3,7 +3,7 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{CreateScheduledRunRequest, ListParams, UpdateScheduledRunRequest};
 use crate::client::CovalClient;
-use crate::output::{print_list, print_one, print_success, OutputFormat};
+use crate::output::{emit_list, emit_one, emit_success, OutputContext};
 
 #[derive(Subcommand)]
 pub enum ScheduledRunCommands {
@@ -12,6 +12,18 @@ pub enum ScheduledRunCommands {
     Create(CreateArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
+}
+
+impl ScheduledRunCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::List(_) => "list",
+            Self::Get(_) => "get",
+            Self::Create(_) => "create",
+            Self::Update(_) => "update",
+            Self::Delete(_) => "delete",
+        }
+    }
 }
 
 #[derive(Args)]
@@ -70,8 +82,9 @@ pub struct DeleteArgs {
 pub async fn execute(
     cmd: ScheduledRunCommands,
     client: &CovalClient,
-    format: OutputFormat,
+    ctx: &OutputContext,
 ) -> Result<()> {
+    let operation = cmd.operation();
     match cmd {
         ScheduledRunCommands::List(args) => {
             let params = ListParams {
@@ -84,11 +97,11 @@ pub async fn execute(
                 .scheduled_runs()
                 .list(params, args.enabled, args.template_id.as_deref())
                 .await?;
-            print_list(&response.scheduled_runs, format);
+            emit_list(ctx, "scheduled-runs", operation, &response.scheduled_runs);
         }
         ScheduledRunCommands::Get(args) => {
             let run = client.scheduled_runs().get(&args.scheduled_run_id).await?;
-            print_one(&run, format);
+            emit_one(ctx, "scheduled-runs", operation, &run);
         }
         ScheduledRunCommands::Create(args) => {
             let req = CreateScheduledRunRequest {
@@ -99,7 +112,7 @@ pub async fn execute(
                 enabled: args.enabled,
             };
             let run = client.scheduled_runs().create(req).await?;
-            print_one(&run, format);
+            emit_one(ctx, "scheduled-runs", operation, &run);
         }
         ScheduledRunCommands::Update(args) => {
             let req = UpdateScheduledRunRequest {
@@ -113,14 +126,14 @@ pub async fn execute(
                 .scheduled_runs()
                 .update(&args.scheduled_run_id, req)
                 .await?;
-            print_one(&run, format);
+            emit_one(ctx, "scheduled-runs", operation, &run);
         }
         ScheduledRunCommands::Delete(args) => {
             client
                 .scheduled_runs()
                 .delete(&args.scheduled_run_id)
                 .await?;
-            print_success("Scheduled run deleted.");
+            emit_success(ctx, "scheduled-runs", operation, "Scheduled run deleted.");
         }
     }
     Ok(())

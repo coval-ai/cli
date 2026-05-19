@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 use crate::client::CovalClient;
 use crate::commands;
 use crate::config::Config;
-use crate::output::OutputFormat;
+use crate::output::{OutputContext, OutputFormat};
 
 #[derive(Parser)]
 #[command(name = "coval")]
@@ -21,6 +21,9 @@ pub struct Cli {
 
     #[arg(long, global = true, env = "COVAL_API_URL")]
     pub api_url: Option<String>,
+
+    #[arg(long, global = true)]
+    pub agent: bool,
 }
 
 #[derive(Subcommand)]
@@ -100,18 +103,68 @@ pub enum Commands {
     },
 }
 
-pub async fn run(cli: Cli) -> anyhow::Result<()> {
+impl Commands {
+    pub fn resource(&self) -> &'static str {
+        match self {
+            Self::Login(_) | Self::Whoami => "auth",
+            Self::Config { .. } => "config",
+            Self::Agents { .. } => "agents",
+            Self::Conversations { .. } => "conversations",
+            Self::Runs { .. } => "runs",
+            Self::Simulations { .. } => "simulations",
+            Self::TestSets { .. } => "test-sets",
+            Self::TestCases { .. } => "test-cases",
+            Self::Personas { .. } => "personas",
+            Self::Metrics { .. } => "metrics",
+            Self::Mutations { .. } => "mutations",
+            Self::ApiKeys { .. } => "api-keys",
+            Self::RunTemplates { .. } => "run-templates",
+            Self::ScheduledRuns { .. } => "scheduled-runs",
+            Self::Dashboards { command } => match command {
+                commands::dashboards::DashboardCommands::Widgets { .. } => "widgets",
+                _ => "dashboards",
+            },
+            Self::ReviewAnnotations { .. } => "review-annotations",
+            Self::ReviewProjects { .. } => "review-projects",
+        }
+    }
+
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::Login(_) => "login",
+            Self::Whoami => "whoami",
+            Self::Config { command } => command.operation(),
+            Self::Agents { command } => command.operation(),
+            Self::Conversations { command } => command.operation(),
+            Self::Runs { command } => command.operation(),
+            Self::Simulations { command } => command.operation(),
+            Self::TestSets { command } => command.operation(),
+            Self::TestCases { command } => command.operation(),
+            Self::Personas { command } => command.operation(),
+            Self::Metrics { command } => command.operation(),
+            Self::Mutations { command } => command.operation(),
+            Self::ApiKeys { command } => command.operation(),
+            Self::RunTemplates { command } => command.operation(),
+            Self::ScheduledRuns { command } => command.operation(),
+            Self::Dashboards { command } => command.operation(),
+            Self::ReviewAnnotations { command } => command.operation(),
+            Self::ReviewProjects { command } => command.operation(),
+        }
+    }
+}
+
+pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
     let config = Config::load().unwrap_or_default();
     let api_key = cli.api_key.or(config.api_key);
     let api_url = cli.api_url.or(config.api_url);
 
     match cli.command {
-        Commands::Login(args) => commands::auth::login(args).await,
+        Commands::Login(args) => commands::auth::login(args, ctx).await,
         Commands::Whoami => {
-            commands::auth::whoami(api_key.as_ref());
+            commands::auth::whoami(api_key.as_ref(), ctx);
             Ok(())
         }
-        Commands::Config { command } => commands::config::execute(command),
+        Commands::Config { command } => commands::config::execute(command, ctx),
         _ => {
             let api_key = api_key.ok_or_else(|| {
                 anyhow::anyhow!(
@@ -122,49 +175,47 @@ pub async fn run(cli: Cli) -> anyhow::Result<()> {
 
             match cli.command {
                 Commands::Agents { command } => {
-                    commands::agents::execute(command, &client, cli.format).await
+                    commands::agents::execute(command, &client, ctx).await
                 }
                 Commands::Conversations { command } => {
-                    commands::conversations::execute(command, &client, cli.format).await
+                    commands::conversations::execute(command, &client, ctx).await
                 }
-                Commands::Runs { command } => {
-                    commands::runs::execute(command, &client, cli.format).await
-                }
+                Commands::Runs { command } => commands::runs::execute(command, &client, ctx).await,
                 Commands::Simulations { command } => {
-                    commands::simulations::execute(command, &client, cli.format).await
+                    commands::simulations::execute(command, &client, ctx).await
                 }
                 Commands::TestSets { command } => {
-                    commands::test_sets::execute(command, &client, cli.format).await
+                    commands::test_sets::execute(command, &client, ctx).await
                 }
                 Commands::TestCases { command } => {
-                    commands::test_cases::execute(command, &client, cli.format).await
+                    commands::test_cases::execute(command, &client, ctx).await
                 }
                 Commands::Personas { command } => {
-                    commands::personas::execute(command, &client, cli.format).await
+                    commands::personas::execute(command, &client, ctx).await
                 }
                 Commands::Metrics { command } => {
-                    commands::metrics::execute(command, &client, cli.format).await
+                    commands::metrics::execute(command, &client, ctx).await
                 }
                 Commands::Mutations { command } => {
-                    commands::mutations::execute(command, &client, cli.format).await
+                    commands::mutations::execute(command, &client, ctx).await
                 }
                 Commands::ApiKeys { command } => {
-                    commands::api_keys::execute(command, &client, cli.format).await
+                    commands::api_keys::execute(command, &client, ctx).await
                 }
                 Commands::RunTemplates { command } => {
-                    commands::run_templates::execute(command, &client, cli.format).await
+                    commands::run_templates::execute(command, &client, ctx).await
                 }
                 Commands::ScheduledRuns { command } => {
-                    commands::scheduled_runs::execute(command, &client, cli.format).await
+                    commands::scheduled_runs::execute(command, &client, ctx).await
                 }
                 Commands::Dashboards { command } => {
-                    commands::dashboards::execute(command, &client, cli.format).await
+                    commands::dashboards::execute(command, &client, ctx).await
                 }
                 Commands::ReviewAnnotations { command } => {
-                    commands::review_annotations::execute(command, &client, cli.format).await
+                    commands::review_annotations::execute(command, &client, ctx).await
                 }
                 Commands::ReviewProjects { command } => {
-                    commands::review_projects::execute(command, &client, cli.format).await
+                    commands::review_projects::execute(command, &client, ctx).await
                 }
                 _ => unreachable!(),
             }

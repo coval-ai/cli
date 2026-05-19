@@ -1,12 +1,16 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
-use serde_json::json;
+use serde_json::{json, Value};
 use wiremock::matchers::{body_partial_json, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn coval() -> Command {
     #[allow(deprecated)]
     Command::cargo_bin("coval").unwrap()
+}
+
+fn stdout_json(assert: assert_cmd::assert::Assert) -> Value {
+    serde_json::from_slice(&assert.get_output().stdout).unwrap()
 }
 
 #[test]
@@ -39,6 +43,62 @@ fn test_missing_api_key() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("Not authenticated"));
+}
+
+#[test]
+fn test_missing_api_key_agent_mode() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("agents")
+            .arg("list")
+            .env_remove("COVAL_API_KEY")
+            .env("HOME", temp_dir.path())
+            .env("XDG_CONFIG_HOME", temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["aci"], "0.1");
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["resource"], "agents");
+    assert_eq!(value["operation"], "list");
+    assert_eq!(value["error"]["code"], "unauthenticated");
+}
+
+#[test]
+fn test_config_get_masks_unicode_api_key() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let config_dir = temp_dir.path().join(".config").join("coval");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("config.toml"),
+        r#"api_key = "🔑🔑🔑🔑abcdEFGH""#,
+    )
+    .unwrap();
+
+    coval()
+        .arg("config")
+        .arg("get")
+        .arg("api_key")
+        .env_remove("COVAL_API_KEY")
+        .env("HOME", temp_dir.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("🔑🔑🔑🔑...EFGH"));
+}
+
+#[test]
+fn test_whoami_masks_unicode_api_key() {
+    coval()
+        .arg("--api-key")
+        .arg("🔑🔑🔑🔑abcdEFGH")
+        .arg("whoami")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("🔑🔑🔑🔑...EFGH"));
 }
 
 #[test]
@@ -118,6 +178,86 @@ async fn test_agents_list_json() {
         .assert()
         .success()
         .stdout(predicate::str::contains("\"id\": \"abc123\""));
+}
+
+#[tokio::test]
+async fn test_agents_list_agent_mode() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/agents"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "agents": [
+                {
+                    "id": "abc123",
+                    "display_name": "Test Agent",
+                    "model_type": "MODEL_TYPE_VOICE",
+                    "create_time": "2025-01-15T10:30:00Z"
+                }
+            ]
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("agents")
+            .arg("list")
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["aci"], "0.1");
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["resource"], "agents");
+    assert_eq!(value["operation"], "list");
+    assert_eq!(value["data"][0]["id"], "abc123");
+    assert_eq!(value["warnings"].as_array().unwrap().len(), 0);
+    assert_eq!(value["next_actions"].as_array().unwrap().len(), 0);
+}
+
+#[tokio::test]
+async fn test_agents_list_json_is_not_agent_enveloped() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/agents"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "agents": [
+                {
+                    "id": "abc123",
+                    "display_name": "Test Agent",
+                    "model_type": "MODEL_TYPE_VOICE",
+                    "create_time": "2025-01-15T10:30:00Z"
+                }
+            ]
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let output = coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("--format")
+        .arg("json")
+        .arg("agents")
+        .arg("list")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(value.is_array());
 }
 
 #[tokio::test]
@@ -276,6 +416,305 @@ async fn test_api_error_handling() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("not found"));
+}
+
+#[tokio::test]
+async fn test_api_error_handling_agent_mode() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/agents/notfound"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(404).set_body_json(json!({
+            "error": {
+                "code": "NOT_FOUND",
+                "message": "Agent not found",
+                "details": []
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("agents")
+            .arg("get")
+            .arg("notfound")
+            .assert()
+            .failure()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["aci"], "0.1");
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["resource"], "agents");
+    assert_eq!(value["operation"], "get");
+    assert_eq!(value["error"]["code"], "not_found");
+    assert_eq!(value["error"]["message"], "Agent not found");
+}
+
+#[tokio::test]
+async fn test_api_key_create_warning_agent_mode() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/api-keys"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "api_key": {
+                "id": "key123",
+                "name": "Agent Key",
+                "description": "",
+                "key_type": "SERVICE",
+                "environment": "DEVELOPMENT",
+                "status": "ACTIVE",
+                "permissions": [],
+                "api_key": "coval_secret_123",
+                "create_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("api-keys")
+            .arg("create")
+            .arg("--name")
+            .arg("Agent Key")
+            .arg("--type")
+            .arg("service")
+            .arg("--environment")
+            .arg("development")
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["resource"], "api-keys");
+    assert_eq!(value["operation"], "create");
+    assert_eq!(value["warnings"][0]["code"], "store_api_key");
+    assert_eq!(value["data"]["api_key"], "coval_secret_123");
+}
+
+#[tokio::test]
+async fn test_dashboard_widgets_list_agent_mode_resource() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/dashboards/dash123/widgets"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "widgets": [
+                {
+                    "name": "dashboards/dash123/widgets/widget123",
+                    "display_name": "Overview",
+                    "type": "chart",
+                    "create_time": "2025-01-15T10:30:00Z"
+                }
+            ]
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("dashboards")
+            .arg("widgets")
+            .arg("list")
+            .arg("dash123")
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["resource"], "widgets");
+    assert_eq!(value["operation"], "widgets.list");
+    assert_eq!(
+        value["data"][0]["name"],
+        "dashboards/dash123/widgets/widget123"
+    );
+}
+
+#[test]
+fn test_dashboard_widgets_agent_mode_error_resource() {
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("dashboards")
+            .arg("widgets")
+            .arg("create")
+            .arg("dash123")
+            .arg("--name")
+            .arg("Overview")
+            .arg("--type")
+            .arg("chart")
+            .arg("--config")
+            .arg("{")
+            .assert()
+            .failure()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["resource"], "widgets");
+    assert_eq!(value["operation"], "widgets.create");
+    assert_eq!(value["error"]["code"], "cli_error");
+}
+
+#[tokio::test]
+async fn test_conversations_audio_json_output() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/conversations/conv123/audio"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "audio_url": "https://storage.example.com/conversation.wav",
+            "conversation_id": "conv123",
+            "url_expires_in_seconds": 3600
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("--format")
+            .arg("json")
+            .arg("conversations")
+            .arg("audio")
+            .arg("conv123")
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(
+        value["audio_url"],
+        "https://storage.example.com/conversation.wav"
+    );
+    assert_eq!(value["conversation_id"], "conv123");
+}
+
+#[tokio::test]
+async fn test_test_cases_stdin_json_summary() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/test-cases"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "test_set_id": "ts123",
+            "input_str": "hello"
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "test_case": {
+                "name": "testCases/tc123",
+                "id": "tc123",
+                "test_set_id": "ts123",
+                "input_str": "hello",
+                "create_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("--format")
+            .arg("json")
+            .arg("test-cases")
+            .arg("create")
+            .arg("--test-set-id")
+            .arg("ts123")
+            .arg("--stdin")
+            .write_stdin(r#"{"input_str":"hello"}"#)
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["created"], 1);
+    assert_eq!(value["failed"], 0);
+}
+
+#[tokio::test]
+async fn test_runs_watch_agent_mode() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/runs/run123"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "run": {
+                "name": "Test Run",
+                "run_id": "run123",
+                "status": "COMPLETED",
+                "create_time": "2025-01-15T10:30:00Z",
+                "progress": {
+                    "total_test_cases": 10,
+                    "completed_test_cases": 10,
+                    "failed_test_cases": 0,
+                    "in_progress_test_cases": 0
+                },
+                "results": {
+                    "output_ids": ["sim123"],
+                    "metrics": {}
+                }
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("runs")
+            .arg("watch")
+            .arg("run123")
+            .arg("--interval")
+            .arg("0")
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["resource"], "runs");
+    assert_eq!(value["operation"], "watch");
+    assert_eq!(value["data"]["run_id"], "run123");
+    assert_eq!(value["data"]["status"], "COMPLETED");
 }
 
 #[tokio::test]
