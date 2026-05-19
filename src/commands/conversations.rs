@@ -11,7 +11,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use crate::client::error::ApiError;
 use crate::client::models::{ListParams, MetricDetailResponse, SubmitConversationRequest};
 use crate::client::CovalClient;
-use crate::output::{print_list, print_one, print_success, OutputFormat};
+use crate::output::{emit_list, emit_one, emit_success, OutputContext};
 
 #[derive(Subcommand)]
 pub enum ConversationCommands {
@@ -23,6 +23,20 @@ pub enum ConversationCommands {
     Metrics(MetricsArgs),
     #[command(name = "metric-detail")]
     MetricDetail(MetricDetailArgs),
+}
+
+impl ConversationCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::List(_) => "list",
+            Self::Get(_) => "get",
+            Self::Delete(_) => "delete",
+            Self::Audio(_) => "audio",
+            Self::Submit(_) => "submit",
+            Self::Metrics(_) => "metrics",
+            Self::MetricDetail(_) => "metric-detail",
+        }
+    }
 }
 
 #[derive(Args)]
@@ -107,8 +121,9 @@ pub struct MetricDetailArgs {
 pub async fn execute(
     cmd: ConversationCommands,
     client: &CovalClient,
-    format: OutputFormat,
+    ctx: &OutputContext,
 ) -> Result<()> {
+    let operation = cmd.operation();
     match cmd {
         ConversationCommands::List(args) => {
             let params = ListParams {
@@ -118,14 +133,16 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.conversations().list(params).await?;
-            print_list(&response.conversations, format);
+            emit_list(ctx, "conversations", operation, &response.conversations);
         }
         ConversationCommands::Get(args) => {
             let result = client.conversations().get(&args.conversation_id).await;
             match result {
-                Ok(conversation) => print_one(&conversation, format),
+                Ok(conversation) => emit_one(ctx, "conversations", operation, &conversation),
                 Err(ApiError::NotFound { .. }) => {
-                    print_not_found_hint(&args.conversation_id, "simulations");
+                    if !ctx.agent {
+                        print_not_found_hint(&args.conversation_id, "simulations");
+                    }
                     return Err(ApiError::NotFound {
                         resource: format!("Conversation '{}'", args.conversation_id),
                     }
@@ -137,9 +154,11 @@ pub async fn execute(
         ConversationCommands::Delete(args) => {
             let result = client.conversations().delete(&args.conversation_id).await;
             match result {
-                Ok(()) => print_success("Conversation deleted."),
+                Ok(()) => emit_success(ctx, "conversations", operation, "Conversation deleted."),
                 Err(ApiError::NotFound { .. }) => {
-                    print_not_found_hint(&args.conversation_id, "simulations");
+                    if !ctx.agent {
+                        print_not_found_hint(&args.conversation_id, "simulations");
+                    }
                     return Err(ApiError::NotFound {
                         resource: format!("Conversation '{}'", args.conversation_id),
                     }
@@ -153,7 +172,7 @@ pub async fn execute(
                 .conversations()
                 .list_metrics(&args.conversation_id)
                 .await?;
-            print_list(&response.metrics, format);
+            emit_list(ctx, "conversations", operation, &response.metrics);
         }
         ConversationCommands::MetricDetail(args) => {
             let response = client
@@ -161,27 +180,38 @@ pub async fn execute(
                 .get_metric(&args.conversation_id, &args.metric_id)
                 .await?;
             match response {
-                MetricDetailResponse::Single { metric } => print_one(&metric, format),
+                MetricDetailResponse::Single { metric } => {
+                    emit_one(ctx, "conversations", operation, &metric)
+                }
                 MetricDetailResponse::Collection { metric_outputs } => {
-                    print_list(&metric_outputs, format)
+                    emit_list(ctx, "conversations", operation, &metric_outputs)
                 }
             }
         }
         ConversationCommands::Submit(args) => {
             let req = build_submit_request(args)?;
             let conversation = client.conversations().submit(req).await?;
-            print_one(&conversation, format);
+            emit_one(ctx, "conversations", operation, &conversation);
         }
         ConversationCommands::Audio(args) => {
             let audio = client.conversations().audio(&args.conversation_id).await?;
 
             match args.output {
                 Some(path) => {
-                    download_audio(&audio.audio_url, &path).await?;
-                    print_success(&format!("Audio saved to {}", path.display()));
+                    download_audio(&audio.audio_url, &path, !ctx.agent).await?;
+                    emit_success(
+                        ctx,
+                        "conversations",
+                        operation,
+                        &format!("Audio saved to {}", path.display()),
+                    );
                 }
                 None => {
-                    println!("{}", audio.audio_url);
+                    if ctx.human() {
+                        println!("{}", audio.audio_url);
+                    } else {
+                        emit_one(ctx, "conversations", operation, &audio);
+                    }
                 }
             }
         }
@@ -265,7 +295,7 @@ fn build_submit_request(args: SubmitArgs) -> Result<SubmitConversationRequest> {
     })
 }
 
-async fn download_audio(url: &str, path: &Path) -> Result<()> {
+async fn download_audio(url: &str, path: &Path, show_progress: bool) -> Result<()> {
     let client = reqwest::Client::new();
     let resp = client.get(url).send().await?;
 
@@ -274,16 +304,17 @@ async fn download_audio(url: &str, path: &Path) -> Result<()> {
     }
 
     let total = resp.content_length().unwrap_or(0);
-    let pb = ProgressBar::new(total);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template("{spinner:.green} [{bar:40.cyan/blue}] {bytes}/{total_bytes}")?
-            .progress_chars("=>-"),
-    );
-
     let bytes = resp.bytes().await?;
-    pb.set_position(bytes.len() as u64);
-    pb.finish_and_clear();
+    if show_progress {
+        let pb = ProgressBar::new(total);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{spinner:.green} [{bar:40.cyan/blue}] {bytes}/{total_bytes}")?
+                .progress_chars("=>-"),
+        );
+        pb.set_position(bytes.len() as u64);
+        pb.finish_and_clear();
+    }
 
     std::fs::write(path, &bytes)?;
     Ok(())

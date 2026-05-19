@@ -85,7 +85,7 @@ pub struct GetSimulationResponse {
     pub simulation: Simulation,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AudioUrlResponse {
     pub audio_url: String,
     pub simulation_id: String,

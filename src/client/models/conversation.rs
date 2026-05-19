@@ -117,7 +117,7 @@ pub struct GetConversationResponse {
     pub conversation: Conversation,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ConversationAudioUrlResponse {
     pub audio_url: String,
     pub conversation_id: String,

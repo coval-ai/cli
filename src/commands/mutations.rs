@@ -3,7 +3,7 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{CreateMutationRequest, ListParams, UpdateMutationRequest};
 use crate::client::CovalClient;
-use crate::output::{print_list, print_one, print_success, OutputFormat};
+use crate::output::{emit_list, emit_one, emit_success, OutputContext};
 
 #[derive(Subcommand)]
 pub enum MutationCommands {
@@ -12,6 +12,18 @@ pub enum MutationCommands {
     Create(CreateArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
+}
+
+impl MutationCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::List(_) => "list",
+            Self::Get(_) => "get",
+            Self::Create(_) => "create",
+            Self::Update(_) => "update",
+            Self::Delete(_) => "delete",
+        }
+    }
 }
 
 #[derive(Args)]
@@ -76,8 +88,9 @@ pub struct DeleteArgs {
 pub async fn execute(
     cmd: MutationCommands,
     client: &CovalClient,
-    format: OutputFormat,
+    ctx: &OutputContext,
 ) -> Result<()> {
+    let operation = cmd.operation();
     match cmd {
         MutationCommands::List(args) => {
             let params = ListParams {
@@ -85,14 +98,14 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.mutations(&args.agent_id).list(params).await?;
-            print_list(&response.mutations, format);
+            emit_list(ctx, "mutations", operation, &response.mutations);
         }
         MutationCommands::Get(args) => {
             let mutation = client
                 .mutations(&args.agent_id)
                 .get(&args.mutation_id)
                 .await?;
-            print_one(&mutation, format);
+            emit_one(ctx, "mutations", operation, &mutation);
         }
         MutationCommands::Create(args) => {
             let config_overrides = args
@@ -107,7 +120,7 @@ pub async fn execute(
                 parameter_values: None,
             };
             let mutation = client.mutations(&args.agent_id).create(req).await?;
-            print_one(&mutation, format);
+            emit_one(ctx, "mutations", operation, &mutation);
         }
         MutationCommands::Update(args) => {
             let config_overrides = args
@@ -125,14 +138,14 @@ pub async fn execute(
                 .mutations(&args.agent_id)
                 .update(&args.mutation_id, req)
                 .await?;
-            print_one(&mutation, format);
+            emit_one(ctx, "mutations", operation, &mutation);
         }
         MutationCommands::Delete(args) => {
             client
                 .mutations(&args.agent_id)
                 .delete(&args.mutation_id)
                 .await?;
-            print_success("Mutation deleted.");
+            emit_success(ctx, "mutations", operation, "Mutation deleted.");
         }
     }
     Ok(())

@@ -2,10 +2,12 @@ use std::io::{self, Write};
 
 use anyhow::Result;
 use clap::Args;
+use serde_json::json;
 
 use crate::client::models::ListParams;
 use crate::client::CovalClient;
-use crate::config::Config;
+use crate::config::{mask_api_key, Config};
+use crate::output::{emit_one, OutputContext};
 
 #[derive(Args)]
 pub struct LoginArgs {
@@ -13,9 +15,11 @@ pub struct LoginArgs {
     pub api_key: Option<String>,
 }
 
-pub async fn login(args: LoginArgs) -> Result<()> {
+pub async fn login(args: LoginArgs, ctx: &OutputContext) -> Result<()> {
     let api_key = if let Some(key) = args.api_key {
         key
+    } else if ctx.agent {
+        anyhow::bail!("API key is required in agent mode. Pass `coval login --api-key <key>`.")
     } else {
         print!("Enter your Coval API key: ");
         io::stdout().flush()?;
@@ -38,8 +42,20 @@ pub async fn login(args: LoginArgs) -> Result<()> {
             config.save()?;
 
             let path = Config::path();
-            println!("Authenticated successfully.");
-            println!("Credentials saved to {}", path.display());
+            if ctx.agent {
+                emit_one(
+                    ctx,
+                    "auth",
+                    "login",
+                    &json!({
+                        "authenticated": true,
+                        "config_path": path.display().to_string(),
+                    }),
+                );
+            } else {
+                println!("Authenticated successfully.");
+                println!("Credentials saved to {}", path.display());
+            }
             Ok(())
         }
         Err(e) => {
@@ -48,14 +64,32 @@ pub async fn login(args: LoginArgs) -> Result<()> {
     }
 }
 
-pub fn whoami(api_key: Option<&String>) {
+pub fn whoami(api_key: Option<&String>, ctx: &OutputContext) {
     if let Some(key) = api_key {
-        let masked = if key.len() > 8 {
-            format!("{}...{}", &key[..4], &key[key.len() - 4..])
+        let masked = mask_api_key(key);
+        if ctx.agent {
+            emit_one(
+                ctx,
+                "auth",
+                "whoami",
+                &json!({
+                    "authenticated": true,
+                    "api_key": masked,
+                }),
+            );
         } else {
-            "****".to_string()
-        };
-        println!("Authenticated with API key: {masked}");
+            println!("Authenticated with API key: {masked}");
+        }
+    } else if ctx.agent {
+        emit_one(
+            ctx,
+            "auth",
+            "whoami",
+            &json!({
+                "authenticated": false,
+                "api_key": null,
+            }),
+        );
     } else {
         println!("Not authenticated. Run `coval login` to authenticate.");
     }

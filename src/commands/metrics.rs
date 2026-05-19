@@ -3,7 +3,7 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{CreateMetricRequest, ListParams, MetricType, UpdateMetricRequest};
 use crate::client::CovalClient;
-use crate::output::{print_list, print_one, print_success, OutputFormat};
+use crate::output::{emit_list, emit_one, emit_success, OutputContext};
 
 #[derive(Subcommand)]
 pub enum MetricCommands {
@@ -12,6 +12,18 @@ pub enum MetricCommands {
     Create(CreateArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
+}
+
+impl MetricCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::List(_) => "list",
+            Self::Get(_) => "get",
+            Self::Create(_) => "create",
+            Self::Update(_) => "update",
+            Self::Delete(_) => "delete",
+        }
+    }
 }
 
 #[derive(Args)]
@@ -144,11 +156,8 @@ pub struct DeleteArgs {
     metric_id: String,
 }
 
-pub async fn execute(
-    cmd: MetricCommands,
-    client: &CovalClient,
-    format: OutputFormat,
-) -> Result<()> {
+pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputContext) -> Result<()> {
+    let operation = cmd.operation();
     match cmd {
         MetricCommands::List(args) => {
             let params = ListParams {
@@ -158,11 +167,11 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.metrics().list(params, args.include_builtin).await?;
-            print_list(&response.metrics, format);
+            emit_list(ctx, "metrics", operation, &response.metrics);
         }
         MetricCommands::Get(args) => {
             let metric = client.metrics().get(&args.metric_id).await?;
-            print_one(&metric, format);
+            emit_one(ctx, "metrics", operation, &metric);
         }
         MetricCommands::Create(args) => {
             let target_condition = args
@@ -190,7 +199,7 @@ pub async fn execute(
                 target_condition,
             };
             let metric = client.metrics().create(req).await?;
-            print_one(&metric, format);
+            emit_one(ctx, "metrics", operation, &metric);
         }
         MetricCommands::Update(args) => {
             let target_condition = args
@@ -218,11 +227,11 @@ pub async fn execute(
                 target_condition,
             };
             let metric = client.metrics().update(&args.metric_id, req).await?;
-            print_one(&metric, format);
+            emit_one(ctx, "metrics", operation, &metric);
         }
         MetricCommands::Delete(args) => {
             client.metrics().delete(&args.metric_id).await?;
-            print_success("Metric deleted.");
+            emit_success(ctx, "metrics", operation, "Metric deleted.");
         }
     }
     Ok(())

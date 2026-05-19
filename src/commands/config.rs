@@ -1,7 +1,9 @@
 use anyhow::Result;
 use clap::Subcommand;
+use serde_json::json;
 
-use crate::config::Config;
+use crate::config::{mask_api_key, Config};
+use crate::output::{emit_one, emit_success, OutputContext};
 
 #[derive(Subcommand)]
 pub enum ConfigCommands {
@@ -10,30 +12,47 @@ pub enum ConfigCommands {
     Set { key: String, value: String },
 }
 
-pub fn execute(cmd: ConfigCommands) -> Result<()> {
+impl ConfigCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::Path => "path",
+            Self::Get { .. } => "get",
+            Self::Set { .. } => "set",
+        }
+    }
+}
+
+pub fn execute(cmd: ConfigCommands, ctx: &OutputContext) -> Result<()> {
+    let operation = cmd.operation();
     match cmd {
         ConfigCommands::Path => {
-            println!("{}", Config::path().display());
+            let path = Config::path().display().to_string();
+            if ctx.agent {
+                emit_one(ctx, "config", operation, &json!({ "path": path }));
+            } else {
+                println!("{path}");
+            }
         }
         ConfigCommands::Get { key } => {
             let config = Config::load()?;
-            match key.as_str() {
-                "api_key" => {
-                    if let Some(key) = config.api_key {
-                        let masked = if key.len() > 8 {
-                            format!("{}...{}", &key[..4], &key[key.len() - 4..])
-                        } else {
-                            "****".to_string()
-                        };
-                        println!("{masked}");
-                    }
-                }
-                "api_url" => {
-                    if let Some(url) = config.api_url {
-                        println!("{url}");
-                    }
-                }
+            let value = match key.as_str() {
+                "api_key" => config.api_key.map(|key| mask_api_key(&key)),
+                "api_url" => config.api_url,
                 _ => anyhow::bail!("Unknown config key: {key}"),
+            };
+
+            if ctx.agent {
+                emit_one(
+                    ctx,
+                    "config",
+                    operation,
+                    &json!({
+                        "key": key,
+                        "value": value,
+                    }),
+                );
+            } else if let Some(value) = value {
+                println!("{value}");
             }
         }
         ConfigCommands::Set { key, value } => {
@@ -44,7 +63,7 @@ pub fn execute(cmd: ConfigCommands) -> Result<()> {
                 _ => anyhow::bail!("Unknown config key: {key}"),
             }
             config.save()?;
-            println!("Config updated.");
+            emit_success(ctx, "config", operation, "Config updated.");
         }
     }
     Ok(())

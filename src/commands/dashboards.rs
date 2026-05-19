@@ -6,7 +6,7 @@ use crate::client::models::{
     UpdateWidgetRequest, WidgetType,
 };
 use crate::client::CovalClient;
-use crate::output::{print_list, print_one, print_success, OutputFormat};
+use crate::output::{emit_list, emit_one, emit_success, OutputContext};
 
 #[derive(Subcommand)]
 pub enum DashboardCommands {
@@ -19,6 +19,19 @@ pub enum DashboardCommands {
         #[command(subcommand)]
         command: WidgetCommands,
     },
+}
+
+impl DashboardCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::List(_) => "list",
+            Self::Get(_) => "get",
+            Self::Create(_) => "create",
+            Self::Update(_) => "update",
+            Self::Delete(_) => "delete",
+            Self::Widgets { command } => command.operation(),
+        }
+    }
 }
 
 #[derive(Args)]
@@ -61,6 +74,18 @@ pub enum WidgetCommands {
     Create(WidgetCreateArgs),
     Update(WidgetUpdateArgs),
     Delete(WidgetDeleteArgs),
+}
+
+impl WidgetCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::List(_) => "widgets.list",
+            Self::Get(_) => "widgets.get",
+            Self::Create(_) => "widgets.create",
+            Self::Update(_) => "widgets.update",
+            Self::Delete(_) => "widgets.delete",
+        }
+    }
 }
 
 #[derive(Args)]
@@ -147,8 +172,9 @@ fn parse_config(raw: &str) -> Result<serde_json::Value> {
 pub async fn execute(
     cmd: DashboardCommands,
     client: &CovalClient,
-    format: OutputFormat,
+    ctx: &OutputContext,
 ) -> Result<()> {
+    let operation = cmd.operation();
     match cmd {
         DashboardCommands::List(args) => {
             let params = ListParams {
@@ -158,31 +184,31 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.dashboards().list(params).await?;
-            print_list(&response.dashboards, format);
+            emit_list(ctx, "dashboards", operation, &response.dashboards);
         }
         DashboardCommands::Get(args) => {
             let dashboard = client.dashboards().get(&args.dashboard_id).await?;
-            print_one(&dashboard, format);
+            emit_one(ctx, "dashboards", operation, &dashboard);
         }
         DashboardCommands::Create(args) => {
             let req = CreateDashboardRequest {
                 display_name: args.name,
             };
             let dashboard = client.dashboards().create(req).await?;
-            print_one(&dashboard, format);
+            emit_one(ctx, "dashboards", operation, &dashboard);
         }
         DashboardCommands::Update(args) => {
             let req = UpdateDashboardRequest {
                 display_name: args.name,
             };
             let dashboard = client.dashboards().update(&args.dashboard_id, req).await?;
-            print_one(&dashboard, format);
+            emit_one(ctx, "dashboards", operation, &dashboard);
         }
         DashboardCommands::Delete(args) => {
             client.dashboards().delete(&args.dashboard_id).await?;
-            print_success("Dashboard deleted.");
+            emit_success(ctx, "dashboards", operation, "Dashboard deleted.");
         }
-        DashboardCommands::Widgets { command } => execute_widget(command, client, format).await?,
+        DashboardCommands::Widgets { command } => execute_widget(command, client, ctx).await?,
     }
     Ok(())
 }
@@ -190,8 +216,9 @@ pub async fn execute(
 async fn execute_widget(
     cmd: WidgetCommands,
     client: &CovalClient,
-    format: OutputFormat,
+    ctx: &OutputContext,
 ) -> Result<()> {
+    let operation = cmd.operation();
     match cmd {
         WidgetCommands::List(args) => {
             let params = ListParams {
@@ -199,14 +226,14 @@ async fn execute_widget(
                 ..Default::default()
             };
             let response = client.widgets(&args.dashboard_id).list(params).await?;
-            print_list(&response.widgets, format);
+            emit_list(ctx, "widgets", operation, &response.widgets);
         }
         WidgetCommands::Get(args) => {
             let widget = client
                 .widgets(&args.dashboard_id)
                 .get(&args.widget_id)
                 .await?;
-            print_one(&widget, format);
+            emit_one(ctx, "widgets", operation, &widget);
         }
         WidgetCommands::Create(args) => {
             validate_widget_grid(args.grid_w, args.grid_h)?;
@@ -221,7 +248,7 @@ async fn execute_widget(
                 grid_h: args.grid_h,
             };
             let widget = client.widgets(&args.dashboard_id).create(req).await?;
-            print_one(&widget, format);
+            emit_one(ctx, "widgets", operation, &widget);
         }
         WidgetCommands::Update(args) => {
             validate_widget_grid(args.grid_w, args.grid_h)?;
@@ -239,14 +266,14 @@ async fn execute_widget(
                 .widgets(&args.dashboard_id)
                 .update(&args.widget_id, req)
                 .await?;
-            print_one(&widget, format);
+            emit_one(ctx, "widgets", operation, &widget);
         }
         WidgetCommands::Delete(args) => {
             client
                 .widgets(&args.dashboard_id)
                 .delete(&args.widget_id)
                 .await?;
-            print_success("Widget deleted.");
+            emit_success(ctx, "widgets", operation, "Widget deleted.");
         }
     }
     Ok(())

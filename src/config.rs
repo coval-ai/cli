@@ -39,3 +39,18 @@ impl Config {
         Ok(())
     }
 }
+
+pub fn mask_api_key(key: &str) -> String {
+    let chars = key.chars().collect::<Vec<_>>();
+    if chars.len() > 8 {
+        let prefix = chars.iter().take(4).copied().collect::<String>();
+        let suffix = chars
+            .iter()
+            .skip(chars.len() - 4)
+            .copied()
+            .collect::<String>();
+        format!("{prefix}...{suffix}")
+    } else {
+        "****".to_string()
+    }
+}

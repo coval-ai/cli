@@ -3,7 +3,7 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{CreateTestSetRequest, ListParams, UpdateTestSetRequest};
 use crate::client::CovalClient;
-use crate::output::{print_list, print_one, print_success, OutputFormat};
+use crate::output::{emit_list, emit_one, emit_success, OutputContext};
 
 #[derive(Subcommand)]
 pub enum TestSetCommands {
@@ -12,6 +12,18 @@ pub enum TestSetCommands {
     Create(CreateArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
+}
+
+impl TestSetCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::List(_) => "list",
+            Self::Get(_) => "get",
+            Self::Create(_) => "create",
+            Self::Update(_) => "update",
+            Self::Delete(_) => "delete",
+        }
+    }
 }
 
 #[derive(Args)]
@@ -70,8 +82,9 @@ pub struct DeleteArgs {
 pub async fn execute(
     cmd: TestSetCommands,
     client: &CovalClient,
-    format: OutputFormat,
+    ctx: &OutputContext,
 ) -> Result<()> {
+    let operation = cmd.operation();
     match cmd {
         TestSetCommands::List(args) => {
             let params = ListParams {
@@ -81,11 +94,11 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.test_sets().list(params).await?;
-            print_list(&response.test_sets, format);
+            emit_list(ctx, "test-sets", operation, &response.test_sets);
         }
         TestSetCommands::Get(args) => {
             let test_set = client.test_sets().get(&args.test_set_id).await?;
-            print_one(&test_set, format);
+            emit_one(ctx, "test-sets", operation, &test_set);
         }
         TestSetCommands::Create(args) => {
             let req = CreateTestSetRequest {
@@ -97,7 +110,7 @@ pub async fn execute(
                 parameters: None,
             };
             let test_set = client.test_sets().create(req).await?;
-            print_one(&test_set, format);
+            emit_one(ctx, "test-sets", operation, &test_set);
         }
         TestSetCommands::Update(args) => {
             let req = UpdateTestSetRequest {
@@ -107,11 +120,11 @@ pub async fn execute(
                 ..Default::default()
             };
             let test_set = client.test_sets().update(&args.test_set_id, req).await?;
-            print_one(&test_set, format);
+            emit_one(ctx, "test-sets", operation, &test_set);
         }
         TestSetCommands::Delete(args) => {
             client.test_sets().delete(&args.test_set_id).await?;
-            print_success("Test set deleted.");
+            emit_success(ctx, "test-sets", operation, "Test set deleted.");
         }
     }
     Ok(())

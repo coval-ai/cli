@@ -3,10 +3,11 @@ use std::io::{self, BufRead};
 use anyhow::Result;
 use clap::{Args, Subcommand};
 use serde::Deserialize;
+use serde_json::json;
 
 use crate::client::models::{CreateTestCaseRequest, ListParams, UpdateTestCaseRequest};
 use crate::client::CovalClient;
-use crate::output::{print_list, print_one, print_success, OutputFormat};
+use crate::output::{emit_list, emit_one, emit_success, OutputContext};
 
 #[derive(Subcommand)]
 pub enum TestCaseCommands {
@@ -15,6 +16,18 @@ pub enum TestCaseCommands {
     Create(CreateArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
+}
+
+impl TestCaseCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::List(_) => "list",
+            Self::Get(_) => "get",
+            Self::Create(_) => "create",
+            Self::Update(_) => "update",
+            Self::Delete(_) => "delete",
+        }
+    }
 }
 
 #[derive(Args)]
@@ -88,8 +101,9 @@ pub struct DeleteArgs {
 pub async fn execute(
     cmd: TestCaseCommands,
     client: &CovalClient,
-    format: OutputFormat,
+    ctx: &OutputContext,
 ) -> Result<()> {
+    let operation = cmd.operation();
     match cmd {
         TestCaseCommands::List(args) => {
             let filter = match (args.filter, args.test_set_id) {
@@ -106,11 +120,11 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.test_cases().list(params).await?;
-            print_list(&response.test_cases, format);
+            emit_list(ctx, "test-cases", operation, &response.test_cases);
         }
         TestCaseCommands::Get(args) => {
             let test_case = client.test_cases().get(&args.test_case_id).await?;
-            print_one(&test_case, format);
+            emit_one(ctx, "test-cases", operation, &test_case);
         }
         TestCaseCommands::Create(args) => {
             if args.stdin {
@@ -140,13 +154,24 @@ pub async fn execute(
                     match client.test_cases().create(req).await {
                         Ok(_) => created += 1,
                         Err(e) => {
-                            eprintln!("Error: {e}");
+                            if !ctx.agent {
+                                eprintln!("Error: {e}");
+                            }
                             failed += 1;
                         }
                     }
                 }
 
-                println!("Created {created} test cases ({failed} failed)");
+                if ctx.human() {
+                    println!("Created {created} test cases ({failed} failed)");
+                } else {
+                    emit_one(
+                        ctx,
+                        "test-cases",
+                        operation,
+                        &json!({ "created": created, "failed": failed }),
+                    );
+                }
             } else {
                 let req = CreateTestCaseRequest {
                     test_set_id: args.test_set_id,
@@ -161,7 +186,7 @@ pub async fn execute(
                     user_notes: None,
                 };
                 let test_case = client.test_cases().create(req).await?;
-                print_one(&test_case, format);
+                emit_one(ctx, "test-cases", operation, &test_case);
             }
         }
         TestCaseCommands::Update(args) => {
@@ -172,11 +197,11 @@ pub async fn execute(
                 ..Default::default()
             };
             let test_case = client.test_cases().update(&args.test_case_id, req).await?;
-            print_one(&test_case, format);
+            emit_one(ctx, "test-cases", operation, &test_case);
         }
         TestCaseCommands::Delete(args) => {
             client.test_cases().delete(&args.test_case_id).await?;
-            print_success("Test case deleted.");
+            emit_success(ctx, "test-cases", operation, "Test case deleted.");
         }
     }
     Ok(())

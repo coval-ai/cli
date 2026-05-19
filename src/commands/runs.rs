@@ -8,7 +8,7 @@ use crate::client::models::{
     LaunchMetadata, LaunchOptions, LaunchRunRequest, ListParams, RunStatus, UpdateRunRequest,
 };
 use crate::client::CovalClient;
-use crate::output::{print_list, print_one, print_success, OutputFormat};
+use crate::output::{emit_list, emit_one, emit_success, OutputContext};
 
 #[derive(Subcommand)]
 pub enum RunCommands {
@@ -18,6 +18,19 @@ pub enum RunCommands {
     Update(UpdateArgs),
     Watch(WatchArgs),
     Delete(DeleteArgs),
+}
+
+impl RunCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::List(_) => "list",
+            Self::Get(_) => "get",
+            Self::Launch(_) => "launch",
+            Self::Update(_) => "update",
+            Self::Watch(_) => "watch",
+            Self::Delete(_) => "delete",
+        }
+    }
 }
 
 #[derive(Args)]
@@ -106,7 +119,8 @@ pub struct DeleteArgs {
     run_id: String,
 }
 
-pub async fn execute(cmd: RunCommands, client: &CovalClient, format: OutputFormat) -> Result<()> {
+pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext) -> Result<()> {
+    let operation = cmd.operation();
     match cmd {
         RunCommands::List(args) => {
             let params = ListParams {
@@ -116,11 +130,11 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, format: OutputForma
                 ..Default::default()
             };
             let response = client.runs().list(params).await?;
-            print_list(&response.runs, format);
+            emit_list(ctx, "runs", operation, &response.runs);
         }
         RunCommands::Get(args) => {
             let run = client.runs().get(&args.run_id).await?;
-            print_one(&run, format);
+            emit_one(ctx, "runs", operation, &run);
         }
         RunCommands::Launch(args) => {
             if let Some(ref ids) = args.test_cases {
@@ -167,7 +181,7 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, format: OutputForma
                 metadata,
             };
             let run = client.runs().launch(req).await?;
-            print_one(&run, format);
+            emit_one(ctx, "runs", operation, &run);
         }
         RunCommands::Update(args) => {
             let tags = args
@@ -179,21 +193,47 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, format: OutputForma
                 .runs()
                 .update(&args.run_id, UpdateRunRequest { tags })
                 .await?;
-            print_one(&run, format);
+            emit_one(ctx, "runs", operation, &run);
         }
         RunCommands::Watch(args) => {
-            watch_run(client, &args.run_id, args.interval).await?;
+            watch_run(client, &args.run_id, args.interval, ctx).await?;
         }
         RunCommands::Delete(args) => {
             client.runs().delete(&args.run_id).await?;
-            print_success("Run deleted.");
+            emit_success(ctx, "runs", operation, "Run deleted.");
         }
     }
     Ok(())
 }
 
 #[allow(clippy::cast_sign_loss)]
-async fn watch_run(client: &CovalClient, run_id: &str, interval_secs: u64) -> Result<()> {
+async fn watch_run(
+    client: &CovalClient,
+    run_id: &str,
+    interval_secs: u64,
+    ctx: &OutputContext,
+) -> Result<()> {
+    if ctx.agent {
+        loop {
+            let run = client.runs().get(run_id).await?;
+            match run.status {
+                RunStatus::Completed | RunStatus::Cancelled => {
+                    emit_one(ctx, "runs", "watch", &run);
+                    break;
+                }
+                RunStatus::Failed => {
+                    let msg = run.error.unwrap_or_else(|| "Unknown error".to_string());
+                    anyhow::bail!("Run failed: {msg}");
+                }
+                _ => {
+                    tokio::time::sleep(Duration::from_secs(interval_secs)).await;
+                }
+            }
+        }
+
+        return Ok(());
+    }
+
     let run = client.runs().get(run_id).await?;
     let total = run
         .progress
