@@ -37,7 +37,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -65,7 +65,7 @@ jobs:
           tar -czvf ../../../${{ matrix.artifact }}.tar.gz ${{ matrix.binary }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}.tar.gz
@@ -77,10 +77,10 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
@@ -88,12 +88,12 @@ jobs:
         run: |
           cd artifacts
           for dir in */; do
-            (cd "$dir" && sha256sum *.tar.gz > SHA256SUMS)
+            (cd "$dir" && sha256sum -- *.tar.gz > SHA256SUMS)
           done
-          cat */SHA256SUMS > ../SHA256SUMS
+          cat -- */SHA256SUMS > ../SHA256SUMS
 
       - name: Create release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             artifacts/*/*.tar.gz
@@ -120,10 +120,12 @@ jobs:
       - name: Parse checksums
         id: sha
         run: |
-          echo "macos_arm64=$(grep 'coval-macos-arm64' SHA256SUMS | awk '{print $1}')" >> "$GITHUB_OUTPUT"
-          echo "macos_x64=$(grep 'coval-macos-x64' SHA256SUMS | awk '{print $1}')" >> "$GITHUB_OUTPUT"
-          echo "linux_arm64=$(grep 'coval-linux-arm64' SHA256SUMS | awk '{print $1}')" >> "$GITHUB_OUTPUT"
-          echo "linux_x64=$(grep 'coval-linux-x64' SHA256SUMS | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          {
+            echo "macos_arm64=$(grep 'coval-macos-arm64' SHA256SUMS | awk '{print $1}')"
+            echo "macos_x64=$(grep 'coval-macos-x64' SHA256SUMS | awk '{print $1}')"
+            echo "linux_arm64=$(grep 'coval-linux-arm64' SHA256SUMS | awk '{print $1}')"
+            echo "linux_x64=$(grep 'coval-linux-x64' SHA256SUMS | awk '{print $1}')"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Update Homebrew tap
         env:
