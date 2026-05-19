@@ -40,7 +40,7 @@ pub fn list(source: Option<&str>, dest: Option<&Path>) -> Result<SkillList> {
     };
     reject_remote_source(source)?;
     let source_path = PathBuf::from(source);
-    let root = skills_root(&source_path);
+    let root = skills_root(&source_path)?;
     let mut skills = Vec::new();
 
     if root.exists() {
@@ -76,15 +76,17 @@ pub fn list(source: Option<&str>, dest: Option<&Path>) -> Result<SkillList> {
 
 pub fn install(source: &str, dest: &Path, id: &str, force: bool) -> Result<SkillInstall> {
     reject_remote_source(source)?;
+    let id_path = skill_id_path(id)?;
     let source_path = PathBuf::from(source);
-    let root = skills_root(&source_path);
-    let source_skill = root.join(id);
+    let root = skills_root(&source_path)?;
+    let source_skill = root.join(&id_path);
     let skill_file = source_skill.join("SKILL.md");
     if !skill_file.exists() {
         anyhow::bail!("Skill not found in source: {id}");
     }
+    ensure_inside_root(&root, &source_skill, id)?;
 
-    let target = dest.join(id);
+    let target = dest.join(&id_path);
     if target.exists() {
         if force {
             fs::remove_dir_all(&target)?;
@@ -103,13 +105,69 @@ pub fn install(source: &str, dest: &Path, id: &str, force: bool) -> Result<Skill
     })
 }
 
-fn skills_root(source: &Path) -> PathBuf {
-    let nested = source.join("skills");
-    if nested.exists() {
-        nested
-    } else {
-        source.to_path_buf()
+fn skill_id_path(id: &str) -> Result<PathBuf> {
+    let parts = id.split('/').collect::<Vec<_>>();
+    if parts.len() != 2
+        || parts
+            .iter()
+            .any(|part| part.is_empty() || *part == "." || *part == ".." || part.contains('\\'))
+    {
+        anyhow::bail!("Invalid skill id: {id}. Expected <namespace>/<skill>.");
     }
+
+    Ok(PathBuf::from(parts[0]).join(parts[1]))
+}
+
+fn skills_root(source: &Path) -> Result<PathBuf> {
+    reject_path_symlink(source)?;
+    let nested = source.join("skills");
+
+    match fs::symlink_metadata(&nested) {
+        Ok(metadata) => {
+            if metadata.file_type().is_symlink() {
+                anyhow::bail!(
+                    "Skill source contains unsupported symlink: {}",
+                    nested.display()
+                );
+            }
+            if metadata.is_dir() {
+                Ok(nested)
+            } else {
+                Ok(source.to_path_buf())
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(source.to_path_buf()),
+        Err(error) => Err(error).with_context(|| format!("failed to inspect {}", nested.display())),
+    }
+}
+
+fn reject_path_symlink(path: &Path) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            anyhow::bail!(
+                "Skill source contains unsupported symlink: {}",
+                path.display()
+            );
+        }
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error).with_context(|| format!("failed to inspect {}", path.display())),
+    }
+}
+
+fn ensure_inside_root(root: &Path, source_skill: &Path, id: &str) -> Result<()> {
+    let root = root
+        .canonicalize()
+        .with_context(|| format!("failed to resolve {}", root.display()))?;
+    let source_skill = source_skill
+        .canonicalize()
+        .with_context(|| format!("failed to resolve {}", source_skill.display()))?;
+
+    if !source_skill.starts_with(root) {
+        anyhow::bail!("Skill source escapes skills root: {id}");
+    }
+
+    Ok(())
 }
 
 fn read_dirs(path: &Path) -> Result<Vec<PathBuf>> {
@@ -154,16 +212,44 @@ fn read_description(path: &Path) -> Result<Option<String>> {
 }
 
 fn copy_dir(source: &Path, target: &Path) -> Result<()> {
+    let metadata = fs::symlink_metadata(source)
+        .with_context(|| format!("failed to inspect {}", source.display()))?;
+    let file_type = metadata.file_type();
+    if file_type.is_symlink() {
+        anyhow::bail!(
+            "Skill source contains unsupported symlink: {}",
+            source.display()
+        );
+    }
+    if !file_type.is_dir() {
+        anyhow::bail!(
+            "Skill source contains unsupported file type: {}",
+            source.display()
+        );
+    }
+
     fs::create_dir_all(target)?;
     for entry in fs::read_dir(source)? {
         let entry = entry?;
         let source_path = entry.path();
         let target_path = target.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
+        let file_type = entry.file_type()?;
+        if file_type.is_symlink() {
+            anyhow::bail!(
+                "Skill source contains unsupported symlink: {}",
+                source_path.display()
+            );
+        }
+        if file_type.is_dir() {
             copy_dir(&source_path, &target_path)?;
-        } else {
+        } else if file_type.is_file() {
             fs::copy(&source_path, &target_path)
                 .with_context(|| format!("failed to copy {}", source_path.display()))?;
+        } else {
+            anyhow::bail!(
+                "Skill source contains unsupported file type: {}",
+                source_path.display()
+            );
         }
     }
     Ok(())

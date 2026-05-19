@@ -242,7 +242,7 @@ fn skills_command(command: SkillCommands, ctx: &OutputContext) -> Result<()> {
                         "--dest",
                         "<path>",
                     ]),
-                    true,
+                    false,
                 ));
             }
             emit_one_with_warnings_and_actions(

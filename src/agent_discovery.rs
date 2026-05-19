@@ -313,7 +313,16 @@ const RESOURCE_SPECS: &[ResourceSpec] = &[
         related: &["simulations", "agents", "personas", "test-sets"],
         workflows: &[WorkflowSpec {
             name: "Launch a run",
-            argv: &["runs", "launch"],
+            argv: &[
+                "runs",
+                "launch",
+                "--agent-id",
+                "<agent_id>",
+                "--persona-id",
+                "<persona_id>",
+                "--test-set-id",
+                "<test_set_id>",
+            ],
         }],
         pitfalls: &["Launch returns a run; use watch or get before assuming outputs are ready."],
     },

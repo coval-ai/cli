@@ -146,6 +146,72 @@ fn test_agent_manifest_no_auth() {
 }
 
 #[test]
+fn test_agent_manifest_skills_require_explicit_local_source() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("agent")
+            .arg("manifest")
+            .env_remove("COVAL_API_KEY")
+            .env("HOME", temp_dir.path())
+            .env("XDG_CONFIG_HOME", temp_dir.path())
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    let skills = &value["data"]["skills"];
+    assert_eq!(skills["implemented"], true);
+    assert!(skills["source"].is_null());
+    assert_eq!(
+        skills["list_argv"],
+        json!(["coval", "--agent", "agent", "skills", "list", "--source", "<path>"])
+    );
+    assert_eq!(
+        skills["install_argv"],
+        json!([
+            "coval",
+            "--agent",
+            "agent",
+            "skills",
+            "install",
+            "<skill-id>",
+            "--source",
+            "<path>",
+            "--dest",
+            "<path>"
+        ])
+    );
+
+    let manifest = value["data"].to_string();
+    assert!(!manifest.contains("github.com"));
+    assert!(!manifest.contains("coval-external-skills"));
+}
+
+#[test]
+fn test_agent_parse_errors_use_structured_envelope() {
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("agents")
+            .assert()
+            .failure()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["aci"], "0.1");
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["resource"], "cli");
+    assert_eq!(value["operation"], "parse");
+    assert_eq!(value["error"]["code"], "usage_error");
+    assert!(value["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("Usage: coval agents"));
+}
+
+#[test]
 fn test_agent_skills_list_requires_explicit_source() {
     let value = stdout_json(
         coval()
@@ -191,6 +257,54 @@ fn test_agent_skills_list_local_source() {
         "Launch a Coval run."
     );
     assert_eq!(value["warnings"].as_array().unwrap().len(), 0);
+    assert_eq!(value["next_actions"][0]["id"], "agent.skills.install");
+    assert_eq!(value["next_actions"][0]["safe"], false);
+    assert_eq!(value["next_actions"][0]["requires_confirmation"], true);
+}
+
+#[test]
+fn test_agent_skills_list_reports_installed_state() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let source = temp_dir.path().join("source");
+    let dest = temp_dir.path().join("dest");
+    write_skill(&source, "agents/create-agent", "Create a Coval agent.");
+    write_skill(&source, "runs/launch-run", "Launch a Coval run.");
+    let installed_skill = dest.join("runs").join("launch-run");
+    std::fs::create_dir_all(&installed_skill).unwrap();
+    std::fs::write(
+        installed_skill.join("SKILL.md"),
+        "---\nname: launch-run\ndescription: Launch a Coval run.\n---\n",
+    )
+    .unwrap();
+
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("agent")
+            .arg("skills")
+            .arg("list")
+            .arg("--source")
+            .arg(&source)
+            .arg("--dest")
+            .arg(&dest)
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    let skills = value["data"]["skills"].as_array().unwrap();
+    let create_agent = skills
+        .iter()
+        .find(|skill| skill["id"] == "agents/create-agent")
+        .unwrap();
+    let launch_run = skills
+        .iter()
+        .find(|skill| skill["id"] == "runs/launch-run")
+        .unwrap();
+
+    assert_eq!(create_agent["installed"], false);
+    assert_eq!(launch_run["installed"], true);
+    assert_eq!(value["next_actions"].as_array().unwrap().len(), 0);
 }
 
 #[test]
@@ -247,6 +361,233 @@ fn test_agent_skills_reject_remote_source() {
 }
 
 #[test]
+fn test_agent_skills_install_requires_force_for_existing_skill() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let source = temp_dir.path().join("source");
+    let dest = temp_dir.path().join("dest");
+    write_skill(&source, "runs/launch-run", "Launch a Coval run.");
+    let installed_skill = dest.join("runs").join("launch-run");
+    std::fs::create_dir_all(&installed_skill).unwrap();
+    std::fs::write(
+        installed_skill.join("SKILL.md"),
+        "---\nname: launch-run\ndescription: Old instructions.\n---\n",
+    )
+    .unwrap();
+
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("agent")
+            .arg("skills")
+            .arg("install")
+            .arg("runs/launch-run")
+            .arg("--source")
+            .arg(&source)
+            .arg("--dest")
+            .arg(&dest)
+            .assert()
+            .failure()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["operation"], "skills.install");
+    assert_eq!(value["error"]["code"], "cli_error");
+    assert!(value["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("Skill already exists"));
+}
+
+#[test]
+fn test_agent_skills_install_rejects_path_traversal_id() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let source = temp_dir.path().join("source");
+    let dest = temp_dir.path().join("dest");
+    let source_escape = source.join("outside");
+    let target_escape = temp_dir.path().join("outside");
+    std::fs::create_dir_all(&source_escape).unwrap();
+    std::fs::create_dir_all(&target_escape).unwrap();
+    std::fs::write(
+        source_escape.join("SKILL.md"),
+        "---\nname: outside\ndescription: Outside source.\n---\n",
+    )
+    .unwrap();
+    std::fs::write(
+        target_escape.join("SKILL.md"),
+        "---\nname: outside\ndescription: Outside target.\n---\n",
+    )
+    .unwrap();
+
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("agent")
+            .arg("skills")
+            .arg("install")
+            .arg("../outside")
+            .arg("--source")
+            .arg(&source)
+            .arg("--dest")
+            .arg(&dest)
+            .arg("--force")
+            .assert()
+            .failure()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["operation"], "skills.install");
+    assert_eq!(value["error"]["code"], "cli_error");
+    assert!(value["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("Invalid skill id"));
+    assert!(target_escape.join("SKILL.md").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_agent_skills_install_rejects_symlink_source() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let source = temp_dir.path().join("source");
+    let dest = temp_dir.path().join("dest");
+    write_skill(&source, "runs/launch-run", "Launch a Coval run.");
+    let outside = temp_dir.path().join("outside.txt");
+    std::fs::write(&outside, "secret").unwrap();
+    symlink(
+        &outside,
+        source
+            .join("skills")
+            .join("runs")
+            .join("launch-run")
+            .join("outside.txt"),
+    )
+    .unwrap();
+
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("agent")
+            .arg("skills")
+            .arg("install")
+            .arg("runs/launch-run")
+            .arg("--source")
+            .arg(&source)
+            .arg("--dest")
+            .arg(&dest)
+            .assert()
+            .failure()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["operation"], "skills.install");
+    assert_eq!(value["error"]["code"], "cli_error");
+    assert!(value["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("unsupported symlink"));
+    assert!(!dest
+        .join("runs")
+        .join("launch-run")
+        .join("outside.txt")
+        .exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_agent_skills_install_rejects_symlink_skills_root() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let source = temp_dir.path().join("source");
+    let external = temp_dir.path().join("external");
+    let dest = temp_dir.path().join("dest");
+    std::fs::create_dir_all(&source).unwrap();
+    write_skill(&external, "runs/launch-run", "Launch a Coval run.");
+    symlink(external.join("skills"), source.join("skills")).unwrap();
+
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("agent")
+            .arg("skills")
+            .arg("install")
+            .arg("runs/launch-run")
+            .arg("--source")
+            .arg(&source)
+            .arg("--dest")
+            .arg(&dest)
+            .assert()
+            .failure()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["operation"], "skills.install");
+    assert_eq!(value["error"]["code"], "cli_error");
+    assert!(value["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("unsupported symlink"));
+    assert!(!dest
+        .join("runs")
+        .join("launch-run")
+        .join("SKILL.md")
+        .exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_agent_skills_install_rejects_symlink_namespace() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let source = temp_dir.path().join("source");
+    let external = temp_dir.path().join("external");
+    let dest = temp_dir.path().join("dest");
+    std::fs::create_dir_all(source.join("skills")).unwrap();
+    write_skill(&external, "runs/launch-run", "Launch a Coval run.");
+    symlink(
+        external.join("skills").join("runs"),
+        source.join("skills").join("runs"),
+    )
+    .unwrap();
+
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("agent")
+            .arg("skills")
+            .arg("install")
+            .arg("runs/launch-run")
+            .arg("--source")
+            .arg(&source)
+            .arg("--dest")
+            .arg(&dest)
+            .assert()
+            .failure()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["operation"], "skills.install");
+    assert_eq!(value["error"]["code"], "cli_error");
+    assert!(value["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("escapes skills root"));
+    assert!(!dest
+        .join("runs")
+        .join("launch-run")
+        .join("SKILL.md")
+        .exists());
+}
+
+#[test]
 fn test_input_json_help_coverage() {
     for args in INPUT_JSON_HELP_COMMANDS {
         coval()
@@ -288,6 +629,23 @@ fn test_resource_contexts_agent_mode_no_auth() {
             value["data"]["commands"][0]["help_argv"],
             json!(["coval", resource, "context", "--help"])
         );
+        if *resource == "runs" {
+            assert_eq!(
+                value["data"]["workflows"][0]["argv"],
+                json!([
+                    "coval",
+                    "--agent",
+                    "runs",
+                    "launch",
+                    "--agent-id",
+                    "<agent_id>",
+                    "--persona-id",
+                    "<persona_id>",
+                    "--test-set-id",
+                    "<test_set_id>"
+                ])
+            );
+        }
     }
 }
 
@@ -548,6 +906,49 @@ async fn test_agents_list_agent_mode() {
         value["next_actions"][0]["argv"],
         json!(["coval", "--agent", "agents", "get", "abc123"])
     );
+}
+
+#[tokio::test]
+async fn test_agent_mode_overrides_json_format() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/agents"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "agents": [
+                {
+                    "id": "abc123",
+                    "display_name": "Test Agent",
+                    "model_type": "MODEL_TYPE_VOICE",
+                    "create_time": "2025-01-15T10:30:00Z"
+                }
+            ]
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("--format")
+            .arg("json")
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("agents")
+            .arg("list")
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["resource"], "agents");
+    assert_eq!(value["operation"], "list");
+    assert_eq!(value["data"][0]["id"], "abc123");
+    assert_eq!(value["next_actions"][0]["id"], "agents.get");
 }
 
 #[tokio::test]
