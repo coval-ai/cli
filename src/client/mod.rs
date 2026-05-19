@@ -7,7 +7,7 @@ use url::Url;
 
 use self::error::ApiError;
 
-const DEFAULT_BASE_URL: &str = "https://api.coval.dev";
+pub const DEFAULT_BASE_URL: &str = "https://api.coval.dev";
 const USER_AGENT: &str = concat!("coval-cli/", env!("CARGO_PKG_VERSION"));
 
 pub struct CovalClient {

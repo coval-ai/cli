@@ -6,10 +6,14 @@ use crate::client::models::{
     ListParams, UpdateReviewAnnotationRequest,
 };
 use crate::client::CovalClient;
-use crate::output::{emit_list, emit_one, emit_success, OutputContext};
+use crate::next_actions;
+use crate::output::{
+    emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, OutputContext,
+};
 
 #[derive(Subcommand)]
 pub enum ReviewAnnotationCommands {
+    Context,
     List(ListArgs),
     Get(GetArgs),
     Create(CreateArgs),
@@ -20,6 +24,7 @@ pub enum ReviewAnnotationCommands {
 impl ReviewAnnotationCommands {
     pub fn operation(&self) -> &'static str {
         match self {
+            Self::Context => "context",
             Self::List(_) => "list",
             Self::Get(_) => "get",
             Self::Create(_) => "create",
@@ -113,6 +118,9 @@ pub async fn execute(
 ) -> Result<()> {
     let operation = cmd.operation();
     match cmd {
+        ReviewAnnotationCommands::Context => {
+            return crate::commands::agent::resource_context("review-annotations", ctx);
+        }
         ReviewAnnotationCommands::List(args) => {
             let params = ListParams {
                 filter: args.filter,
@@ -121,16 +129,29 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.review_annotations().list(params).await?;
-            emit_list(
+            emit_list_with_actions(
                 ctx,
                 "review-annotations",
                 operation,
                 &response.review_annotations,
+                next_actions::list_result(
+                    "review-annotations",
+                    response
+                        .review_annotations
+                        .first()
+                        .map(|annotation| annotation.id.as_str()),
+                ),
             );
         }
         ReviewAnnotationCommands::Get(args) => {
             let annotation = client.review_annotations().get(&args.annotation_id).await?;
-            emit_one(ctx, "review-annotations", operation, &annotation);
+            emit_one_with_actions(
+                ctx,
+                "review-annotations",
+                operation,
+                &annotation,
+                next_actions::item_result("review-annotations", &annotation.id),
+            );
         }
         ReviewAnnotationCommands::Create(args) => {
             let subvalues = args
@@ -148,7 +169,13 @@ pub async fn execute(
                 priority: args.priority,
             };
             let annotation = client.review_annotations().create(req).await?;
-            emit_one(ctx, "review-annotations", operation, &annotation);
+            emit_one_with_actions(
+                ctx,
+                "review-annotations",
+                operation,
+                &annotation,
+                next_actions::item_result("review-annotations", &annotation.id),
+            );
         }
         ReviewAnnotationCommands::Update(args) => {
             let subvalues = args
@@ -169,18 +196,25 @@ pub async fn execute(
                 .review_annotations()
                 .update(&args.annotation_id, req)
                 .await?;
-            emit_one(ctx, "review-annotations", operation, &annotation);
+            emit_one_with_actions(
+                ctx,
+                "review-annotations",
+                operation,
+                &annotation,
+                next_actions::item_result("review-annotations", &annotation.id),
+            );
         }
         ReviewAnnotationCommands::Delete(args) => {
             client
                 .review_annotations()
                 .delete(&args.annotation_id)
                 .await?;
-            emit_success(
+            emit_success_with_actions(
                 ctx,
                 "review-annotations",
                 operation,
                 "Review annotation deleted.",
+                next_actions::delete_result("review-annotations"),
             );
         }
     }

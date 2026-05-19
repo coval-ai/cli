@@ -28,6 +28,11 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    #[command(name = "agent")]
+    Agent {
+        #[command(subcommand)]
+        command: commands::agent::AgentCommands,
+    },
     Login(commands::auth::LoginArgs),
     Whoami,
     Config {
@@ -106,6 +111,7 @@ pub enum Commands {
 impl Commands {
     pub fn resource(&self) -> &'static str {
         match self {
+            Self::Agent { .. } => "agent",
             Self::Login(_) | Self::Whoami => "auth",
             Self::Config { .. } => "config",
             Self::Agents { .. } => "agents",
@@ -131,6 +137,7 @@ impl Commands {
 
     pub fn operation(&self) -> &'static str {
         match self {
+            Self::Agent { command } => command.operation(),
             Self::Login(_) => "login",
             Self::Whoami => "whoami",
             Self::Config { command } => command.operation(),
@@ -155,16 +162,86 @@ impl Commands {
 
 pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
     let config = Config::load().unwrap_or_default();
+    let api_key_source = if cli.api_key.is_some() {
+        "argument_or_env"
+    } else if config.api_key.is_some() {
+        "config"
+    } else {
+        "none"
+    };
+    let api_url_source = if cli.api_url.is_some() {
+        "argument_or_env"
+    } else if config.api_url.is_some() {
+        "config"
+    } else {
+        "default"
+    };
     let api_key = cli.api_key.or(config.api_key);
     let api_url = cli.api_url.or(config.api_url);
 
     match cli.command {
+        Commands::Agent { command } => {
+            commands::agent::execute(
+                command,
+                api_key.as_deref(),
+                api_key_source,
+                api_url.as_deref(),
+                api_url_source,
+                ctx,
+            )
+            .await
+        }
         Commands::Login(args) => commands::auth::login(args, ctx).await,
         Commands::Whoami => {
             commands::auth::whoami(api_key.as_ref(), ctx);
             Ok(())
         }
         Commands::Config { command } => commands::config::execute(command, ctx),
+        Commands::Agents {
+            command: commands::agents::AgentCommands::Context,
+        } => commands::agent::resource_context("agents", ctx),
+        Commands::Conversations {
+            command: commands::conversations::ConversationCommands::Context,
+        } => commands::agent::resource_context("conversations", ctx),
+        Commands::Runs {
+            command: commands::runs::RunCommands::Context,
+        } => commands::agent::resource_context("runs", ctx),
+        Commands::Simulations {
+            command: commands::simulations::SimulationCommands::Context,
+        } => commands::agent::resource_context("simulations", ctx),
+        Commands::TestSets {
+            command: commands::test_sets::TestSetCommands::Context,
+        } => commands::agent::resource_context("test-sets", ctx),
+        Commands::TestCases {
+            command: commands::test_cases::TestCaseCommands::Context,
+        } => commands::agent::resource_context("test-cases", ctx),
+        Commands::Personas {
+            command: commands::personas::PersonaCommands::Context,
+        } => commands::agent::resource_context("personas", ctx),
+        Commands::Metrics {
+            command: commands::metrics::MetricCommands::Context,
+        } => commands::agent::resource_context("metrics", ctx),
+        Commands::Mutations {
+            command: commands::mutations::MutationCommands::Context,
+        } => commands::agent::resource_context("mutations", ctx),
+        Commands::ApiKeys {
+            command: commands::api_keys::ApiKeyCommands::Context,
+        } => commands::agent::resource_context("api-keys", ctx),
+        Commands::RunTemplates {
+            command: commands::run_templates::RunTemplateCommands::Context,
+        } => commands::agent::resource_context("run-templates", ctx),
+        Commands::ScheduledRuns {
+            command: commands::scheduled_runs::ScheduledRunCommands::Context,
+        } => commands::agent::resource_context("scheduled-runs", ctx),
+        Commands::Dashboards {
+            command: commands::dashboards::DashboardCommands::Context,
+        } => commands::agent::resource_context("dashboards", ctx),
+        Commands::ReviewAnnotations {
+            command: commands::review_annotations::ReviewAnnotationCommands::Context,
+        } => commands::agent::resource_context("review-annotations", ctx),
+        Commands::ReviewProjects {
+            command: commands::review_projects::ReviewProjectCommands::Context,
+        } => commands::agent::resource_context("review-projects", ctx),
         _ => {
             let api_key = api_key.ok_or_else(|| {
                 anyhow::anyhow!(

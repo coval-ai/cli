@@ -1,7 +1,9 @@
+mod agent_discovery;
 mod cli;
 mod client;
 mod commands;
 mod config;
+mod next_actions;
 mod output;
 
 use std::process::ExitCode;

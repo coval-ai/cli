@@ -3,10 +3,14 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{CreateMetricRequest, ListParams, MetricType, UpdateMetricRequest};
 use crate::client::CovalClient;
-use crate::output::{emit_list, emit_one, emit_success, OutputContext};
+use crate::next_actions;
+use crate::output::{
+    emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, OutputContext,
+};
 
 #[derive(Subcommand)]
 pub enum MetricCommands {
+    Context,
     List(ListArgs),
     Get(GetArgs),
     Create(CreateArgs),
@@ -17,6 +21,7 @@ pub enum MetricCommands {
 impl MetricCommands {
     pub fn operation(&self) -> &'static str {
         match self {
+            Self::Context => "context",
             Self::List(_) => "list",
             Self::Get(_) => "get",
             Self::Create(_) => "create",
@@ -159,6 +164,7 @@ pub struct DeleteArgs {
 pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputContext) -> Result<()> {
     let operation = cmd.operation();
     match cmd {
+        MetricCommands::Context => return crate::commands::agent::resource_context("metrics", ctx),
         MetricCommands::List(args) => {
             let params = ListParams {
                 filter: args.filter,
@@ -167,11 +173,26 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 ..Default::default()
             };
             let response = client.metrics().list(params, args.include_builtin).await?;
-            emit_list(ctx, "metrics", operation, &response.metrics);
+            emit_list_with_actions(
+                ctx,
+                "metrics",
+                operation,
+                &response.metrics,
+                next_actions::list_result(
+                    "metrics",
+                    response.metrics.first().map(|metric| metric.id.as_str()),
+                ),
+            );
         }
         MetricCommands::Get(args) => {
             let metric = client.metrics().get(&args.metric_id).await?;
-            emit_one(ctx, "metrics", operation, &metric);
+            emit_one_with_actions(
+                ctx,
+                "metrics",
+                operation,
+                &metric,
+                next_actions::item_result("metrics", &metric.id),
+            );
         }
         MetricCommands::Create(args) => {
             let target_condition = args
@@ -199,7 +220,13 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 target_condition,
             };
             let metric = client.metrics().create(req).await?;
-            emit_one(ctx, "metrics", operation, &metric);
+            emit_one_with_actions(
+                ctx,
+                "metrics",
+                operation,
+                &metric,
+                next_actions::item_result("metrics", &metric.id),
+            );
         }
         MetricCommands::Update(args) => {
             let target_condition = args
@@ -227,11 +254,23 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 target_condition,
             };
             let metric = client.metrics().update(&args.metric_id, req).await?;
-            emit_one(ctx, "metrics", operation, &metric);
+            emit_one_with_actions(
+                ctx,
+                "metrics",
+                operation,
+                &metric,
+                next_actions::item_result("metrics", &metric.id),
+            );
         }
         MetricCommands::Delete(args) => {
             client.metrics().delete(&args.metric_id).await?;
-            emit_success(ctx, "metrics", operation, "Metric deleted.");
+            emit_success_with_actions(
+                ctx,
+                "metrics",
+                operation,
+                "Metric deleted.",
+                next_actions::delete_result("metrics"),
+            );
         }
     }
     Ok(())

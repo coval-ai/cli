@@ -3,10 +3,14 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{CreateMutationRequest, ListParams, UpdateMutationRequest};
 use crate::client::CovalClient;
-use crate::output::{emit_list, emit_one, emit_success, OutputContext};
+use crate::next_actions;
+use crate::output::{
+    emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, OutputContext,
+};
 
 #[derive(Subcommand)]
 pub enum MutationCommands {
+    Context,
     List(ListArgs),
     Get(GetArgs),
     Create(CreateArgs),
@@ -17,6 +21,7 @@ pub enum MutationCommands {
 impl MutationCommands {
     pub fn operation(&self) -> &'static str {
         match self {
+            Self::Context => "context",
             Self::List(_) => "list",
             Self::Get(_) => "get",
             Self::Create(_) => "create",
@@ -92,20 +97,41 @@ pub async fn execute(
 ) -> Result<()> {
     let operation = cmd.operation();
     match cmd {
+        MutationCommands::Context => {
+            return crate::commands::agent::resource_context("mutations", ctx)
+        }
         MutationCommands::List(args) => {
             let params = ListParams {
                 page_size: Some(args.page_size),
                 ..Default::default()
             };
             let response = client.mutations(&args.agent_id).list(params).await?;
-            emit_list(ctx, "mutations", operation, &response.mutations);
+            emit_list_with_actions(
+                ctx,
+                "mutations",
+                operation,
+                &response.mutations,
+                mutation_list_actions(
+                    &args.agent_id,
+                    response
+                        .mutations
+                        .first()
+                        .map(|mutation| mutation.id.as_str()),
+                ),
+            );
         }
         MutationCommands::Get(args) => {
             let mutation = client
                 .mutations(&args.agent_id)
                 .get(&args.mutation_id)
                 .await?;
-            emit_one(ctx, "mutations", operation, &mutation);
+            emit_one_with_actions(
+                ctx,
+                "mutations",
+                operation,
+                &mutation,
+                mutation_actions(&mutation.id, &mutation.agent_id),
+            );
         }
         MutationCommands::Create(args) => {
             let config_overrides = args
@@ -120,7 +146,13 @@ pub async fn execute(
                 parameter_values: None,
             };
             let mutation = client.mutations(&args.agent_id).create(req).await?;
-            emit_one(ctx, "mutations", operation, &mutation);
+            emit_one_with_actions(
+                ctx,
+                "mutations",
+                operation,
+                &mutation,
+                mutation_actions(&mutation.id, &mutation.agent_id),
+            );
         }
         MutationCommands::Update(args) => {
             let config_overrides = args
@@ -138,15 +170,52 @@ pub async fn execute(
                 .mutations(&args.agent_id)
                 .update(&args.mutation_id, req)
                 .await?;
-            emit_one(ctx, "mutations", operation, &mutation);
+            emit_one_with_actions(
+                ctx,
+                "mutations",
+                operation,
+                &mutation,
+                mutation_actions(&mutation.id, &mutation.agent_id),
+            );
         }
         MutationCommands::Delete(args) => {
             client
                 .mutations(&args.agent_id)
                 .delete(&args.mutation_id)
                 .await?;
-            emit_success(ctx, "mutations", operation, "Mutation deleted.");
+            emit_success_with_actions(
+                ctx,
+                "mutations",
+                operation,
+                "Mutation deleted.",
+                vec![
+                    next_actions::mutations_for_agent(&args.agent_id).primary(),
+                    next_actions::context("mutations"),
+                ],
+            );
         }
     }
     Ok(())
+}
+
+fn mutation_actions(mutation_id: &str, agent_id: &str) -> Vec<crate::output::NextAction> {
+    vec![
+        next_actions::mutation_get(agent_id, mutation_id).primary(),
+        next_actions::get("agents", agent_id),
+        next_actions::context("mutations"),
+    ]
+}
+
+fn mutation_list_actions(
+    agent_id: &str,
+    mutation_id: Option<&str>,
+) -> Vec<crate::output::NextAction> {
+    let mut actions = vec![next_actions::context("mutations")];
+    if let Some(mutation_id) = mutation_id {
+        actions.insert(
+            0,
+            next_actions::mutation_get(agent_id, mutation_id).primary(),
+        );
+    }
+    actions
 }

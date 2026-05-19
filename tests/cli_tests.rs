@@ -13,6 +13,24 @@ fn stdout_json(assert: assert_cmd::assert::Assert) -> Value {
     serde_json::from_slice(&assert.get_output().stdout).unwrap()
 }
 
+const AGENT_RESOURCES: &[&str] = &[
+    "agents",
+    "conversations",
+    "runs",
+    "simulations",
+    "test-sets",
+    "test-cases",
+    "personas",
+    "metrics",
+    "mutations",
+    "api-keys",
+    "run-templates",
+    "scheduled-runs",
+    "dashboards",
+    "review-annotations",
+    "review-projects",
+];
+
 #[test]
 fn test_help() {
     coval()
@@ -29,6 +47,152 @@ fn test_version() {
         .assert()
         .success()
         .stdout(predicate::str::contains("coval"));
+}
+
+#[test]
+fn test_agent_manifest_no_auth() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("agent")
+            .arg("manifest")
+            .env_remove("COVAL_API_KEY")
+            .env("HOME", temp_dir.path())
+            .env("XDG_CONFIG_HOME", temp_dir.path())
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["resource"], "agent");
+    assert_eq!(value["operation"], "manifest");
+    assert_eq!(value["data"]["name"], "coval");
+    assert!(value["data"]["description"]
+        .as_str()
+        .unwrap()
+        .contains("simulate interactions between your agent and personas"));
+    assert_eq!(
+        value["data"]["agent_mode"]["argv_prefix"],
+        json!(["coval", "--agent"])
+    );
+    assert!(value["data"]["agent_mode"]["argv"].is_null());
+    assert_eq!(value["data"]["help_argv"], json!(["coval", "--help"]));
+    assert_eq!(value["data"]["profiles"]["discovery"], true);
+    assert_eq!(value["data"]["profiles"]["skills"], false);
+    assert_eq!(
+        value["data"]["resources"].as_array().unwrap().len(),
+        AGENT_RESOURCES.len()
+    );
+    assert!(value["data"]["resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|resource| resource["name"] == "runs"
+            && resource["help_argv"] == json!(["coval", "runs", "--help"])
+            && resource["commands"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|command| command == "context")));
+}
+
+#[test]
+fn test_resource_contexts_agent_mode_no_auth() {
+    for resource in AGENT_RESOURCES {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let value = stdout_json(
+            coval()
+                .arg("--agent")
+                .arg(resource)
+                .arg("context")
+                .env_remove("COVAL_API_KEY")
+                .env("HOME", temp_dir.path())
+                .env("XDG_CONFIG_HOME", temp_dir.path())
+                .assert()
+                .success()
+                .stderr(predicate::str::is_empty()),
+        );
+
+        assert_eq!(value["ok"], true);
+        assert_eq!(value["resource"], *resource);
+        assert_eq!(value["operation"], "context");
+        assert_eq!(value["data"]["name"], *resource);
+        assert_eq!(
+            value["data"]["help_argv"],
+            json!(["coval", resource, "--help"])
+        );
+        assert_eq!(value["data"]["commands"][0]["name"], "context");
+        assert_eq!(value["data"]["commands"][0]["requires_auth"], false);
+        assert_eq!(
+            value["data"]["commands"][0]["help_argv"],
+            json!(["coval", resource, "context", "--help"])
+        );
+    }
+}
+
+#[test]
+fn test_agent_doctor_no_auth() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("agent")
+            .arg("doctor")
+            .env_remove("COVAL_API_KEY")
+            .env("HOME", temp_dir.path())
+            .env("XDG_CONFIG_HOME", temp_dir.path())
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["resource"], "agent");
+    assert_eq!(value["operation"], "doctor");
+    assert_eq!(value["data"]["auth"]["authenticated"], false);
+    assert_eq!(value["data"]["api"]["connectivity"]["checked"], false);
+    assert_eq!(value["warnings"][0]["code"], "not_authenticated");
+}
+
+#[tokio::test]
+async fn test_agent_doctor_with_connectivity() {
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+
+    Mock::given(method("GET"))
+        .and(path("/v1/agents"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "agents": []
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("agent")
+            .arg("doctor")
+            .env("HOME", temp_dir.path())
+            .env("XDG_CONFIG_HOME", temp_dir.path())
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["data"]["auth"]["authenticated"], true);
+    assert_eq!(value["data"]["auth"]["source"], "argument_or_env");
+    assert_eq!(value["data"]["api"]["source"], "argument_or_env");
+    assert_eq!(value["data"]["api"]["connectivity"]["checked"], true);
+    assert_eq!(value["data"]["api"]["connectivity"]["ok"], true);
+    assert_eq!(value["warnings"].as_array().unwrap().len(), 0);
 }
 
 #[test]
@@ -220,7 +384,11 @@ async fn test_agents_list_agent_mode() {
     assert_eq!(value["operation"], "list");
     assert_eq!(value["data"][0]["id"], "abc123");
     assert_eq!(value["warnings"].as_array().unwrap().len(), 0);
-    assert_eq!(value["next_actions"].as_array().unwrap().len(), 0);
+    assert_eq!(value["next_actions"][0]["id"], "agents.get");
+    assert_eq!(
+        value["next_actions"][0]["argv"],
+        json!(["coval", "--agent", "agents", "get", "abc123"])
+    );
 }
 
 #[tokio::test]
@@ -313,6 +481,38 @@ async fn test_agents_delete() {
         .assert()
         .success()
         .stdout(predicate::str::contains("deleted"));
+}
+
+#[tokio::test]
+async fn test_agents_delete_agent_mode_next_actions_are_safe() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("DELETE"))
+        .and(path("/v1/agents/abc123"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("agents")
+            .arg("delete")
+            .arg("abc123")
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["next_actions"][0]["id"], "agents.list");
+    assert_eq!(value["next_actions"][0]["safe"], true);
+    assert_eq!(value["next_actions"][0]["requires_confirmation"], false);
 }
 
 #[tokio::test]
@@ -715,6 +915,18 @@ async fn test_runs_watch_agent_mode() {
     assert_eq!(value["operation"], "watch");
     assert_eq!(value["data"]["run_id"], "run123");
     assert_eq!(value["data"]["status"], "COMPLETED");
+    assert_eq!(value["next_actions"][0]["id"], "runs.get");
+    assert_eq!(
+        value["next_actions"][1]["argv"],
+        json!([
+            "coval",
+            "--agent",
+            "simulations",
+            "list",
+            "--run-id",
+            "run123"
+        ])
+    );
 }
 
 #[tokio::test]

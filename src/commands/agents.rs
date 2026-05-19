@@ -3,10 +3,15 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{AgentType, CreateAgentRequest, ListParams, UpdateAgentRequest};
 use crate::client::CovalClient;
-use crate::output::{emit_list, emit_one, emit_success, OutputContext};
+use crate::next_actions;
+use crate::output::{
+    emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, NextAction,
+    OutputContext,
+};
 
 #[derive(Subcommand)]
 pub enum AgentCommands {
+    Context,
     List(ListArgs),
     Get(GetArgs),
     Create(CreateArgs),
@@ -17,6 +22,7 @@ pub enum AgentCommands {
 impl AgentCommands {
     pub fn operation(&self) -> &'static str {
         match self {
+            Self::Context => "context",
             Self::List(_) => "list",
             Self::Get(_) => "get",
             Self::Create(_) => "create",
@@ -102,6 +108,7 @@ pub struct DeleteArgs {
 pub async fn execute(cmd: AgentCommands, client: &CovalClient, ctx: &OutputContext) -> Result<()> {
     let operation = cmd.operation();
     match cmd {
+        AgentCommands::Context => return crate::commands::agent::resource_context("agents", ctx),
         AgentCommands::List(args) => {
             let params = ListParams {
                 filter: args.filter,
@@ -110,11 +117,17 @@ pub async fn execute(cmd: AgentCommands, client: &CovalClient, ctx: &OutputConte
                 ..Default::default()
             };
             let response = client.agents().list(params).await?;
-            emit_list(ctx, "agents", operation, &response.agents);
+            emit_list_with_actions(
+                ctx,
+                "agents",
+                operation,
+                &response.agents,
+                list_actions(response.agents.first().map(|agent| agent.id.as_str())),
+            );
         }
         AgentCommands::Get(args) => {
             let agent = client.agents().get(&args.agent_id).await?;
-            emit_one(ctx, "agents", operation, &agent);
+            emit_one_with_actions(ctx, "agents", operation, &agent, agent_actions(&agent.id));
         }
         AgentCommands::Create(args) => {
             let metadata = args
@@ -134,7 +147,7 @@ pub async fn execute(cmd: AgentCommands, client: &CovalClient, ctx: &OutputConte
                 test_set_ids: args.test_set_ids,
             };
             let agent = client.agents().create(req).await?;
-            emit_one(ctx, "agents", operation, &agent);
+            emit_one_with_actions(ctx, "agents", operation, &agent, agent_actions(&agent.id));
         }
         AgentCommands::Update(args) => {
             let metadata = args
@@ -154,12 +167,38 @@ pub async fn execute(cmd: AgentCommands, client: &CovalClient, ctx: &OutputConte
                 test_set_ids: args.test_set_ids,
             };
             let agent = client.agents().update(&args.agent_id, req).await?;
-            emit_one(ctx, "agents", operation, &agent);
+            emit_one_with_actions(ctx, "agents", operation, &agent, agent_actions(&agent.id));
         }
         AgentCommands::Delete(args) => {
             client.agents().delete(&args.agent_id).await?;
-            emit_success(ctx, "agents", operation, "Agent deleted.");
+            emit_success_with_actions(
+                ctx,
+                "agents",
+                operation,
+                "Agent deleted.",
+                vec![
+                    next_actions::list("agents").primary(),
+                    next_actions::context("agents"),
+                ],
+            );
         }
     }
     Ok(())
+}
+
+fn list_actions(id: Option<&str>) -> Vec<NextAction> {
+    let mut actions = vec![next_actions::context("agents")];
+    if let Some(id) = id {
+        actions.insert(0, next_actions::get("agents", id).primary());
+    }
+    actions
+}
+
+fn agent_actions(agent_id: &str) -> Vec<NextAction> {
+    vec![
+        next_actions::get("agents", agent_id).primary(),
+        next_actions::mutations_for_agent(agent_id),
+        next_actions::runs_for_agent(agent_id),
+        next_actions::context("agents"),
+    ]
 }
