@@ -5,10 +5,14 @@ use crate::client::models::{
     CreateReviewProjectRequest, ListParams, ProjectType, UpdateReviewProjectRequest,
 };
 use crate::client::CovalClient;
-use crate::output::{emit_list, emit_one, emit_success, OutputContext};
+use crate::next_actions;
+use crate::output::{
+    emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, OutputContext,
+};
 
 #[derive(Subcommand)]
 pub enum ReviewProjectCommands {
+    Context,
     List(ListArgs),
     Get(GetArgs),
     Create(CreateArgs),
@@ -19,6 +23,7 @@ pub enum ReviewProjectCommands {
 impl ReviewProjectCommands {
     pub fn operation(&self) -> &'static str {
         match self {
+            Self::Context => "context",
             Self::List(_) => "list",
             Self::Get(_) => "get",
             Self::Create(_) => "create",
@@ -106,6 +111,9 @@ pub async fn execute(
 ) -> Result<()> {
     let operation = cmd.operation();
     match cmd {
+        ReviewProjectCommands::Context => {
+            return crate::commands::agent::resource_context("review-projects", ctx);
+        }
         ReviewProjectCommands::List(args) => {
             let params = ListParams {
                 filter: args.filter,
@@ -114,11 +122,29 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.review_projects().list(params).await?;
-            emit_list(ctx, "review-projects", operation, &response.review_projects);
+            emit_list_with_actions(
+                ctx,
+                "review-projects",
+                operation,
+                &response.review_projects,
+                next_actions::list_result(
+                    "review-projects",
+                    response
+                        .review_projects
+                        .first()
+                        .map(|project| project.id.as_str()),
+                ),
+            );
         }
         ReviewProjectCommands::Get(args) => {
             let project = client.review_projects().get(&args.project_id).await?;
-            emit_one(ctx, "review-projects", operation, &project);
+            emit_one_with_actions(
+                ctx,
+                "review-projects",
+                operation,
+                &project,
+                next_actions::item_result("review-projects", &project.id),
+            );
         }
         ReviewProjectCommands::Create(args) => {
             let req = CreateReviewProjectRequest {
@@ -131,7 +157,13 @@ pub async fn execute(
                 notifications: args.notifications,
             };
             let project = client.review_projects().create(req).await?;
-            emit_one(ctx, "review-projects", operation, &project);
+            emit_one_with_actions(
+                ctx,
+                "review-projects",
+                operation,
+                &project,
+                next_actions::item_result("review-projects", &project.id),
+            );
         }
         ReviewProjectCommands::Update(args) => {
             let req = UpdateReviewProjectRequest {
@@ -147,11 +179,23 @@ pub async fn execute(
                 .review_projects()
                 .update(&args.project_id, req)
                 .await?;
-            emit_one(ctx, "review-projects", operation, &project);
+            emit_one_with_actions(
+                ctx,
+                "review-projects",
+                operation,
+                &project,
+                next_actions::item_result("review-projects", &project.id),
+            );
         }
         ReviewProjectCommands::Delete(args) => {
             client.review_projects().delete(&args.project_id).await?;
-            emit_success(ctx, "review-projects", operation, "Review project deleted.");
+            emit_success_with_actions(
+                ctx,
+                "review-projects",
+                operation,
+                "Review project deleted.",
+                next_actions::delete_result("review-projects"),
+            );
         }
     }
     Ok(())

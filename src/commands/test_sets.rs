@@ -3,10 +3,15 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{CreateTestSetRequest, ListParams, UpdateTestSetRequest};
 use crate::client::CovalClient;
-use crate::output::{emit_list, emit_one, emit_success, OutputContext};
+use crate::next_actions;
+use crate::output::{
+    emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, NextAction,
+    OutputContext,
+};
 
 #[derive(Subcommand)]
 pub enum TestSetCommands {
+    Context,
     List(ListArgs),
     Get(GetArgs),
     Create(CreateArgs),
@@ -17,6 +22,7 @@ pub enum TestSetCommands {
 impl TestSetCommands {
     pub fn operation(&self) -> &'static str {
         match self {
+            Self::Context => "context",
             Self::List(_) => "list",
             Self::Get(_) => "get",
             Self::Create(_) => "create",
@@ -86,6 +92,9 @@ pub async fn execute(
 ) -> Result<()> {
     let operation = cmd.operation();
     match cmd {
+        TestSetCommands::Context => {
+            return crate::commands::agent::resource_context("test-sets", ctx)
+        }
         TestSetCommands::List(args) => {
             let params = ListParams {
                 filter: args.filter,
@@ -94,11 +103,28 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.test_sets().list(params).await?;
-            emit_list(ctx, "test-sets", operation, &response.test_sets);
+            emit_list_with_actions(
+                ctx,
+                "test-sets",
+                operation,
+                &response.test_sets,
+                list_actions(
+                    response
+                        .test_sets
+                        .first()
+                        .map(|test_set| test_set.id.as_str()),
+                ),
+            );
         }
         TestSetCommands::Get(args) => {
             let test_set = client.test_sets().get(&args.test_set_id).await?;
-            emit_one(ctx, "test-sets", operation, &test_set);
+            emit_one_with_actions(
+                ctx,
+                "test-sets",
+                operation,
+                &test_set,
+                test_set_actions(&test_set.id),
+            );
         }
         TestSetCommands::Create(args) => {
             let req = CreateTestSetRequest {
@@ -110,7 +136,13 @@ pub async fn execute(
                 parameters: None,
             };
             let test_set = client.test_sets().create(req).await?;
-            emit_one(ctx, "test-sets", operation, &test_set);
+            emit_one_with_actions(
+                ctx,
+                "test-sets",
+                operation,
+                &test_set,
+                test_set_actions(&test_set.id),
+            );
         }
         TestSetCommands::Update(args) => {
             let req = UpdateTestSetRequest {
@@ -120,12 +152,42 @@ pub async fn execute(
                 ..Default::default()
             };
             let test_set = client.test_sets().update(&args.test_set_id, req).await?;
-            emit_one(ctx, "test-sets", operation, &test_set);
+            emit_one_with_actions(
+                ctx,
+                "test-sets",
+                operation,
+                &test_set,
+                test_set_actions(&test_set.id),
+            );
         }
         TestSetCommands::Delete(args) => {
             client.test_sets().delete(&args.test_set_id).await?;
-            emit_success(ctx, "test-sets", operation, "Test set deleted.");
+            emit_success_with_actions(
+                ctx,
+                "test-sets",
+                operation,
+                "Test set deleted.",
+                vec![
+                    next_actions::list("test-sets").primary(),
+                    next_actions::context("test-sets"),
+                ],
+            );
         }
     }
     Ok(())
+}
+
+fn list_actions(id: Option<&str>) -> Vec<NextAction> {
+    let mut actions = vec![next_actions::context("test-sets")];
+    if let Some(id) = id {
+        actions.insert(0, next_actions::get("test-sets", id).primary());
+    }
+    actions
+}
+
+fn test_set_actions(test_set_id: &str) -> Vec<NextAction> {
+    vec![
+        next_actions::test_cases_for_set(test_set_id).primary(),
+        next_actions::context("test-sets"),
+    ]
 }

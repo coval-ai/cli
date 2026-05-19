@@ -60,6 +60,35 @@ pub struct NextAction {
     pub requires_confirmation: bool,
 }
 
+impl NextAction {
+    pub fn new(
+        id: impl Into<String>,
+        label: impl Into<String>,
+        argv: Vec<String>,
+        safe: bool,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            label: label.into(),
+            description: None,
+            argv,
+            safe,
+            primary: false,
+            requires_confirmation: !safe,
+        }
+    }
+
+    pub fn primary(mut self) -> Self {
+        self.primary = true;
+        self
+    }
+
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub struct AgentError {
     pub code: String,
@@ -179,14 +208,15 @@ pub fn print_success(message: &str) {
     println!("{message}");
 }
 
-pub fn emit_list<T: Serialize + Tabular>(
+pub fn emit_list_with_actions<T: Serialize + Tabular>(
     ctx: &OutputContext,
     resource: &'static str,
     operation: &'static str,
     items: &[T],
+    next_actions: Vec<NextAction>,
 ) {
     if ctx.agent {
-        emit_agent_data(resource, operation, items, Vec::new(), Vec::new());
+        emit_agent_data(resource, operation, items, Vec::new(), next_actions);
     } else {
         print_list(items, ctx.format);
     }
@@ -198,8 +228,18 @@ pub fn emit_one<T: Serialize>(
     operation: &'static str,
     item: &T,
 ) {
+    emit_one_with_actions(ctx, resource, operation, item, Vec::new());
+}
+
+pub fn emit_one_with_actions<T: Serialize>(
+    ctx: &OutputContext,
+    resource: &'static str,
+    operation: &'static str,
+    item: &T,
+    next_actions: Vec<NextAction>,
+) {
     if ctx.agent {
-        emit_agent_data(resource, operation, item, Vec::new(), Vec::new());
+        emit_agent_data(resource, operation, item, Vec::new(), next_actions);
     } else {
         print_one(item, ctx.format);
     }
@@ -212,8 +252,19 @@ pub fn emit_one_with_warnings<T: Serialize>(
     item: &T,
     warnings: Vec<AgentWarning>,
 ) {
+    emit_one_with_warnings_and_actions(ctx, resource, operation, item, warnings, Vec::new());
+}
+
+pub fn emit_one_with_warnings_and_actions<T: Serialize>(
+    ctx: &OutputContext,
+    resource: &'static str,
+    operation: &'static str,
+    item: &T,
+    warnings: Vec<AgentWarning>,
+    next_actions: Vec<NextAction>,
+) {
     if ctx.agent {
-        emit_agent_data(resource, operation, item, warnings, Vec::new());
+        emit_agent_data(resource, operation, item, warnings, next_actions);
     } else {
         print_one(item, ctx.format);
     }
@@ -225,13 +276,23 @@ pub fn emit_success(
     operation: &'static str,
     message: &str,
 ) {
+    emit_success_with_actions(ctx, resource, operation, message, Vec::new());
+}
+
+pub fn emit_success_with_actions(
+    ctx: &OutputContext,
+    resource: &'static str,
+    operation: &'static str,
+    message: &str,
+    next_actions: Vec<NextAction>,
+) {
     if ctx.agent {
         emit_agent_data(
             resource,
             operation,
             json!({ "message": message }),
             Vec::new(),
-            Vec::new(),
+            next_actions,
         );
     } else {
         print_success(message);

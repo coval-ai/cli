@@ -3,10 +3,14 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{CreateRunTemplateRequest, ListParams, UpdateRunTemplateRequest};
 use crate::client::CovalClient;
-use crate::output::{emit_list, emit_one, emit_success, OutputContext};
+use crate::next_actions;
+use crate::output::{
+    emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, OutputContext,
+};
 
 #[derive(Subcommand)]
 pub enum RunTemplateCommands {
+    Context,
     List(ListArgs),
     Get(GetArgs),
     Create(CreateArgs),
@@ -17,6 +21,7 @@ pub enum RunTemplateCommands {
 impl RunTemplateCommands {
     pub fn operation(&self) -> &'static str {
         match self {
+            Self::Context => "context",
             Self::List(_) => "list",
             Self::Get(_) => "get",
             Self::Create(_) => "create",
@@ -106,6 +111,9 @@ pub async fn execute(
 ) -> Result<()> {
     let operation = cmd.operation();
     match cmd {
+        RunTemplateCommands::Context => {
+            return crate::commands::agent::resource_context("run-templates", ctx);
+        }
         RunTemplateCommands::List(args) => {
             let params = ListParams {
                 filter: args.filter,
@@ -114,11 +122,29 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.run_templates().list(params).await?;
-            emit_list(ctx, "run-templates", operation, &response.run_templates);
+            emit_list_with_actions(
+                ctx,
+                "run-templates",
+                operation,
+                &response.run_templates,
+                next_actions::list_result(
+                    "run-templates",
+                    response
+                        .run_templates
+                        .first()
+                        .map(|template| template.id.as_str()),
+                ),
+            );
         }
         RunTemplateCommands::Get(args) => {
             let template = client.run_templates().get(&args.run_template_id).await?;
-            emit_one(ctx, "run-templates", operation, &template);
+            emit_one_with_actions(
+                ctx,
+                "run-templates",
+                operation,
+                &template,
+                next_actions::item_result("run-templates", &template.id),
+            );
         }
         RunTemplateCommands::Create(args) => {
             let req = CreateRunTemplateRequest {
@@ -136,7 +162,13 @@ pub async fn execute(
                 metadata: None,
             };
             let template = client.run_templates().create(req).await?;
-            emit_one(ctx, "run-templates", operation, &template);
+            emit_one_with_actions(
+                ctx,
+                "run-templates",
+                operation,
+                &template,
+                next_actions::item_result("run-templates", &template.id),
+            );
         }
         RunTemplateCommands::Update(args) => {
             let req = UpdateRunTemplateRequest {
@@ -157,11 +189,23 @@ pub async fn execute(
                 .run_templates()
                 .update(&args.run_template_id, req)
                 .await?;
-            emit_one(ctx, "run-templates", operation, &template);
+            emit_one_with_actions(
+                ctx,
+                "run-templates",
+                operation,
+                &template,
+                next_actions::item_result("run-templates", &template.id),
+            );
         }
         RunTemplateCommands::Delete(args) => {
             client.run_templates().delete(&args.run_template_id).await?;
-            emit_success(ctx, "run-templates", operation, "Run template deleted.");
+            emit_success_with_actions(
+                ctx,
+                "run-templates",
+                operation,
+                "Run template deleted.",
+                next_actions::delete_result("run-templates"),
+            );
         }
     }
     Ok(())

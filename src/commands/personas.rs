@@ -3,10 +3,14 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{CreatePersonaRequest, ListParams, UpdatePersonaRequest};
 use crate::client::CovalClient;
-use crate::output::{emit_list, emit_one, emit_success, OutputContext};
+use crate::next_actions;
+use crate::output::{
+    emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, OutputContext,
+};
 
 #[derive(Subcommand)]
 pub enum PersonaCommands {
+    Context,
     List(ListArgs),
     Get(GetArgs),
     Create(CreateArgs),
@@ -19,6 +23,7 @@ pub enum PersonaCommands {
 impl PersonaCommands {
     pub fn operation(&self) -> &'static str {
         match self {
+            Self::Context => "context",
             Self::List(_) => "list",
             Self::Get(_) => "get",
             Self::Create(_) => "create",
@@ -104,6 +109,9 @@ pub async fn execute(
 ) -> Result<()> {
     let operation = cmd.operation();
     match cmd {
+        PersonaCommands::Context => {
+            return crate::commands::agent::resource_context("personas", ctx)
+        }
         PersonaCommands::List(args) => {
             let params = ListParams {
                 filter: args.filter,
@@ -112,11 +120,26 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.personas().list(params).await?;
-            emit_list(ctx, "personas", operation, &response.personas);
+            emit_list_with_actions(
+                ctx,
+                "personas",
+                operation,
+                &response.personas,
+                next_actions::list_result(
+                    "personas",
+                    response.personas.first().map(|persona| persona.id.as_str()),
+                ),
+            );
         }
         PersonaCommands::Get(args) => {
             let persona = client.personas().get(&args.persona_id).await?;
-            emit_one(ctx, "personas", operation, &persona);
+            emit_one_with_actions(
+                ctx,
+                "personas",
+                operation,
+                &persona,
+                next_actions::item_result("personas", &persona.id),
+            );
         }
         PersonaCommands::Create(args) => {
             let req = CreatePersonaRequest {
@@ -129,7 +152,13 @@ pub async fn execute(
                 conversation_initiation: None,
             };
             let persona = client.personas().create(req).await?;
-            emit_one(ctx, "personas", operation, &persona);
+            emit_one_with_actions(
+                ctx,
+                "personas",
+                operation,
+                &persona,
+                next_actions::item_result("personas", &persona.id),
+            );
         }
         PersonaCommands::Update(args) => {
             let req = UpdatePersonaRequest {
@@ -142,15 +171,33 @@ pub async fn execute(
                 ..Default::default()
             };
             let persona = client.personas().update(&args.persona_id, req).await?;
-            emit_one(ctx, "personas", operation, &persona);
+            emit_one_with_actions(
+                ctx,
+                "personas",
+                operation,
+                &persona,
+                next_actions::item_result("personas", &persona.id),
+            );
         }
         PersonaCommands::Delete(args) => {
             client.personas().delete(&args.persona_id).await?;
-            emit_success(ctx, "personas", operation, "Persona deleted.");
+            emit_success_with_actions(
+                ctx,
+                "personas",
+                operation,
+                "Persona deleted.",
+                next_actions::delete_result("personas"),
+            );
         }
         PersonaCommands::PhoneNumbers => {
             let response = client.personas().list_phone_numbers().await?;
-            emit_list(ctx, "personas", operation, &response.phone_numbers);
+            emit_list_with_actions(
+                ctx,
+                "personas",
+                operation,
+                &response.phone_numbers,
+                vec![next_actions::context("personas")],
+            );
         }
     }
     Ok(())

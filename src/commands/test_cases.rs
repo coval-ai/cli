@@ -7,10 +7,15 @@ use serde_json::json;
 
 use crate::client::models::{CreateTestCaseRequest, ListParams, UpdateTestCaseRequest};
 use crate::client::CovalClient;
-use crate::output::{emit_list, emit_one, emit_success, OutputContext};
+use crate::next_actions;
+use crate::output::{
+    emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, NextAction,
+    OutputContext,
+};
 
 #[derive(Subcommand)]
 pub enum TestCaseCommands {
+    Context,
     List(ListArgs),
     Get(GetArgs),
     Create(CreateArgs),
@@ -21,6 +26,7 @@ pub enum TestCaseCommands {
 impl TestCaseCommands {
     pub fn operation(&self) -> &'static str {
         match self {
+            Self::Context => "context",
             Self::List(_) => "list",
             Self::Get(_) => "get",
             Self::Create(_) => "create",
@@ -105,6 +111,9 @@ pub async fn execute(
 ) -> Result<()> {
     let operation = cmd.operation();
     match cmd {
+        TestCaseCommands::Context => {
+            return crate::commands::agent::resource_context("test-cases", ctx);
+        }
         TestCaseCommands::List(args) => {
             let filter = match (args.filter, args.test_set_id) {
                 (Some(f), Some(ts)) => Some(format!("{f} AND test_set_id=\"{ts}\"")),
@@ -120,11 +129,28 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.test_cases().list(params).await?;
-            emit_list(ctx, "test-cases", operation, &response.test_cases);
+            emit_list_with_actions(
+                ctx,
+                "test-cases",
+                operation,
+                &response.test_cases,
+                list_actions(
+                    response
+                        .test_cases
+                        .first()
+                        .map(|test_case| test_case.id.as_str()),
+                ),
+            );
         }
         TestCaseCommands::Get(args) => {
             let test_case = client.test_cases().get(&args.test_case_id).await?;
-            emit_one(ctx, "test-cases", operation, &test_case);
+            emit_one_with_actions(
+                ctx,
+                "test-cases",
+                operation,
+                &test_case,
+                item_actions(&test_case.id, test_case.test_set_id.as_deref()),
+            );
         }
         TestCaseCommands::Create(args) => {
             if args.stdin {
@@ -165,11 +191,15 @@ pub async fn execute(
                 if ctx.human() {
                     println!("Created {created} test cases ({failed} failed)");
                 } else {
-                    emit_one(
+                    emit_one_with_actions(
                         ctx,
                         "test-cases",
                         operation,
                         &json!({ "created": created, "failed": failed }),
+                        vec![
+                            next_actions::list("test-cases").primary(),
+                            next_actions::context("test-cases"),
+                        ],
                     );
                 }
             } else {
@@ -186,7 +216,13 @@ pub async fn execute(
                     user_notes: None,
                 };
                 let test_case = client.test_cases().create(req).await?;
-                emit_one(ctx, "test-cases", operation, &test_case);
+                emit_one_with_actions(
+                    ctx,
+                    "test-cases",
+                    operation,
+                    &test_case,
+                    item_actions(&test_case.id, test_case.test_set_id.as_deref()),
+                );
             }
         }
         TestCaseCommands::Update(args) => {
@@ -197,12 +233,46 @@ pub async fn execute(
                 ..Default::default()
             };
             let test_case = client.test_cases().update(&args.test_case_id, req).await?;
-            emit_one(ctx, "test-cases", operation, &test_case);
+            emit_one_with_actions(
+                ctx,
+                "test-cases",
+                operation,
+                &test_case,
+                item_actions(&test_case.id, test_case.test_set_id.as_deref()),
+            );
         }
         TestCaseCommands::Delete(args) => {
             client.test_cases().delete(&args.test_case_id).await?;
-            emit_success(ctx, "test-cases", operation, "Test case deleted.");
+            emit_success_with_actions(
+                ctx,
+                "test-cases",
+                operation,
+                "Test case deleted.",
+                vec![
+                    next_actions::list("test-cases").primary(),
+                    next_actions::context("test-cases"),
+                ],
+            );
         }
     }
     Ok(())
+}
+
+fn list_actions(id: Option<&str>) -> Vec<NextAction> {
+    let mut actions = vec![next_actions::context("test-cases")];
+    if let Some(id) = id {
+        actions.insert(0, next_actions::get("test-cases", id).primary());
+    }
+    actions
+}
+
+fn item_actions(test_case_id: &str, test_set_id: Option<&str>) -> Vec<NextAction> {
+    let mut actions = vec![
+        next_actions::get("test-cases", test_case_id).primary(),
+        next_actions::context("test-cases"),
+    ];
+    if let Some(test_set_id) = test_set_id {
+        actions.insert(1, next_actions::test_cases_for_set(test_set_id));
+    }
+    actions
 }

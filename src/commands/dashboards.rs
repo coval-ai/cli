@@ -6,10 +6,15 @@ use crate::client::models::{
     UpdateWidgetRequest, WidgetType,
 };
 use crate::client::CovalClient;
-use crate::output::{emit_list, emit_one, emit_success, OutputContext};
+use crate::next_actions;
+use crate::output::{
+    emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, NextAction,
+    OutputContext,
+};
 
 #[derive(Subcommand)]
 pub enum DashboardCommands {
+    Context,
     List(ListArgs),
     Get(GetArgs),
     Create(CreateArgs),
@@ -24,6 +29,7 @@ pub enum DashboardCommands {
 impl DashboardCommands {
     pub fn operation(&self) -> &'static str {
         match self {
+            Self::Context => "context",
             Self::List(_) => "list",
             Self::Get(_) => "get",
             Self::Create(_) => "create",
@@ -176,6 +182,9 @@ pub async fn execute(
 ) -> Result<()> {
     let operation = cmd.operation();
     match cmd {
+        DashboardCommands::Context => {
+            return crate::commands::agent::resource_context("dashboards", ctx);
+        }
         DashboardCommands::List(args) => {
             let params = ListParams {
                 filter: args.filter,
@@ -184,29 +193,65 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.dashboards().list(params).await?;
-            emit_list(ctx, "dashboards", operation, &response.dashboards);
+            emit_list_with_actions(
+                ctx,
+                "dashboards",
+                operation,
+                &response.dashboards,
+                list_actions(
+                    response
+                        .dashboards
+                        .first()
+                        .map(|dashboard| resource_id(&dashboard.name)),
+                ),
+            );
         }
         DashboardCommands::Get(args) => {
             let dashboard = client.dashboards().get(&args.dashboard_id).await?;
-            emit_one(ctx, "dashboards", operation, &dashboard);
+            emit_one_with_actions(
+                ctx,
+                "dashboards",
+                operation,
+                &dashboard,
+                dashboard_actions(&args.dashboard_id),
+            );
         }
         DashboardCommands::Create(args) => {
             let req = CreateDashboardRequest {
                 display_name: args.name,
             };
             let dashboard = client.dashboards().create(req).await?;
-            emit_one(ctx, "dashboards", operation, &dashboard);
+            let dashboard_id = resource_id(&dashboard.name);
+            emit_one_with_actions(
+                ctx,
+                "dashboards",
+                operation,
+                &dashboard,
+                dashboard_actions(&dashboard_id),
+            );
         }
         DashboardCommands::Update(args) => {
             let req = UpdateDashboardRequest {
                 display_name: args.name,
             };
             let dashboard = client.dashboards().update(&args.dashboard_id, req).await?;
-            emit_one(ctx, "dashboards", operation, &dashboard);
+            emit_one_with_actions(
+                ctx,
+                "dashboards",
+                operation,
+                &dashboard,
+                dashboard_actions(&args.dashboard_id),
+            );
         }
         DashboardCommands::Delete(args) => {
             client.dashboards().delete(&args.dashboard_id).await?;
-            emit_success(ctx, "dashboards", operation, "Dashboard deleted.");
+            emit_success_with_actions(
+                ctx,
+                "dashboards",
+                operation,
+                "Dashboard deleted.",
+                next_actions::delete_result("dashboards"),
+            );
         }
         DashboardCommands::Widgets { command } => execute_widget(command, client, ctx).await?,
     }
@@ -226,14 +271,32 @@ async fn execute_widget(
                 ..Default::default()
             };
             let response = client.widgets(&args.dashboard_id).list(params).await?;
-            emit_list(ctx, "widgets", operation, &response.widgets);
+            emit_list_with_actions(
+                ctx,
+                "widgets",
+                operation,
+                &response.widgets,
+                vec![
+                    next_actions::get("dashboards", &args.dashboard_id).primary(),
+                    next_actions::context("dashboards"),
+                ],
+            );
         }
         WidgetCommands::Get(args) => {
             let widget = client
                 .widgets(&args.dashboard_id)
                 .get(&args.widget_id)
                 .await?;
-            emit_one(ctx, "widgets", operation, &widget);
+            emit_one_with_actions(
+                ctx,
+                "widgets",
+                operation,
+                &widget,
+                vec![
+                    next_actions::get("dashboards", &args.dashboard_id).primary(),
+                    next_actions::context("dashboards"),
+                ],
+            );
         }
         WidgetCommands::Create(args) => {
             validate_widget_grid(args.grid_w, args.grid_h)?;
@@ -248,7 +311,16 @@ async fn execute_widget(
                 grid_h: args.grid_h,
             };
             let widget = client.widgets(&args.dashboard_id).create(req).await?;
-            emit_one(ctx, "widgets", operation, &widget);
+            emit_one_with_actions(
+                ctx,
+                "widgets",
+                operation,
+                &widget,
+                vec![
+                    next_actions::dashboard_widgets(&args.dashboard_id).primary(),
+                    next_actions::context("dashboards"),
+                ],
+            );
         }
         WidgetCommands::Update(args) => {
             validate_widget_grid(args.grid_w, args.grid_h)?;
@@ -266,15 +338,52 @@ async fn execute_widget(
                 .widgets(&args.dashboard_id)
                 .update(&args.widget_id, req)
                 .await?;
-            emit_one(ctx, "widgets", operation, &widget);
+            emit_one_with_actions(
+                ctx,
+                "widgets",
+                operation,
+                &widget,
+                vec![
+                    next_actions::dashboard_widgets(&args.dashboard_id).primary(),
+                    next_actions::context("dashboards"),
+                ],
+            );
         }
         WidgetCommands::Delete(args) => {
             client
                 .widgets(&args.dashboard_id)
                 .delete(&args.widget_id)
                 .await?;
-            emit_success(ctx, "widgets", operation, "Widget deleted.");
+            emit_success_with_actions(
+                ctx,
+                "widgets",
+                operation,
+                "Widget deleted.",
+                vec![
+                    next_actions::dashboard_widgets(&args.dashboard_id).primary(),
+                    next_actions::context("dashboards"),
+                ],
+            );
         }
     }
     Ok(())
+}
+
+fn resource_id(name: &str) -> String {
+    name.rsplit('/').next().unwrap_or(name).to_string()
+}
+
+fn list_actions(id: Option<String>) -> Vec<NextAction> {
+    let mut actions = vec![next_actions::context("dashboards")];
+    if let Some(id) = id {
+        actions.insert(0, next_actions::get("dashboards", &id).primary());
+    }
+    actions
+}
+
+fn dashboard_actions(dashboard_id: &str) -> Vec<NextAction> {
+    vec![
+        next_actions::dashboard_widgets(dashboard_id).primary(),
+        next_actions::context("dashboards"),
+    ]
 }

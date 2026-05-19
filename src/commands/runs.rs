@@ -5,13 +5,18 @@ use clap::{Args, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::client::models::{
-    LaunchMetadata, LaunchOptions, LaunchRunRequest, ListParams, RunStatus, UpdateRunRequest,
+    LaunchMetadata, LaunchOptions, LaunchRunRequest, ListParams, Run, RunStatus, UpdateRunRequest,
 };
 use crate::client::CovalClient;
-use crate::output::{emit_list, emit_one, emit_success, OutputContext};
+use crate::next_actions;
+use crate::output::{
+    emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, NextAction,
+    OutputContext,
+};
 
 #[derive(Subcommand)]
 pub enum RunCommands {
+    Context,
     List(ListArgs),
     Get(GetArgs),
     Launch(LaunchArgs),
@@ -23,6 +28,7 @@ pub enum RunCommands {
 impl RunCommands {
     pub fn operation(&self) -> &'static str {
         match self {
+            Self::Context => "context",
             Self::List(_) => "list",
             Self::Get(_) => "get",
             Self::Launch(_) => "launch",
@@ -122,6 +128,7 @@ pub struct DeleteArgs {
 pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext) -> Result<()> {
     let operation = cmd.operation();
     match cmd {
+        RunCommands::Context => return crate::commands::agent::resource_context("runs", ctx),
         RunCommands::List(args) => {
             let params = ListParams {
                 filter: args.filter,
@@ -130,11 +137,17 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext
                 ..Default::default()
             };
             let response = client.runs().list(params).await?;
-            emit_list(ctx, "runs", operation, &response.runs);
+            emit_list_with_actions(
+                ctx,
+                "runs",
+                operation,
+                &response.runs,
+                list_actions(response.runs.first().map(|run| run.run_id.as_str())),
+            );
         }
         RunCommands::Get(args) => {
             let run = client.runs().get(&args.run_id).await?;
-            emit_one(ctx, "runs", operation, &run);
+            emit_one_with_actions(ctx, "runs", operation, &run, run_actions(&run));
         }
         RunCommands::Launch(args) => {
             if let Some(ref ids) = args.test_cases {
@@ -181,7 +194,7 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext
                 metadata,
             };
             let run = client.runs().launch(req).await?;
-            emit_one(ctx, "runs", operation, &run);
+            emit_one_with_actions(ctx, "runs", operation, &run, run_actions(&run));
         }
         RunCommands::Update(args) => {
             let tags = args
@@ -193,14 +206,23 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext
                 .runs()
                 .update(&args.run_id, UpdateRunRequest { tags })
                 .await?;
-            emit_one(ctx, "runs", operation, &run);
+            emit_one_with_actions(ctx, "runs", operation, &run, run_actions(&run));
         }
         RunCommands::Watch(args) => {
             watch_run(client, &args.run_id, args.interval, ctx).await?;
         }
         RunCommands::Delete(args) => {
             client.runs().delete(&args.run_id).await?;
-            emit_success(ctx, "runs", operation, "Run deleted.");
+            emit_success_with_actions(
+                ctx,
+                "runs",
+                operation,
+                "Run deleted.",
+                vec![
+                    next_actions::list("runs").primary(),
+                    next_actions::context("runs"),
+                ],
+            );
         }
     }
     Ok(())
@@ -218,7 +240,7 @@ async fn watch_run(
             let run = client.runs().get(run_id).await?;
             match run.status {
                 RunStatus::Completed | RunStatus::Cancelled => {
-                    emit_one(ctx, "runs", "watch", &run);
+                    emit_one_with_actions(ctx, "runs", "watch", &run, run_actions(&run));
                     break;
                 }
                 RunStatus::Failed => {
@@ -283,4 +305,29 @@ async fn watch_run(
     }
 
     Ok(())
+}
+
+fn list_actions(id: Option<&str>) -> Vec<NextAction> {
+    let mut actions = vec![next_actions::context("runs")];
+    if let Some(id) = id {
+        actions.insert(0, next_actions::get("runs", id).primary());
+    }
+    actions
+}
+
+fn run_actions(run: &Run) -> Vec<NextAction> {
+    let mut actions = Vec::new();
+    let terminal = matches!(
+        run.status,
+        RunStatus::Completed | RunStatus::Failed | RunStatus::Cancelled | RunStatus::Deleted
+    );
+    if terminal {
+        actions.push(next_actions::get("runs", &run.run_id).primary());
+    } else {
+        actions.push(next_actions::runs_watch(&run.run_id));
+        actions.push(next_actions::get("runs", &run.run_id));
+    }
+    actions.push(next_actions::simulations_for_run(&run.run_id));
+    actions.push(next_actions::context("runs"));
+    actions
 }

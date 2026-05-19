@@ -7,10 +7,15 @@ use indicatif::{ProgressBar, ProgressStyle};
 use crate::client::error::ApiError;
 use crate::client::models::{ListParams, MetricDetailResponse};
 use crate::client::CovalClient;
-use crate::output::{emit_list, emit_one, emit_success, OutputContext};
+use crate::next_actions;
+use crate::output::{
+    emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, NextAction,
+    OutputContext,
+};
 
 #[derive(Subcommand)]
 pub enum SimulationCommands {
+    Context,
     List(ListArgs),
     Get(GetArgs),
     Delete(DeleteArgs),
@@ -23,6 +28,7 @@ pub enum SimulationCommands {
 impl SimulationCommands {
     pub fn operation(&self) -> &'static str {
         match self {
+            Self::Context => "context",
             Self::List(_) => "list",
             Self::Get(_) => "get",
             Self::Delete(_) => "delete",
@@ -80,6 +86,9 @@ pub async fn execute(
 ) -> Result<()> {
     let operation = cmd.operation();
     match cmd {
+        SimulationCommands::Context => {
+            return crate::commands::agent::resource_context("simulations", ctx);
+        }
         SimulationCommands::List(args) => {
             let filter = match (args.filter, args.run_id) {
                 (Some(f), Some(run_id)) => Some(format!("{f} AND run_id=\"{run_id}\"")),
@@ -95,12 +104,29 @@ pub async fn execute(
                 ..Default::default()
             };
             let response = client.simulations().list(params).await?;
-            emit_list(ctx, "simulations", operation, &response.simulations);
+            emit_list_with_actions(
+                ctx,
+                "simulations",
+                operation,
+                &response.simulations,
+                list_actions(
+                    response
+                        .simulations
+                        .first()
+                        .map(|simulation| simulation.simulation_id.as_str()),
+                ),
+            );
         }
         SimulationCommands::Get(args) => {
             let result = client.simulations().get(&args.simulation_id).await;
             match result {
-                Ok(simulation) => emit_one(ctx, "simulations", operation, &simulation),
+                Ok(simulation) => emit_one_with_actions(
+                    ctx,
+                    "simulations",
+                    operation,
+                    &simulation,
+                    simulation_actions(&simulation.simulation_id),
+                ),
                 Err(ApiError::NotFound { .. }) => {
                     if !ctx.agent {
                         print_not_found_hint(&args.simulation_id, "conversations");
@@ -116,7 +142,16 @@ pub async fn execute(
         SimulationCommands::Delete(args) => {
             let result = client.simulations().delete(&args.simulation_id).await;
             match result {
-                Ok(()) => emit_success(ctx, "simulations", operation, "Simulation deleted."),
+                Ok(()) => emit_success_with_actions(
+                    ctx,
+                    "simulations",
+                    operation,
+                    "Simulation deleted.",
+                    vec![
+                        next_actions::list("simulations").primary(),
+                        next_actions::context("simulations"),
+                    ],
+                ),
                 Err(ApiError::NotFound { .. }) => {
                     if !ctx.agent {
                         print_not_found_hint(&args.simulation_id, "conversations");
@@ -134,7 +169,16 @@ pub async fn execute(
                 .simulations()
                 .list_metrics(&args.simulation_id)
                 .await?;
-            emit_list(ctx, "simulations", operation, &response.metrics);
+            emit_list_with_actions(
+                ctx,
+                "simulations",
+                operation,
+                &response.metrics,
+                vec![
+                    next_actions::get("simulations", &args.simulation_id).primary(),
+                    next_actions::context("simulations"),
+                ],
+            );
         }
         SimulationCommands::MetricDetail(args) => {
             let response = client
@@ -142,12 +186,20 @@ pub async fn execute(
                 .get_metric(&args.simulation_id, &args.metric_id)
                 .await?;
             match response {
-                MetricDetailResponse::Single { metric } => {
-                    emit_one(ctx, "simulations", operation, &metric)
-                }
-                MetricDetailResponse::Collection { metric_outputs } => {
-                    emit_list(ctx, "simulations", operation, &metric_outputs)
-                }
+                MetricDetailResponse::Single { metric } => emit_one_with_actions(
+                    ctx,
+                    "simulations",
+                    operation,
+                    &metric,
+                    vec![next_actions::get("simulations", &args.simulation_id).primary()],
+                ),
+                MetricDetailResponse::Collection { metric_outputs } => emit_list_with_actions(
+                    ctx,
+                    "simulations",
+                    operation,
+                    &metric_outputs,
+                    vec![next_actions::get("simulations", &args.simulation_id).primary()],
+                ),
             }
         }
         SimulationCommands::Audio(args) => {
@@ -156,16 +208,29 @@ pub async fn execute(
             match args.output {
                 Some(path) => {
                     download_audio(&audio.audio_url, &path, !ctx.agent).await?;
-                    emit_success(
+                    emit_success_with_actions(
                         ctx,
                         "simulations",
                         operation,
                         &format!("Audio saved to {}", path.display()),
+                        vec![
+                            next_actions::get("simulations", &args.simulation_id).primary(),
+                            next_actions::simulation_metrics(&args.simulation_id),
+                        ],
                     );
                 }
                 None => {
                     if ctx.agent {
-                        emit_one(ctx, "simulations", operation, &audio);
+                        emit_one_with_actions(
+                            ctx,
+                            "simulations",
+                            operation,
+                            &audio,
+                            vec![
+                                next_actions::get("simulations", &args.simulation_id).primary(),
+                                next_actions::simulation_metrics(&args.simulation_id),
+                            ],
+                        );
                     } else {
                         println!("{}", audio.audio_url);
                     }
@@ -174,6 +239,22 @@ pub async fn execute(
         }
     }
     Ok(())
+}
+
+fn list_actions(id: Option<&str>) -> Vec<NextAction> {
+    let mut actions = vec![next_actions::context("simulations")];
+    if let Some(id) = id {
+        actions.insert(0, next_actions::get("simulations", id).primary());
+    }
+    actions
+}
+
+fn simulation_actions(simulation_id: &str) -> Vec<NextAction> {
+    vec![
+        next_actions::simulation_metrics(simulation_id).primary(),
+        next_actions::simulation_audio(simulation_id),
+        next_actions::context("simulations"),
+    ]
 }
 
 fn print_not_found_hint(id: &str, try_command: &str) {
