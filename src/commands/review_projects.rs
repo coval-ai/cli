@@ -5,6 +5,7 @@ use crate::client::models::{
     CreateReviewProjectRequest, ListParams, ProjectType, UpdateReviewProjectRequest,
 };
 use crate::client::CovalClient;
+use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
 use crate::output::{
     emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, OutputContext,
@@ -50,18 +51,20 @@ pub struct GetArgs {
 
 #[derive(Args)]
 pub struct CreateArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Project name
     #[arg(long)]
-    name: String,
+    name: Option<String>,
     /// Comma-separated reviewer emails
     #[arg(long, value_delimiter = ',')]
-    assignees: Vec<String>,
+    assignees: Option<Vec<String>>,
     /// Comma-separated simulation output IDs
     #[arg(long, value_delimiter = ',')]
-    simulation_ids: Vec<String>,
+    simulation_ids: Option<Vec<String>>,
     /// Comma-separated metric IDs
     #[arg(long, value_delimiter = ',')]
-    metric_ids: Vec<String>,
+    metric_ids: Option<Vec<String>>,
     /// Optional project description
     #[arg(long)]
     description: Option<String>,
@@ -76,6 +79,8 @@ pub struct CreateArgs {
 #[derive(Args)]
 pub struct UpdateArgs {
     project_id: String,
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Updated project name
     #[arg(long)]
     name: Option<String>,
@@ -147,15 +152,15 @@ pub async fn execute(
             );
         }
         ReviewProjectCommands::Create(args) => {
-            let req = CreateReviewProjectRequest {
-                display_name: args.name,
-                assignees: args.assignees,
-                linked_simulation_ids: args.simulation_ids,
-                linked_metric_ids: args.metric_ids,
-                description: args.description,
-                project_type: args.project_type,
-                notifications: args.notifications,
-            };
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "display_name", args.name)?;
+            input_json::insert(&mut input, "assignees", args.assignees)?;
+            input_json::insert(&mut input, "linked_simulation_ids", args.simulation_ids)?;
+            input_json::insert(&mut input, "linked_metric_ids", args.metric_ids)?;
+            input_json::insert(&mut input, "description", args.description)?;
+            input_json::insert(&mut input, "project_type", args.project_type)?;
+            input_json::insert(&mut input, "notifications", args.notifications)?;
+            let req: CreateReviewProjectRequest = input_json::finish(input)?;
             let project = client.review_projects().create(req).await?;
             emit_one_with_actions(
                 ctx,
@@ -166,15 +171,15 @@ pub async fn execute(
             );
         }
         ReviewProjectCommands::Update(args) => {
-            let req = UpdateReviewProjectRequest {
-                display_name: args.name,
-                description: args.description,
-                assignees: args.assignees,
-                linked_simulation_ids: args.simulation_ids,
-                linked_metric_ids: args.metric_ids,
-                notifications: args.notifications,
-                opted_out_assignees: args.opted_out_assignees,
-            };
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "display_name", args.name)?;
+            input_json::insert(&mut input, "description", args.description)?;
+            input_json::insert(&mut input, "assignees", args.assignees)?;
+            input_json::insert(&mut input, "linked_simulation_ids", args.simulation_ids)?;
+            input_json::insert(&mut input, "linked_metric_ids", args.metric_ids)?;
+            input_json::insert(&mut input, "notifications", args.notifications)?;
+            input_json::insert(&mut input, "opted_out_assignees", args.opted_out_assignees)?;
+            let req: UpdateReviewProjectRequest = input_json::finish(input)?;
             let project = client
                 .review_projects()
                 .update(&args.project_id, req)

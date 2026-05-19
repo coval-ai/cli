@@ -3,6 +3,7 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{CreateTestSetRequest, ListParams, UpdateTestSetRequest};
 use crate::client::CovalClient;
+use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
 use crate::output::{
     emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, NextAction,
@@ -52,9 +53,11 @@ pub struct GetArgs {
 
 #[derive(Args)]
 pub struct CreateArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Test set name (1-100 characters)
     #[arg(long)]
-    name: String,
+    name: Option<String>,
     /// URL-friendly identifier; auto-generated if omitted
     #[arg(long)]
     slug: Option<String>,
@@ -69,6 +72,8 @@ pub struct CreateArgs {
 #[derive(Args)]
 pub struct UpdateArgs {
     test_set_id: String,
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Test set name (1-100 characters)
     #[arg(long)]
     name: Option<String>,
@@ -127,14 +132,12 @@ pub async fn execute(
             );
         }
         TestSetCommands::Create(args) => {
-            let req = CreateTestSetRequest {
-                display_name: args.name,
-                slug: args.slug,
-                description: args.description,
-                test_set_type: args.r#type,
-                test_set_metadata: None,
-                parameters: None,
-            };
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "display_name", args.name)?;
+            input_json::insert(&mut input, "slug", args.slug)?;
+            input_json::insert(&mut input, "description", args.description)?;
+            input_json::insert(&mut input, "test_set_type", args.r#type)?;
+            let req: CreateTestSetRequest = input_json::finish(input)?;
             let test_set = client.test_sets().create(req).await?;
             emit_one_with_actions(
                 ctx,
@@ -145,12 +148,11 @@ pub async fn execute(
             );
         }
         TestSetCommands::Update(args) => {
-            let req = UpdateTestSetRequest {
-                display_name: args.name,
-                slug: args.slug,
-                description: args.description,
-                ..Default::default()
-            };
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "display_name", args.name)?;
+            input_json::insert(&mut input, "slug", args.slug)?;
+            input_json::insert(&mut input, "description", args.description)?;
+            let req: UpdateTestSetRequest = input_json::finish(input)?;
             let test_set = client.test_sets().update(&args.test_set_id, req).await?;
             emit_one_with_actions(
                 ctx,

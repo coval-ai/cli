@@ -67,7 +67,7 @@ impl std::fmt::Display for AgentType {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateAgentRequest {
     pub display_name: String,
     pub model_type: AgentType,
@@ -85,7 +85,7 @@ pub struct CreateAgentRequest {
     pub test_set_ids: Option<Vec<String>>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct UpdateAgentRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,

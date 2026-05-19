@@ -79,7 +79,7 @@ pub struct ConversationProgress {
     pub in_progress_metrics: i32,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct SubmitConversationRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transcript: Option<serde_json::Value>,

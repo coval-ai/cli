@@ -6,6 +6,7 @@ use crate::client::models::{
     UpdateApiKeyRequest,
 };
 use crate::client::CovalClient;
+use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
 use crate::output::{
     emit_list_with_actions, emit_one_with_actions, emit_one_with_warnings_and_actions,
@@ -49,14 +50,16 @@ pub struct ListArgs {
 
 #[derive(Args)]
 pub struct CreateArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
     #[arg(long)]
-    name: String,
+    name: Option<String>,
     #[arg(long)]
     description: Option<String>,
     #[arg(long, value_enum)]
-    r#type: ApiKeyType,
+    r#type: Option<ApiKeyType>,
     #[arg(long, value_enum)]
-    environment: ApiKeyEnvironment,
+    environment: Option<ApiKeyEnvironment>,
     #[arg(long, value_delimiter = ',')]
     permissions: Option<Vec<String>>,
 }
@@ -64,8 +67,10 @@ pub struct CreateArgs {
 #[derive(Args)]
 pub struct UpdateArgs {
     api_key_id: String,
+    #[command(flatten)]
+    input_json: InputJsonArg,
     #[arg(long, value_enum)]
-    status: ApiKeyStatus,
+    status: Option<ApiKeyStatus>,
     #[arg(long)]
     reason: Option<String>,
 }
@@ -101,13 +106,13 @@ pub async fn execute(cmd: ApiKeyCommands, client: &CovalClient, ctx: &OutputCont
             );
         }
         ApiKeyCommands::Create(args) => {
-            let req = CreateApiKeyRequest {
-                name: Some(args.name),
-                description: args.description,
-                key_type: args.r#type,
-                environment: args.environment,
-                permissions: args.permissions,
-            };
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "name", args.name)?;
+            input_json::insert(&mut input, "description", args.description)?;
+            input_json::insert(&mut input, "key_type", args.r#type)?;
+            input_json::insert(&mut input, "environment", args.environment)?;
+            input_json::insert(&mut input, "permissions", args.permissions)?;
+            let req: CreateApiKeyRequest = input_json::finish(input)?;
             let api_key = client.api_keys().create(req).await?;
             if !api_key.key.is_empty() && !api_key.key.contains("***") {
                 if ctx.agent {
@@ -138,10 +143,10 @@ pub async fn execute(cmd: ApiKeyCommands, client: &CovalClient, ctx: &OutputCont
             }
         }
         ApiKeyCommands::Update(args) => {
-            let req = UpdateApiKeyRequest {
-                status: args.status,
-                reason: args.reason,
-            };
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "status", args.status)?;
+            input_json::insert(&mut input, "reason", args.reason)?;
+            let req: UpdateApiKeyRequest = input_json::finish(input)?;
             let api_key = client.api_keys().update(&args.api_key_id, req).await?;
             emit_one_with_actions(
                 ctx,

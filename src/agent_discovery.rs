@@ -106,7 +106,7 @@ pub fn manifest() -> Manifest {
         version: env!("CARGO_PKG_VERSION"),
         profiles: Profiles {
             discovery: true,
-            structured_input: false,
+            structured_input: true,
             skills: false,
         },
         agent_mode: AgentMode {
@@ -133,6 +133,11 @@ pub fn manifest() -> Manifest {
                 name: "format",
                 flag: "--format",
                 scope: "global",
+            },
+            FlagInfo {
+                name: "input-json",
+                flag: "--input-json",
+                scope: "body commands",
             },
         ],
         resources: RESOURCE_SPECS

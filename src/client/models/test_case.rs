@@ -31,7 +31,7 @@ pub struct TestCase {
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateTestCaseRequest {
     pub input_str: String,
     pub test_set_id: String,
@@ -53,7 +53,7 @@ pub struct CreateTestCaseRequest {
     pub user_notes: Option<String>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct UpdateTestCaseRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_str: Option<String>,

@@ -11,6 +11,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use crate::client::error::ApiError;
 use crate::client::models::{ListParams, MetricDetailResponse, SubmitConversationRequest};
 use crate::client::CovalClient;
+use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
 use crate::output::{
     emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, NextAction,
@@ -74,6 +75,8 @@ pub struct AudioArgs {
 
 #[derive(Args)]
 pub struct SubmitArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Path to JSON file containing the transcript (array of message objects)
     #[arg(long)]
     transcript_file: Option<PathBuf>,
@@ -310,6 +313,7 @@ fn print_not_found_hint(id: &str, try_command: &str) {
 }
 
 fn build_submit_request(args: SubmitArgs) -> Result<SubmitConversationRequest> {
+    let mut input = args.input_json.object()?;
     let audio_sources = [
         args.audio_file.is_some(),
         args.audio_url.is_some(),
@@ -323,9 +327,14 @@ fn build_submit_request(args: SubmitArgs) -> Result<SubmitConversationRequest> {
     }
 
     if args.transcript_file.is_none() && audio_sources == 0 {
-        anyhow::bail!(
-            "must provide at least one of: --transcript-file, --audio-file, --audio-url, --upload-id"
-        );
+        let has_input_source = ["transcript", "audio", "audio_url", "upload_id"]
+            .iter()
+            .any(|key| input.contains_key(*key));
+        if !has_input_source {
+            anyhow::bail!(
+                "must provide at least one of: --transcript-file, --audio-file, --audio-url, --upload-id"
+            );
+        }
     }
 
     let transcript = if let Some(path) = args.transcript_file.as_ref() {
@@ -368,17 +377,16 @@ fn build_submit_request(args: SubmitArgs) -> Result<SubmitConversationRequest> {
         Some(args.metrics)
     };
 
-    Ok(SubmitConversationRequest {
-        transcript,
-        audio,
-        audio_url: args.audio_url,
-        upload_id: args.upload_id,
-        metrics,
-        metadata,
-        external_conversation_id: args.external_id,
-        occurred_at: args.occurred_at,
-        agent_id: args.agent_id,
-    })
+    input_json::insert(&mut input, "transcript", transcript)?;
+    input_json::insert(&mut input, "audio", audio)?;
+    input_json::insert(&mut input, "audio_url", args.audio_url)?;
+    input_json::insert(&mut input, "upload_id", args.upload_id)?;
+    input_json::insert(&mut input, "metrics", metrics)?;
+    input_json::insert(&mut input, "metadata", metadata)?;
+    input_json::insert(&mut input, "external_conversation_id", args.external_id)?;
+    input_json::insert(&mut input, "occurred_at", args.occurred_at)?;
+    input_json::insert(&mut input, "agent_id", args.agent_id)?;
+    input_json::finish(input)
 }
 
 async fn download_audio(url: &str, path: &Path, show_progress: bool) -> Result<()> {

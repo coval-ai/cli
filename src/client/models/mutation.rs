@@ -53,7 +53,7 @@ impl Tabular for Mutation {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateMutationRequest {
     pub display_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -64,7 +64,7 @@ pub struct CreateMutationRequest {
     pub parameter_values: Option<HashMap<String, String>>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct UpdateMutationRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,

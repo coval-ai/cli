@@ -3,6 +3,7 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{CreateRunTemplateRequest, ListParams, UpdateRunTemplateRequest};
 use crate::client::CovalClient;
+use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
 use crate::output::{
     emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, OutputContext,
@@ -48,8 +49,10 @@ pub struct GetArgs {
 
 #[derive(Args)]
 pub struct CreateArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
     #[arg(long)]
-    name: String,
+    name: Option<String>,
     #[arg(long)]
     description: Option<String>,
     #[arg(long)]
@@ -75,6 +78,8 @@ pub struct CreateArgs {
 #[derive(Args)]
 pub struct UpdateArgs {
     run_template_id: String,
+    #[command(flatten)]
+    input_json: InputJsonArg,
     #[arg(long)]
     name: Option<String>,
     #[arg(long)]
@@ -147,20 +152,19 @@ pub async fn execute(
             );
         }
         RunTemplateCommands::Create(args) => {
-            let req = CreateRunTemplateRequest {
-                display_name: args.name,
-                description: args.description,
-                agent_id: args.agent_id,
-                persona_id: args.persona_id,
-                test_set_id: args.test_set_id,
-                metric_ids: args.metric_ids,
-                mutation_ids: args.mutation_ids,
-                iteration_count: args.iteration_count,
-                concurrency: args.concurrency,
-                sub_sample_size: args.sub_sample_size,
-                sub_sample_seed: args.sub_sample_seed,
-                metadata: None,
-            };
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "display_name", args.name)?;
+            input_json::insert(&mut input, "description", args.description)?;
+            input_json::insert(&mut input, "agent_id", args.agent_id)?;
+            input_json::insert(&mut input, "persona_id", args.persona_id)?;
+            input_json::insert(&mut input, "test_set_id", args.test_set_id)?;
+            input_json::insert(&mut input, "metric_ids", args.metric_ids)?;
+            input_json::insert(&mut input, "mutation_ids", args.mutation_ids)?;
+            input_json::insert(&mut input, "iteration_count", args.iteration_count)?;
+            input_json::insert(&mut input, "concurrency", args.concurrency)?;
+            input_json::insert(&mut input, "sub_sample_size", args.sub_sample_size)?;
+            input_json::insert(&mut input, "sub_sample_seed", args.sub_sample_seed)?;
+            let req: CreateRunTemplateRequest = input_json::finish(input)?;
             let template = client.run_templates().create(req).await?;
             emit_one_with_actions(
                 ctx,
@@ -171,20 +175,19 @@ pub async fn execute(
             );
         }
         RunTemplateCommands::Update(args) => {
-            let req = UpdateRunTemplateRequest {
-                display_name: args.name,
-                description: args.description,
-                agent_id: args.agent_id,
-                persona_id: args.persona_id,
-                test_set_id: args.test_set_id,
-                metric_ids: args.metric_ids,
-                mutation_ids: args.mutation_ids,
-                iteration_count: args.iteration_count,
-                concurrency: args.concurrency,
-                sub_sample_size: args.sub_sample_size,
-                sub_sample_seed: args.sub_sample_seed,
-                ..Default::default()
-            };
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "display_name", args.name)?;
+            input_json::insert(&mut input, "description", args.description)?;
+            input_json::insert(&mut input, "agent_id", args.agent_id)?;
+            input_json::insert(&mut input, "persona_id", args.persona_id)?;
+            input_json::insert(&mut input, "test_set_id", args.test_set_id)?;
+            input_json::insert(&mut input, "metric_ids", args.metric_ids)?;
+            input_json::insert(&mut input, "mutation_ids", args.mutation_ids)?;
+            input_json::insert(&mut input, "iteration_count", args.iteration_count)?;
+            input_json::insert(&mut input, "concurrency", args.concurrency)?;
+            input_json::insert(&mut input, "sub_sample_size", args.sub_sample_size)?;
+            input_json::insert(&mut input, "sub_sample_seed", args.sub_sample_seed)?;
+            let req: UpdateRunTemplateRequest = input_json::finish(input)?;
             let template = client
                 .run_templates()
                 .update(&args.run_template_id, req)

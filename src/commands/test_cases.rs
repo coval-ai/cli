@@ -7,6 +7,7 @@ use serde_json::json;
 
 use crate::client::models::{CreateTestCaseRequest, ListParams, UpdateTestCaseRequest};
 use crate::client::CovalClient;
+use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
 use crate::output::{
     emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, NextAction,
@@ -59,11 +60,13 @@ pub struct GetArgs {
 
 #[derive(Args)]
 pub struct CreateArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Test set to add this case to (8-char ID)
     #[arg(long)]
-    test_set_id: String,
+    test_set_id: Option<String>,
     /// Test case input text
-    #[arg(long, required_unless_present = "stdin")]
+    #[arg(long)]
     input: Option<String>,
     /// Expected output text
     #[arg(long)]
@@ -88,6 +91,8 @@ struct StdinTestCase {
 #[derive(Args)]
 pub struct UpdateArgs {
     test_case_id: String,
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Updated test case input text
     #[arg(long)]
     input: Option<String>,
@@ -153,7 +158,14 @@ pub async fn execute(
             );
         }
         TestCaseCommands::Create(args) => {
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "test_set_id", args.test_set_id)?;
             if args.stdin {
+                let test_set_id = input
+                    .get("test_set_id")
+                    .and_then(|value| value.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("missing field `test_set_id`"))?
+                    .to_string();
                 let mut created = 0;
                 let mut failed = 0;
 
@@ -165,7 +177,7 @@ pub async fn execute(
 
                     let tc: StdinTestCase = serde_json::from_str(&line)?;
                     let req = CreateTestCaseRequest {
-                        test_set_id: args.test_set_id.clone(),
+                        test_set_id: test_set_id.clone(),
                         input_str: tc.input_str,
                         expected_output_str: tc.expected_output_str,
                         description: tc.description,
@@ -203,18 +215,10 @@ pub async fn execute(
                     );
                 }
             } else {
-                let req = CreateTestCaseRequest {
-                    test_set_id: args.test_set_id,
-                    input_str: args.input.unwrap(),
-                    expected_output_str: args.expected,
-                    description: args.description,
-                    expected_behaviors: None,
-                    expected_output_json: None,
-                    input_type: None,
-                    simulation_metadata_input: None,
-                    metric_input: None,
-                    user_notes: None,
-                };
+                input_json::insert(&mut input, "input_str", args.input)?;
+                input_json::insert(&mut input, "expected_output_str", args.expected)?;
+                input_json::insert(&mut input, "description", args.description)?;
+                let req: CreateTestCaseRequest = input_json::finish(input)?;
                 let test_case = client.test_cases().create(req).await?;
                 emit_one_with_actions(
                     ctx,
@@ -226,12 +230,11 @@ pub async fn execute(
             }
         }
         TestCaseCommands::Update(args) => {
-            let req = UpdateTestCaseRequest {
-                input_str: args.input,
-                expected_output_str: args.expected,
-                description: args.description,
-                ..Default::default()
-            };
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "input_str", args.input)?;
+            input_json::insert(&mut input, "expected_output_str", args.expected)?;
+            input_json::insert(&mut input, "description", args.description)?;
+            let req: UpdateTestCaseRequest = input_json::finish(input)?;
             let test_case = client.test_cases().update(&args.test_case_id, req).await?;
             emit_one_with_actions(
                 ctx,

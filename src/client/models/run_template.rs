@@ -45,7 +45,7 @@ pub struct RunTemplate {
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateRunTemplateRequest {
     pub display_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -72,7 +72,7 @@ pub struct CreateRunTemplateRequest {
     pub metadata: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct UpdateRunTemplateRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,

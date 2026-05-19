@@ -77,7 +77,7 @@ pub struct RunResults {
     pub metrics: serde_json::Value,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LaunchRunRequest {
     pub agent_id: String,
     pub persona_id: String,
@@ -96,7 +96,7 @@ pub struct LaunchRunRequest {
     pub metadata: Option<LaunchMetadata>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct LaunchOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub iteration_count: Option<u32>,
@@ -110,7 +110,7 @@ pub struct LaunchOptions {
     pub test_case_ids: Option<Vec<String>>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct LaunchMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
@@ -138,7 +138,7 @@ pub struct LaunchRunResponse {
     pub run: Run,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateRunRequest {
     pub tags: Vec<String>,
 }

@@ -105,7 +105,7 @@ impl std::fmt::Display for ApiKeyStatus {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateApiKeyRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -117,7 +117,7 @@ pub struct CreateApiKeyRequest {
     pub permissions: Option<Vec<String>>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateApiKeyRequest {
     pub status: ApiKeyStatus,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -6,6 +6,7 @@ use crate::client::models::{
     UpdateWidgetRequest, WidgetType,
 };
 use crate::client::CovalClient;
+use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
 use crate::output::{
     emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, NextAction,
@@ -57,13 +58,17 @@ pub struct GetArgs {
 
 #[derive(Args)]
 pub struct CreateArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
     #[arg(long)]
-    name: String,
+    name: Option<String>,
 }
 
 #[derive(Args)]
 pub struct UpdateArgs {
     dashboard_id: String,
+    #[command(flatten)]
+    input_json: InputJsonArg,
     #[arg(long)]
     name: Option<String>,
 }
@@ -110,10 +115,12 @@ pub struct WidgetGetArgs {
 #[derive(Args)]
 pub struct WidgetCreateArgs {
     dashboard_id: String,
+    #[command(flatten)]
+    input_json: InputJsonArg,
     #[arg(long)]
-    name: String,
+    name: Option<String>,
     #[arg(long, value_enum)]
-    r#type: WidgetType,
+    r#type: Option<WidgetType>,
     #[arg(long)]
     config: Option<String>,
     #[arg(long)]
@@ -130,6 +137,8 @@ pub struct WidgetCreateArgs {
 pub struct WidgetUpdateArgs {
     dashboard_id: String,
     widget_id: String,
+    #[command(flatten)]
+    input_json: InputJsonArg,
     #[arg(long)]
     name: Option<String>,
     #[arg(long, value_enum)]
@@ -217,9 +226,9 @@ pub async fn execute(
             );
         }
         DashboardCommands::Create(args) => {
-            let req = CreateDashboardRequest {
-                display_name: args.name,
-            };
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "display_name", args.name)?;
+            let req: CreateDashboardRequest = input_json::finish(input)?;
             let dashboard = client.dashboards().create(req).await?;
             let dashboard_id = resource_id(&dashboard.name);
             emit_one_with_actions(
@@ -231,9 +240,9 @@ pub async fn execute(
             );
         }
         DashboardCommands::Update(args) => {
-            let req = UpdateDashboardRequest {
-                display_name: args.name,
-            };
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "display_name", args.name)?;
+            let req: UpdateDashboardRequest = input_json::finish(input)?;
             let dashboard = client.dashboards().update(&args.dashboard_id, req).await?;
             emit_one_with_actions(
                 ctx,
@@ -300,16 +309,16 @@ async fn execute_widget(
         }
         WidgetCommands::Create(args) => {
             validate_widget_grid(args.grid_w, args.grid_h)?;
+            let mut input = args.input_json.object()?;
             let config = args.config.as_ref().map(|c| parse_config(c)).transpose()?;
-            let req = CreateWidgetRequest {
-                display_name: args.name,
-                widget_type: args.r#type,
-                config,
-                grid_x: args.grid_x,
-                grid_y: args.grid_y,
-                grid_w: args.grid_w,
-                grid_h: args.grid_h,
-            };
+            input_json::insert(&mut input, "display_name", args.name)?;
+            input_json::insert(&mut input, "type", args.r#type)?;
+            input_json::insert(&mut input, "config", config)?;
+            input_json::insert(&mut input, "grid_x", args.grid_x)?;
+            input_json::insert(&mut input, "grid_y", args.grid_y)?;
+            input_json::insert(&mut input, "grid_w", args.grid_w)?;
+            input_json::insert(&mut input, "grid_h", args.grid_h)?;
+            let req: CreateWidgetRequest = input_json::finish(input)?;
             let widget = client.widgets(&args.dashboard_id).create(req).await?;
             emit_one_with_actions(
                 ctx,
@@ -324,16 +333,16 @@ async fn execute_widget(
         }
         WidgetCommands::Update(args) => {
             validate_widget_grid(args.grid_w, args.grid_h)?;
+            let mut input = args.input_json.object()?;
             let config = args.config.as_ref().map(|c| parse_config(c)).transpose()?;
-            let req = UpdateWidgetRequest {
-                display_name: args.name,
-                widget_type: args.r#type,
-                config,
-                grid_x: args.grid_x,
-                grid_y: args.grid_y,
-                grid_w: args.grid_w,
-                grid_h: args.grid_h,
-            };
+            input_json::insert(&mut input, "display_name", args.name)?;
+            input_json::insert(&mut input, "type", args.r#type)?;
+            input_json::insert(&mut input, "config", config)?;
+            input_json::insert(&mut input, "grid_x", args.grid_x)?;
+            input_json::insert(&mut input, "grid_y", args.grid_y)?;
+            input_json::insert(&mut input, "grid_w", args.grid_w)?;
+            input_json::insert(&mut input, "grid_h", args.grid_h)?;
+            let req: UpdateWidgetRequest = input_json::finish(input)?;
             let widget = client
                 .widgets(&args.dashboard_id)
                 .update(&args.widget_id, req)

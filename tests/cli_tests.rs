@@ -31,6 +31,38 @@ const AGENT_RESOURCES: &[&str] = &[
     "review-projects",
 ];
 
+const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
+    &["agents", "create", "--help"],
+    &["agents", "update", "--help"],
+    &["conversations", "submit", "--help"],
+    &["runs", "launch", "--help"],
+    &["runs", "update", "--help"],
+    &["test-sets", "create", "--help"],
+    &["test-sets", "update", "--help"],
+    &["test-cases", "create", "--help"],
+    &["test-cases", "update", "--help"],
+    &["personas", "create", "--help"],
+    &["personas", "update", "--help"],
+    &["metrics", "create", "--help"],
+    &["metrics", "update", "--help"],
+    &["mutations", "create", "--help"],
+    &["mutations", "update", "--help"],
+    &["api-keys", "create", "--help"],
+    &["api-keys", "update", "--help"],
+    &["run-templates", "create", "--help"],
+    &["run-templates", "update", "--help"],
+    &["scheduled-runs", "create", "--help"],
+    &["scheduled-runs", "update", "--help"],
+    &["dashboards", "create", "--help"],
+    &["dashboards", "update", "--help"],
+    &["dashboards", "widgets", "create", "--help"],
+    &["dashboards", "widgets", "update", "--help"],
+    &["review-annotations", "create", "--help"],
+    &["review-annotations", "update", "--help"],
+    &["review-projects", "create", "--help"],
+    &["review-projects", "update", "--help"],
+];
+
 #[test]
 fn test_help() {
     coval()
@@ -80,6 +112,7 @@ fn test_agent_manifest_no_auth() {
     assert!(value["data"]["agent_mode"]["argv"].is_null());
     assert_eq!(value["data"]["help_argv"], json!(["coval", "--help"]));
     assert_eq!(value["data"]["profiles"]["discovery"], true);
+    assert_eq!(value["data"]["profiles"]["structured_input"], true);
     assert_eq!(value["data"]["profiles"]["skills"], false);
     assert_eq!(
         value["data"]["resources"].as_array().unwrap().len(),
@@ -96,6 +129,17 @@ fn test_agent_manifest_no_auth() {
                 .unwrap()
                 .iter()
                 .any(|command| command == "context")));
+}
+
+#[test]
+fn test_input_json_help_coverage() {
+    for args in INPUT_JSON_HELP_COMMANDS {
+        coval()
+            .args(*args)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("--input-json"));
+    }
 }
 
 #[test]
@@ -1242,6 +1286,109 @@ async fn test_run_templates_list_hyphenated_path() {
 }
 
 #[tokio::test]
+async fn test_input_json_file() {
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let input_path = temp_dir.path().join("test-set.json");
+    std::fs::write(
+        &input_path,
+        r#"{"display_name":"From File","slug":"from-file"}"#,
+    )
+    .unwrap();
+
+    Mock::given(method("POST"))
+        .and(path("/v1/test-sets"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "display_name": "From File",
+            "slug": "from-file"
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "test_set": {
+                "name": "testSets/ts123",
+                "id": "ts123",
+                "slug": "from-file",
+                "display_name": "From File",
+                "create_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("test-sets")
+        .arg("create")
+        .arg("--input-json")
+        .arg(format!("@{}", input_path.display()))
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ts123"));
+}
+
+#[tokio::test]
+async fn test_input_json_stdin() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/dashboards"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "display_name": "Ops"
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "dashboard": {
+                "name": "dashboards/dash123",
+                "display_name": "Ops",
+                "create_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("dashboards")
+        .arg("create")
+        .arg("--input-json")
+        .arg("-")
+        .write_stdin(r#"{"display_name":"Ops"}"#)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("dash123"));
+}
+
+#[test]
+fn test_input_json_invalid_agent_error() {
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg("http://localhost:1")
+            .arg("agents")
+            .arg("create")
+            .arg("--input-json")
+            .arg("{")
+            .assert()
+            .failure()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["resource"], "agents");
+    assert_eq!(value["operation"], "create");
+    assert_eq!(value["error"]["code"], "cli_error");
+}
+
+#[tokio::test]
 async fn test_scheduled_runs_list_hyphenated_path() {
     let mock_server = MockServer::start().await;
 
@@ -1308,6 +1455,88 @@ async fn test_agents_create_with_metadata() {
         .arg("chat")
         .arg("--metadata")
         .arg(r#"{"chat_endpoint":"https://example.com"}"#)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("new123"));
+}
+
+#[tokio::test]
+async fn test_agents_create_with_input_json() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/agents"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "display_name": "Bot",
+            "model_type": "MODEL_TYPE_CHAT",
+            "metadata": {"chat_endpoint": "https://example.com"}
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "agent": {
+                "id": "new123",
+                "display_name": "Bot",
+                "model_type": "MODEL_TYPE_CHAT",
+                "metadata": {"chat_endpoint": "https://example.com"},
+                "create_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("agents")
+        .arg("create")
+        .arg("--input-json")
+        .arg(
+            r#"{"display_name":"Bot","model_type":"MODEL_TYPE_CHAT","metadata":{"chat_endpoint":"https://example.com"}}"#,
+        )
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("new123"));
+}
+
+#[tokio::test]
+async fn test_input_json_flags_override_json() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/agents"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "display_name": "Bot",
+            "model_type": "MODEL_TYPE_VOICE"
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "agent": {
+                "id": "new123",
+                "display_name": "Bot",
+                "model_type": "MODEL_TYPE_VOICE",
+                "create_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("agents")
+        .arg("create")
+        .arg("--input-json")
+        .arg(r#"{"display_name":"Wrong","model_type":"MODEL_TYPE_CHAT"}"#)
+        .arg("--name")
+        .arg("Bot")
+        .arg("--type")
+        .arg("voice")
+        .arg("--phone-number")
+        .arg("+15551234567")
         .assert()
         .success()
         .stdout(predicate::str::contains("new123"));

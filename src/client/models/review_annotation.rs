@@ -84,7 +84,7 @@ impl std::fmt::Display for AnnotationPriority {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateReviewAnnotationRequest {
     pub simulation_output_id: String,
     pub metric_id: String,
@@ -101,7 +101,7 @@ pub struct CreateReviewAnnotationRequest {
     pub priority: Option<AnnotationPriority>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct UpdateReviewAnnotationRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ground_truth_float_value: Option<f64>,

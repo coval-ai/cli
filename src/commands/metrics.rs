@@ -3,6 +3,7 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{CreateMetricRequest, ListParams, MetricType, UpdateMetricRequest};
 use crate::client::CovalClient;
+use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
 use crate::output::{
     emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, OutputContext,
@@ -57,15 +58,17 @@ pub struct GetArgs {
     after_help = "Required fields by metric type:\n  llm-binary          --prompt\n  categorical         --prompt --categories\n  numerical           --prompt --min-value --max-value\n  audio-binary        --prompt\n  audio-categorical   --prompt --categories\n  audio-numerical     --prompt --min-value --max-value\n  toolcall            --prompt\n  metadata            --metadata-field-type --metadata-field-key\n  regex               --regex-pattern\n  pause               --min-pause-duration"
 )]
 pub struct CreateArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Metric name (1-200 characters)
     #[arg(long)]
-    name: String,
+    name: Option<String>,
     /// Metric description (1-1000 characters)
     #[arg(long)]
-    description: String,
+    description: Option<String>,
     /// Metric type (determines required fields, see below)
     #[arg(long, value_enum)]
-    r#type: MetricType,
+    r#type: Option<MetricType>,
     /// LLM evaluation prompt
     #[arg(long)]
     prompt: Option<String>,
@@ -108,6 +111,8 @@ pub struct CreateArgs {
 #[derive(Args)]
 pub struct UpdateArgs {
     metric_id: String,
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Metric name (1-200 characters)
     #[arg(long)]
     name: Option<String>,
@@ -195,30 +200,34 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
             );
         }
         MetricCommands::Create(args) => {
-            let target_condition = args
+            let mut input = args.input_json.object()?;
+            let target_condition: Option<serde_json::Value> = args
                 .target_condition
                 .map(|s| serde_json::from_str(&s))
                 .transpose()
                 .map_err(|e| anyhow::anyhow!("Invalid JSON for --target-condition: {e}"))?;
 
-            let req = CreateMetricRequest {
-                metric_name: args.name,
-                description: args.description,
-                metric_type: args.r#type,
-                prompt: args.prompt,
-                categories: args.categories,
-                min_value: args.min_value,
-                max_value: args.max_value,
-                metadata_field_type: args.metadata_field_type,
-                metadata_field_key: args.metadata_field_key,
-                regex_pattern: args.regex_pattern,
-                role: args.role,
-                match_mode: args.match_mode,
-                position: args.position,
-                case_insensitive: args.case_insensitive,
-                min_pause_duration_seconds: args.min_pause_duration,
-                target_condition,
-            };
+            input_json::insert(&mut input, "metric_name", args.name)?;
+            input_json::insert(&mut input, "description", args.description)?;
+            input_json::insert(&mut input, "metric_type", args.r#type)?;
+            input_json::insert(&mut input, "prompt", args.prompt)?;
+            input_json::insert(&mut input, "categories", args.categories)?;
+            input_json::insert(&mut input, "min_value", args.min_value)?;
+            input_json::insert(&mut input, "max_value", args.max_value)?;
+            input_json::insert(&mut input, "metadata_field_type", args.metadata_field_type)?;
+            input_json::insert(&mut input, "metadata_field_key", args.metadata_field_key)?;
+            input_json::insert(&mut input, "regex_pattern", args.regex_pattern)?;
+            input_json::insert(&mut input, "role", args.role)?;
+            input_json::insert(&mut input, "match_mode", args.match_mode)?;
+            input_json::insert(&mut input, "position", args.position)?;
+            input_json::insert(&mut input, "case_insensitive", args.case_insensitive)?;
+            input_json::insert(
+                &mut input,
+                "min_pause_duration_seconds",
+                args.min_pause_duration,
+            )?;
+            input_json::insert(&mut input, "target_condition", target_condition)?;
+            let req: CreateMetricRequest = input_json::finish(input)?;
             let metric = client.metrics().create(req).await?;
             emit_one_with_actions(
                 ctx,
@@ -229,30 +238,34 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
             );
         }
         MetricCommands::Update(args) => {
-            let target_condition = args
+            let mut input = args.input_json.object()?;
+            let target_condition: Option<serde_json::Value> = args
                 .target_condition
                 .map(|s| serde_json::from_str(&s))
                 .transpose()
                 .map_err(|e| anyhow::anyhow!("Invalid JSON for --target-condition: {e}"))?;
 
-            let req = UpdateMetricRequest {
-                metric_name: args.name,
-                description: args.description,
-                metric_type: args.r#type,
-                prompt: args.prompt,
-                categories: args.categories,
-                min_value: args.min_value,
-                max_value: args.max_value,
-                metadata_field_type: args.metadata_field_type,
-                metadata_field_key: args.metadata_field_key,
-                regex_pattern: args.regex_pattern,
-                role: args.role,
-                match_mode: args.match_mode,
-                position: args.position,
-                case_insensitive: args.case_insensitive,
-                min_pause_duration_seconds: args.min_pause_duration,
-                target_condition,
-            };
+            input_json::insert(&mut input, "metric_name", args.name)?;
+            input_json::insert(&mut input, "description", args.description)?;
+            input_json::insert(&mut input, "metric_type", args.r#type)?;
+            input_json::insert(&mut input, "prompt", args.prompt)?;
+            input_json::insert(&mut input, "categories", args.categories)?;
+            input_json::insert(&mut input, "min_value", args.min_value)?;
+            input_json::insert(&mut input, "max_value", args.max_value)?;
+            input_json::insert(&mut input, "metadata_field_type", args.metadata_field_type)?;
+            input_json::insert(&mut input, "metadata_field_key", args.metadata_field_key)?;
+            input_json::insert(&mut input, "regex_pattern", args.regex_pattern)?;
+            input_json::insert(&mut input, "role", args.role)?;
+            input_json::insert(&mut input, "match_mode", args.match_mode)?;
+            input_json::insert(&mut input, "position", args.position)?;
+            input_json::insert(&mut input, "case_insensitive", args.case_insensitive)?;
+            input_json::insert(
+                &mut input,
+                "min_pause_duration_seconds",
+                args.min_pause_duration,
+            )?;
+            input_json::insert(&mut input, "target_condition", target_condition)?;
+            let req: UpdateMetricRequest = input_json::finish(input)?;
             let metric = client.metrics().update(&args.metric_id, req).await?;
             emit_one_with_actions(
                 ctx,
