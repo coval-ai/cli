@@ -13,6 +13,20 @@ fn stdout_json(assert: assert_cmd::assert::Assert) -> Value {
     serde_json::from_slice(&assert.get_output().stdout).unwrap()
 }
 
+fn write_skill(root: &std::path::Path, id: &str, description: &str) {
+    let skill_dir = root.join("skills").join(id);
+    std::fs::create_dir_all(&skill_dir).unwrap();
+    std::fs::write(
+        skill_dir.join("SKILL.md"),
+        format!(
+            "---\nname: {}\ndescription: {}\n---\n",
+            id.replace('/', "-"),
+            description
+        ),
+    )
+    .unwrap();
+}
+
 const AGENT_RESOURCES: &[&str] = &[
     "agents",
     "conversations",
@@ -113,7 +127,7 @@ fn test_agent_manifest_no_auth() {
     assert_eq!(value["data"]["help_argv"], json!(["coval", "--help"]));
     assert_eq!(value["data"]["profiles"]["discovery"], true);
     assert_eq!(value["data"]["profiles"]["structured_input"], true);
-    assert_eq!(value["data"]["profiles"]["skills"], false);
+    assert_eq!(value["data"]["profiles"]["skills"], true);
     assert_eq!(
         value["data"]["resources"].as_array().unwrap().len(),
         AGENT_RESOURCES.len()
@@ -129,6 +143,107 @@ fn test_agent_manifest_no_auth() {
                 .unwrap()
                 .iter()
                 .any(|command| command == "context")));
+}
+
+#[test]
+fn test_agent_skills_list_requires_explicit_source() {
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("agent")
+            .arg("skills")
+            .arg("list")
+            .env_remove("COVAL_SKILLS_SOURCE")
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["operation"], "skills.list");
+    assert_eq!(value["data"]["skills"].as_array().unwrap().len(), 0);
+    assert_eq!(value["warnings"][0]["code"], "skills_source_required");
+}
+
+#[test]
+fn test_agent_skills_list_local_source() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let source = temp_dir.path().join("source");
+    write_skill(&source, "runs/launch-run", "Launch a Coval run.");
+
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("agent")
+            .arg("skills")
+            .arg("list")
+            .arg("--source")
+            .arg(&source)
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["data"]["skills"][0]["id"], "runs/launch-run");
+    assert_eq!(
+        value["data"]["skills"][0]["description"],
+        "Launch a Coval run."
+    );
+    assert_eq!(value["warnings"].as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn test_agent_skills_install_local_source() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let source = temp_dir.path().join("source");
+    let dest = temp_dir.path().join("dest");
+    write_skill(&source, "runs/launch-run", "Launch a Coval run.");
+
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("agent")
+            .arg("skills")
+            .arg("install")
+            .arg("runs/launch-run")
+            .arg("--source")
+            .arg(&source)
+            .arg("--dest")
+            .arg(&dest)
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["operation"], "skills.install");
+    assert_eq!(value["data"]["id"], "runs/launch-run");
+    assert!(dest
+        .join("runs")
+        .join("launch-run")
+        .join("SKILL.md")
+        .exists());
+}
+
+#[test]
+fn test_agent_skills_reject_remote_source() {
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("agent")
+            .arg("skills")
+            .arg("list")
+            .arg("--source")
+            .arg("https://github.com/coval-ai/coval-external-skills")
+            .assert()
+            .failure()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["operation"], "skills.list");
+    assert_eq!(value["error"]["code"], "cli_error");
 }
 
 #[test]

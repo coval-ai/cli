@@ -47,6 +47,8 @@ pub struct ResourceManifest {
 pub struct SkillsProfile {
     pub implemented: bool,
     pub source: Option<&'static str>,
+    pub list_argv: Vec<String>,
+    pub install_argv: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -107,7 +109,7 @@ pub fn manifest() -> Manifest {
         profiles: Profiles {
             discovery: true,
             structured_input: true,
-            skills: false,
+            skills: true,
         },
         agent_mode: AgentMode {
             argv_prefix: next_actions::argv(std::iter::empty::<&str>()),
@@ -151,8 +153,19 @@ pub fn manifest() -> Manifest {
             .collect(),
         doctor_argv: next_actions::argv(["agent", "doctor"]),
         skills: SkillsProfile {
-            implemented: false,
+            implemented: true,
             source: None,
+            list_argv: next_actions::argv(["agent", "skills", "list", "--source", "<path>"]),
+            install_argv: next_actions::argv([
+                "agent",
+                "skills",
+                "install",
+                "<skill-id>",
+                "--source",
+                "<path>",
+                "--dest",
+                "<path>",
+            ]),
         },
     }
 }

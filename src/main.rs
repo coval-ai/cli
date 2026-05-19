@@ -6,6 +6,7 @@ mod config;
 mod input_json;
 mod next_actions;
 mod output;
+mod skills;
 
 use std::process::ExitCode;
 
