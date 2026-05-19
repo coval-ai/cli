@@ -1,17 +1,51 @@
 use anyhow::Result;
-use clap::Subcommand;
+use clap::{Args, Subcommand};
 use serde::Serialize;
+use std::path::PathBuf;
 
 use crate::agent_discovery;
 use crate::client::models::ListParams;
 use crate::client::{CovalClient, DEFAULT_BASE_URL};
 use crate::config::Config;
-use crate::output::{emit_one, emit_one_with_warnings, AgentWarning, OutputContext};
+use crate::output::{
+    emit_one, emit_one_with_warnings, emit_one_with_warnings_and_actions, AgentWarning, NextAction,
+    OutputContext,
+};
+use crate::skills;
 
 #[derive(Subcommand)]
 pub enum AgentCommands {
     Doctor,
     Manifest,
+    Skills {
+        #[command(subcommand)]
+        command: SkillCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum SkillCommands {
+    List(SkillListArgs),
+    Install(SkillInstallArgs),
+}
+
+#[derive(Args)]
+pub struct SkillListArgs {
+    #[arg(long, env = "COVAL_SKILLS_SOURCE")]
+    source: Option<String>,
+    #[arg(long, env = "COVAL_SKILLS_DEST")]
+    dest: Option<PathBuf>,
+}
+
+#[derive(Args)]
+pub struct SkillInstallArgs {
+    skill_id: String,
+    #[arg(long, env = "COVAL_SKILLS_SOURCE")]
+    source: String,
+    #[arg(long, env = "COVAL_SKILLS_DEST")]
+    dest: PathBuf,
+    #[arg(long)]
+    force: bool,
 }
 
 impl AgentCommands {
@@ -19,6 +53,16 @@ impl AgentCommands {
         match self {
             Self::Doctor => "doctor",
             Self::Manifest => "manifest",
+            Self::Skills { command } => command.operation(),
+        }
+    }
+}
+
+impl SkillCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::List(_) => "skills.list",
+            Self::Install(_) => "skills.install",
         }
     }
 }
@@ -62,7 +106,7 @@ struct ConnectivityReport {
 #[derive(Debug, Serialize)]
 struct SkillsReport {
     implemented: bool,
-    source: Option<&'static str>,
+    source: Option<String>,
 }
 
 pub async fn execute(
@@ -82,6 +126,7 @@ pub async fn execute(
             emit_one(ctx, "agent", "manifest", &manifest);
             Ok(())
         }
+        AgentCommands::Skills { command } => skills_command(command, ctx),
     }
 }
 
@@ -157,11 +202,63 @@ async fn doctor(
             connectivity,
         },
         skills: SkillsReport {
-            implemented: false,
-            source: None,
+            implemented: true,
+            source: std::env::var("COVAL_SKILLS_SOURCE").ok(),
         },
     };
 
     emit_one_with_warnings(ctx, "agent", "doctor", &report, warnings);
     Ok(())
+}
+
+fn skills_command(command: SkillCommands, ctx: &OutputContext) -> Result<()> {
+    match command {
+        SkillCommands::List(args) => {
+            let list = skills::list(args.source.as_deref(), args.dest.as_deref())?;
+            let mut warnings = Vec::new();
+            let mut next_actions = Vec::new();
+            if list.source.is_none() {
+                warnings.push(AgentWarning::new(
+                    "skills_source_required",
+                    "Pass --source or set COVAL_SKILLS_SOURCE to list skills.",
+                ));
+            } else if list.skills.is_empty() {
+                warnings.push(AgentWarning::new(
+                    "skills_empty",
+                    "No skills were found in the provided source.",
+                ));
+            }
+            if args.dest.is_none() {
+                next_actions.push(NextAction::new(
+                    "agent.skills.install",
+                    "Install a skill",
+                    crate::next_actions::argv([
+                        "agent",
+                        "skills",
+                        "install",
+                        "<skill-id>",
+                        "--source",
+                        "<path>",
+                        "--dest",
+                        "<path>",
+                    ]),
+                    true,
+                ));
+            }
+            emit_one_with_warnings_and_actions(
+                ctx,
+                "agent",
+                "skills.list",
+                &list,
+                warnings,
+                next_actions,
+            );
+            Ok(())
+        }
+        SkillCommands::Install(args) => {
+            let installed = skills::install(&args.source, &args.dest, &args.skill_id, args.force)?;
+            emit_one(ctx, "agent", "skills.install", &installed);
+            Ok(())
+        }
+    }
 }
