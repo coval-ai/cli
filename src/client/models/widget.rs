@@ -64,7 +64,7 @@ impl std::fmt::Display for WidgetType {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateWidgetRequest {
     pub display_name: String,
     #[serde(rename = "type")]
@@ -81,7 +81,7 @@ pub struct CreateWidgetRequest {
     pub grid_h: Option<i32>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct UpdateWidgetRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,

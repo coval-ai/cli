@@ -3,6 +3,7 @@ mod cli;
 mod client;
 mod commands;
 mod config;
+mod input_json;
 mod next_actions;
 mod output;
 

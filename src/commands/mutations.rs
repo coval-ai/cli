@@ -3,6 +3,7 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{CreateMutationRequest, ListParams, UpdateMutationRequest};
 use crate::client::CovalClient;
+use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
 use crate::output::{
     emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, OutputContext,
@@ -51,12 +52,14 @@ pub struct GetArgs {
 
 #[derive(Args)]
 pub struct CreateArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Parent agent ID (22-char ID)
     #[arg(long)]
     agent_id: String,
     /// Mutation name, unique per agent (1-200 characters)
     #[arg(long)]
-    name: String,
+    name: Option<String>,
     /// Mutation description (max 2000 characters)
     #[arg(long)]
     description: Option<String>,
@@ -67,6 +70,8 @@ pub struct CreateArgs {
 
 #[derive(Args)]
 pub struct UpdateArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Parent agent ID (22-char ID)
     #[arg(long)]
     agent_id: String,
@@ -134,17 +139,16 @@ pub async fn execute(
             );
         }
         MutationCommands::Create(args) => {
-            let config_overrides = args
+            let mut input = args.input_json.object()?;
+            let config_overrides: Option<serde_json::Value> = args
                 .config
                 .as_ref()
                 .map(|c| serde_json::from_str(c))
                 .transpose()?;
-            let req = CreateMutationRequest {
-                display_name: args.name,
-                description: args.description,
-                config_overrides,
-                parameter_values: None,
-            };
+            input_json::insert(&mut input, "display_name", args.name)?;
+            input_json::insert(&mut input, "description", args.description)?;
+            input_json::insert(&mut input, "config_overrides", config_overrides)?;
+            let req: CreateMutationRequest = input_json::finish(input)?;
             let mutation = client.mutations(&args.agent_id).create(req).await?;
             emit_one_with_actions(
                 ctx,
@@ -155,17 +159,16 @@ pub async fn execute(
             );
         }
         MutationCommands::Update(args) => {
-            let config_overrides = args
+            let mut input = args.input_json.object()?;
+            let config_overrides: Option<serde_json::Value> = args
                 .config
                 .as_ref()
                 .map(|c| serde_json::from_str(c))
                 .transpose()?;
-            let req = UpdateMutationRequest {
-                display_name: args.name,
-                description: args.description,
-                config_overrides,
-                parameter_values: None,
-            };
+            input_json::insert(&mut input, "display_name", args.name)?;
+            input_json::insert(&mut input, "description", args.description)?;
+            input_json::insert(&mut input, "config_overrides", config_overrides)?;
+            let req: UpdateMutationRequest = input_json::finish(input)?;
             let mutation = client
                 .mutations(&args.agent_id)
                 .update(&args.mutation_id, req)

@@ -28,12 +28,12 @@ pub struct Dashboard {
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateDashboardRequest {
     pub display_name: String,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct UpdateDashboardRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,

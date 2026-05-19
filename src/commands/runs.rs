@@ -8,6 +8,7 @@ use crate::client::models::{
     LaunchMetadata, LaunchOptions, LaunchRunRequest, ListParams, Run, RunStatus, UpdateRunRequest,
 };
 use crate::client::CovalClient;
+use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
 use crate::output::{
     emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, NextAction,
@@ -19,7 +20,7 @@ pub enum RunCommands {
     Context,
     List(ListArgs),
     Get(GetArgs),
-    Launch(LaunchArgs),
+    Launch(Box<LaunchArgs>),
     Update(UpdateArgs),
     Watch(WatchArgs),
     Delete(DeleteArgs),
@@ -59,15 +60,17 @@ pub struct GetArgs {
 
 #[derive(Args)]
 pub struct LaunchArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Agent to evaluate (22-char ID)
     #[arg(long)]
-    agent_id: String,
+    agent_id: Option<String>,
     /// Simulated persona for the run (22-char ID)
     #[arg(long)]
-    persona_id: String,
+    persona_id: Option<String>,
     /// Test cases to run against (8-char ID)
     #[arg(long)]
-    test_set_id: String,
+    test_set_id: Option<String>,
     /// Comma-separated metric IDs; defaults to agent's metrics
     #[arg(long, value_delimiter = ',')]
     metric_ids: Option<Vec<String>>,
@@ -107,9 +110,11 @@ pub struct LaunchArgs {
 #[derive(Args)]
 pub struct UpdateArgs {
     run_id: String,
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Comma-separated tags; replaces existing tags. Pass an empty string to clear.
-    #[arg(long, value_delimiter = ',', required = true)]
-    tags: Vec<String>,
+    #[arg(long, value_delimiter = ',')]
+    tags: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -150,6 +155,7 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext
             emit_one_with_actions(ctx, "runs", operation, &run, run_actions(&run));
         }
         RunCommands::Launch(args) => {
+            let args = *args;
             if let Some(ref ids) = args.test_cases {
                 if ids.len() > 100 {
                     anyhow::bail!("--test-cases accepts 1-100 values, got {}", ids.len());
@@ -183,9 +189,9 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext
             };
 
             let req = LaunchRunRequest {
-                agent_id: args.agent_id,
-                persona_id: args.persona_id,
-                test_set_id: args.test_set_id,
+                agent_id: args.agent_id.unwrap_or_default(),
+                persona_id: args.persona_id.unwrap_or_default(),
+                test_set_id: args.test_set_id.unwrap_or_default(),
                 metric_ids: args.metric_ids,
                 mutation_id: args.mutation_id,
                 mutation_ids: args.mutation_ids,
@@ -193,19 +199,29 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext
                 options,
                 metadata,
             };
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "agent_id", empty_to_none(req.agent_id))?;
+            input_json::insert(&mut input, "persona_id", empty_to_none(req.persona_id))?;
+            input_json::insert(&mut input, "test_set_id", empty_to_none(req.test_set_id))?;
+            input_json::insert(&mut input, "metric_ids", req.metric_ids)?;
+            input_json::insert(&mut input, "mutation_id", req.mutation_id)?;
+            input_json::insert(&mut input, "mutation_ids", req.mutation_ids)?;
+            input_json::insert(&mut input, "options", req.options)?;
+            input_json::insert(&mut input, "metadata", req.metadata)?;
+            let req: LaunchRunRequest = input_json::finish(input)?;
             let run = client.runs().launch(req).await?;
             emit_one_with_actions(ctx, "runs", operation, &run, run_actions(&run));
         }
         RunCommands::Update(args) => {
-            let tags = args
-                .tags
-                .into_iter()
-                .filter(|t| !t.trim().is_empty())
-                .collect();
-            let run = client
-                .runs()
-                .update(&args.run_id, UpdateRunRequest { tags })
-                .await?;
+            let mut input = args.input_json.object()?;
+            let tags: Option<Vec<String>> = args.tags.map(|tags| {
+                tags.into_iter()
+                    .filter(|tag| !tag.trim().is_empty())
+                    .collect()
+            });
+            input_json::insert(&mut input, "tags", tags)?;
+            let req: UpdateRunRequest = input_json::finish(input)?;
+            let run = client.runs().update(&args.run_id, req).await?;
             emit_one_with_actions(ctx, "runs", operation, &run, run_actions(&run));
         }
         RunCommands::Watch(args) => {
@@ -226,6 +242,14 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext
         }
     }
     Ok(())
+}
+
+fn empty_to_none(value: String) -> Option<String> {
+    if value.is_empty() {
+        None
+    } else {
+        Some(value)
+    }
 }
 
 #[allow(clippy::cast_sign_loss)]

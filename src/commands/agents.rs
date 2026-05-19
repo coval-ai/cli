@@ -3,6 +3,7 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{AgentType, CreateAgentRequest, ListParams, UpdateAgentRequest};
 use crate::client::CovalClient;
+use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
 use crate::output::{
     emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, NextAction,
@@ -52,12 +53,14 @@ pub struct GetArgs {
     after_help = "Required fields by agent type:\n  voice           --phone-number (E.164, e.g. +12345678901)\n  outbound-voice  --endpoint (webhook URL)\n  chat            --metadata '{\"chat_endpoint\": \"https://...\"}'\n  sms             --phone-number (E.164)\n  websocket       --metadata '{\"endpoint\": \"wss://...\", \"initialization_json\": \"...\"}'"
 )]
 pub struct CreateArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Human-readable agent name
     #[arg(long)]
-    name: String,
+    name: Option<String>,
     /// Agent type (determines required fields, see below)
     #[arg(long, value_enum)]
-    r#type: AgentType,
+    r#type: Option<AgentType>,
     /// Phone number in E.164 format; required for voice and sms
     #[arg(long)]
     phone_number: Option<String>,
@@ -81,6 +84,8 @@ pub struct CreateArgs {
 #[derive(Args)]
 pub struct UpdateArgs {
     agent_id: String,
+    #[command(flatten)]
+    input_json: InputJsonArg,
     #[arg(long)]
     name: Option<String>,
     #[arg(long, value_enum)]
@@ -130,42 +135,42 @@ pub async fn execute(cmd: AgentCommands, client: &CovalClient, ctx: &OutputConte
             emit_one_with_actions(ctx, "agents", operation, &agent, agent_actions(&agent.id));
         }
         AgentCommands::Create(args) => {
-            let metadata = args
+            let mut input = args.input_json.object()?;
+            let metadata: Option<serde_json::Value> = args
                 .metadata
                 .map(|s| serde_json::from_str(&s))
                 .transpose()
                 .map_err(|e| anyhow::anyhow!("Invalid JSON for --metadata: {e}"))?;
 
-            let req = CreateAgentRequest {
-                display_name: args.name,
-                model_type: args.r#type,
-                phone_number: args.phone_number,
-                endpoint: args.endpoint,
-                prompt: args.prompt,
-                metadata,
-                metric_ids: args.metric_ids,
-                test_set_ids: args.test_set_ids,
-            };
+            input_json::insert(&mut input, "display_name", args.name)?;
+            input_json::insert(&mut input, "model_type", args.r#type)?;
+            input_json::insert(&mut input, "phone_number", args.phone_number)?;
+            input_json::insert(&mut input, "endpoint", args.endpoint)?;
+            input_json::insert(&mut input, "prompt", args.prompt)?;
+            input_json::insert(&mut input, "metadata", metadata)?;
+            input_json::insert(&mut input, "metric_ids", args.metric_ids)?;
+            input_json::insert(&mut input, "test_set_ids", args.test_set_ids)?;
+            let req: CreateAgentRequest = input_json::finish(input)?;
             let agent = client.agents().create(req).await?;
             emit_one_with_actions(ctx, "agents", operation, &agent, agent_actions(&agent.id));
         }
         AgentCommands::Update(args) => {
-            let metadata = args
+            let mut input = args.input_json.object()?;
+            let metadata: Option<serde_json::Value> = args
                 .metadata
                 .map(|s| serde_json::from_str(&s))
                 .transpose()
                 .map_err(|e| anyhow::anyhow!("Invalid JSON for --metadata: {e}"))?;
 
-            let req = UpdateAgentRequest {
-                display_name: args.name,
-                model_type: args.r#type,
-                phone_number: args.phone_number,
-                endpoint: args.endpoint,
-                prompt: args.prompt,
-                metadata,
-                metric_ids: args.metric_ids,
-                test_set_ids: args.test_set_ids,
-            };
+            input_json::insert(&mut input, "display_name", args.name)?;
+            input_json::insert(&mut input, "model_type", args.r#type)?;
+            input_json::insert(&mut input, "phone_number", args.phone_number)?;
+            input_json::insert(&mut input, "endpoint", args.endpoint)?;
+            input_json::insert(&mut input, "prompt", args.prompt)?;
+            input_json::insert(&mut input, "metadata", metadata)?;
+            input_json::insert(&mut input, "metric_ids", args.metric_ids)?;
+            input_json::insert(&mut input, "test_set_ids", args.test_set_ids)?;
+            let req: UpdateAgentRequest = input_json::finish(input)?;
             let agent = client.agents().update(&args.agent_id, req).await?;
             emit_one_with_actions(ctx, "agents", operation, &agent, agent_actions(&agent.id));
         }

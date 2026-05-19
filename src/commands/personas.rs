@@ -3,6 +3,7 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{CreatePersonaRequest, ListParams, UpdatePersonaRequest};
 use crate::client::CovalClient;
+use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
 use crate::output::{
     emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, OutputContext,
@@ -54,15 +55,17 @@ pub struct GetArgs {
 
 #[derive(Args)]
 pub struct CreateArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Persona name (1-200 characters)
     #[arg(long)]
-    name: String,
+    name: Option<String>,
     /// Voice name for speech synthesis
     #[arg(long)]
-    voice: String,
+    voice: Option<String>,
     /// Language code in BCP-47 format (e.g. en-US)
     #[arg(long)]
-    language: String,
+    language: Option<String>,
     /// Persona behavior instructions
     #[arg(long)]
     prompt: Option<String>,
@@ -77,6 +80,8 @@ pub struct CreateArgs {
 #[derive(Args)]
 pub struct UpdateArgs {
     persona_id: String,
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Persona name (1-200 characters)
     #[arg(long)]
     name: Option<String>,
@@ -142,15 +147,14 @@ pub async fn execute(
             );
         }
         PersonaCommands::Create(args) => {
-            let req = CreatePersonaRequest {
-                name: args.name,
-                voice_name: args.voice,
-                language_code: args.language,
-                persona_prompt: args.prompt,
-                background_sound: args.background,
-                wait_seconds: args.wait_seconds,
-                conversation_initiation: None,
-            };
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "name", args.name)?;
+            input_json::insert(&mut input, "voice_name", args.voice)?;
+            input_json::insert(&mut input, "language_code", args.language)?;
+            input_json::insert(&mut input, "persona_prompt", args.prompt)?;
+            input_json::insert(&mut input, "background_sound", args.background)?;
+            input_json::insert(&mut input, "wait_seconds", args.wait_seconds)?;
+            let req: CreatePersonaRequest = input_json::finish(input)?;
             let persona = client.personas().create(req).await?;
             emit_one_with_actions(
                 ctx,
@@ -161,15 +165,14 @@ pub async fn execute(
             );
         }
         PersonaCommands::Update(args) => {
-            let req = UpdatePersonaRequest {
-                name: args.name,
-                voice_name: args.voice,
-                language_code: args.language,
-                persona_prompt: args.prompt,
-                background_sound: args.background,
-                wait_seconds: args.wait_seconds,
-                ..Default::default()
-            };
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "name", args.name)?;
+            input_json::insert(&mut input, "voice_name", args.voice)?;
+            input_json::insert(&mut input, "language_code", args.language)?;
+            input_json::insert(&mut input, "persona_prompt", args.prompt)?;
+            input_json::insert(&mut input, "background_sound", args.background)?;
+            input_json::insert(&mut input, "wait_seconds", args.wait_seconds)?;
+            let req: UpdatePersonaRequest = input_json::finish(input)?;
             let persona = client.personas().update(&args.persona_id, req).await?;
             emit_one_with_actions(
                 ctx,

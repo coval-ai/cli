@@ -60,7 +60,7 @@ pub enum VoiceName {
     Harry,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreatePersonaRequest {
     pub name: String,
     pub voice_name: String,
@@ -75,7 +75,7 @@ pub struct CreatePersonaRequest {
     pub conversation_initiation: Option<String>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct UpdatePersonaRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,

@@ -33,7 +33,7 @@ pub struct ScheduledRun {
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateScheduledRunRequest {
     pub display_name: String,
     pub run_template_id: String,
@@ -44,7 +44,7 @@ pub struct CreateScheduledRunRequest {
     pub enabled: Option<bool>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct UpdateScheduledRunRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,

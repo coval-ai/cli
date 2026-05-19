@@ -105,7 +105,7 @@ impl std::fmt::Display for MetricType {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateMetricRequest {
     pub metric_name: String,
     pub description: String,
@@ -138,7 +138,7 @@ pub struct CreateMetricRequest {
     pub target_condition: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct UpdateMetricRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metric_name: Option<String>,

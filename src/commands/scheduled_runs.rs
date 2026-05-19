@@ -3,6 +3,7 @@ use clap::{Args, Subcommand};
 
 use crate::client::models::{CreateScheduledRunRequest, ListParams, UpdateScheduledRunRequest};
 use crate::client::CovalClient;
+use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
 use crate::output::{
     emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, OutputContext,
@@ -52,12 +53,14 @@ pub struct GetArgs {
 
 #[derive(Args)]
 pub struct CreateArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
     #[arg(long)]
-    name: String,
+    name: Option<String>,
     #[arg(long)]
-    template_id: String,
+    template_id: Option<String>,
     #[arg(long)]
-    schedule: String,
+    schedule: Option<String>,
     #[arg(long)]
     timezone: Option<String>,
     #[arg(long)]
@@ -67,6 +70,8 @@ pub struct CreateArgs {
 #[derive(Args)]
 pub struct UpdateArgs {
     scheduled_run_id: String,
+    #[command(flatten)]
+    input_json: InputJsonArg,
     #[arg(long)]
     name: Option<String>,
     #[arg(long)]
@@ -127,13 +132,13 @@ pub async fn execute(
             );
         }
         ScheduledRunCommands::Create(args) => {
-            let req = CreateScheduledRunRequest {
-                display_name: args.name,
-                run_template_id: args.template_id,
-                schedule_expression: args.schedule,
-                schedule_timezone: args.timezone,
-                enabled: args.enabled,
-            };
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "display_name", args.name)?;
+            input_json::insert(&mut input, "run_template_id", args.template_id)?;
+            input_json::insert(&mut input, "schedule_expression", args.schedule)?;
+            input_json::insert(&mut input, "schedule_timezone", args.timezone)?;
+            input_json::insert(&mut input, "enabled", args.enabled)?;
+            let req: CreateScheduledRunRequest = input_json::finish(input)?;
             let run = client.scheduled_runs().create(req).await?;
             emit_one_with_actions(
                 ctx,
@@ -144,13 +149,13 @@ pub async fn execute(
             );
         }
         ScheduledRunCommands::Update(args) => {
-            let req = UpdateScheduledRunRequest {
-                display_name: args.name,
-                run_template_id: args.template_id,
-                schedule_expression: args.schedule,
-                schedule_timezone: args.timezone,
-                enabled: args.enabled,
-            };
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "display_name", args.name)?;
+            input_json::insert(&mut input, "run_template_id", args.template_id)?;
+            input_json::insert(&mut input, "schedule_expression", args.schedule)?;
+            input_json::insert(&mut input, "schedule_timezone", args.timezone)?;
+            input_json::insert(&mut input, "enabled", args.enabled)?;
+            let req: UpdateScheduledRunRequest = input_json::finish(input)?;
             let run = client
                 .scheduled_runs()
                 .update(&args.scheduled_run_id, req)

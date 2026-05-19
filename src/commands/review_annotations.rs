@@ -6,6 +6,7 @@ use crate::client::models::{
     ListParams, UpdateReviewAnnotationRequest,
 };
 use crate::client::CovalClient;
+use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
 use crate::output::{
     emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, OutputContext,
@@ -51,15 +52,17 @@ pub struct GetArgs {
 
 #[derive(Args)]
 pub struct CreateArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Simulation output ID to link
     #[arg(long)]
-    simulation_output_id: String,
+    simulation_output_id: Option<String>,
     /// Metric ID to link
     #[arg(long)]
-    metric_id: String,
+    metric_id: Option<String>,
     /// Email of the reviewer to assign
     #[arg(long)]
-    assignee: String,
+    assignee: Option<String>,
     /// Ground truth numeric value (auto-completes annotation)
     #[arg(long)]
     ground_truth_float: Option<f64>,
@@ -80,6 +83,8 @@ pub struct CreateArgs {
 #[derive(Args)]
 pub struct UpdateArgs {
     annotation_id: String,
+    #[command(flatten)]
+    input_json: InputJsonArg,
     /// Ground truth numeric value (auto-completes annotation)
     #[arg(long)]
     ground_truth_float: Option<f64>,
@@ -154,20 +159,32 @@ pub async fn execute(
             );
         }
         ReviewAnnotationCommands::Create(args) => {
-            let subvalues = args
+            let mut input = args.input_json.object()?;
+            let subvalues: Option<Vec<serde_json::Value>> = args
                 .ground_truth_subvalues
                 .map(|s| serde_json::from_str(&s))
                 .transpose()?;
-            let req = CreateReviewAnnotationRequest {
-                simulation_output_id: args.simulation_output_id,
-                metric_id: args.metric_id,
-                assignee: args.assignee,
-                ground_truth_float_value: args.ground_truth_float,
-                ground_truth_string_value: args.ground_truth_string,
-                ground_truth_subvalues_by_timestamp: subvalues,
-                reviewer_notes: args.notes,
-                priority: args.priority,
-            };
+            input_json::insert(
+                &mut input,
+                "simulation_output_id",
+                args.simulation_output_id,
+            )?;
+            input_json::insert(&mut input, "metric_id", args.metric_id)?;
+            input_json::insert(&mut input, "assignee", args.assignee)?;
+            input_json::insert(
+                &mut input,
+                "ground_truth_float_value",
+                args.ground_truth_float,
+            )?;
+            input_json::insert(
+                &mut input,
+                "ground_truth_string_value",
+                args.ground_truth_string,
+            )?;
+            input_json::insert(&mut input, "ground_truth_subvalues_by_timestamp", subvalues)?;
+            input_json::insert(&mut input, "reviewer_notes", args.notes)?;
+            input_json::insert(&mut input, "priority", args.priority)?;
+            let req: CreateReviewAnnotationRequest = input_json::finish(input)?;
             let annotation = client.review_annotations().create(req).await?;
             emit_one_with_actions(
                 ctx,
@@ -178,20 +195,28 @@ pub async fn execute(
             );
         }
         ReviewAnnotationCommands::Update(args) => {
-            let subvalues = args
+            let mut input = args.input_json.object()?;
+            let subvalues: Option<Vec<serde_json::Value>> = args
                 .ground_truth_subvalues
                 .map(|s| serde_json::from_str(&s))
                 .transpose()?;
-            let req = UpdateReviewAnnotationRequest {
-                ground_truth_float_value: args.ground_truth_float,
-                ground_truth_string_value: args.ground_truth_string,
-                ground_truth_subvalues_by_timestamp: subvalues,
-                reviewer_notes: args.notes,
-                priority: args.priority,
-                assignee: args.assignee,
-                completion_status: args.completion_status,
-                status: args.status,
-            };
+            input_json::insert(
+                &mut input,
+                "ground_truth_float_value",
+                args.ground_truth_float,
+            )?;
+            input_json::insert(
+                &mut input,
+                "ground_truth_string_value",
+                args.ground_truth_string,
+            )?;
+            input_json::insert(&mut input, "ground_truth_subvalues_by_timestamp", subvalues)?;
+            input_json::insert(&mut input, "reviewer_notes", args.notes)?;
+            input_json::insert(&mut input, "priority", args.priority)?;
+            input_json::insert(&mut input, "assignee", args.assignee)?;
+            input_json::insert(&mut input, "completion_status", args.completion_status)?;
+            input_json::insert(&mut input, "status", args.status)?;
+            let req: UpdateReviewAnnotationRequest = input_json::finish(input)?;
             let annotation = client
                 .review_annotations()
                 .update(&args.annotation_id, req)

@@ -45,7 +45,7 @@ impl std::fmt::Display for ProjectType {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateReviewProjectRequest {
     pub display_name: String,
     pub assignees: Vec<String>,
@@ -59,7 +59,7 @@ pub struct CreateReviewProjectRequest {
     pub notifications: Option<bool>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct UpdateReviewProjectRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
