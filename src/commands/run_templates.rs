@@ -55,12 +55,12 @@ pub struct CreateArgs {
     name: Option<String>,
     #[arg(long)]
     description: Option<String>,
-    #[arg(long)]
-    agent_id: Option<String>,
-    #[arg(long)]
-    persona_id: Option<String>,
-    #[arg(long)]
-    test_set_id: Option<String>,
+    #[arg(long, value_delimiter = ',')]
+    agent_ids: Option<Vec<String>>,
+    #[arg(long, value_delimiter = ',')]
+    persona_ids: Option<Vec<String>>,
+    #[arg(long, value_delimiter = ',')]
+    test_set_ids: Option<Vec<String>>,
     #[arg(long, value_delimiter = ',')]
     metric_ids: Option<Vec<String>>,
     #[arg(long, value_delimiter = ',')]
@@ -84,12 +84,12 @@ pub struct UpdateArgs {
     name: Option<String>,
     #[arg(long)]
     description: Option<String>,
-    #[arg(long)]
-    agent_id: Option<String>,
-    #[arg(long)]
-    persona_id: Option<String>,
-    #[arg(long)]
-    test_set_id: Option<String>,
+    #[arg(long, value_delimiter = ',')]
+    agent_ids: Option<Vec<String>>,
+    #[arg(long, value_delimiter = ',')]
+    persona_ids: Option<Vec<String>>,
+    #[arg(long, value_delimiter = ',')]
+    test_set_ids: Option<Vec<String>>,
     #[arg(long, value_delimiter = ',')]
     metric_ids: Option<Vec<String>>,
     #[arg(long, value_delimiter = ',')]
@@ -155,9 +155,9 @@ pub async fn execute(
             let mut input = args.input_json.object()?;
             input_json::insert(&mut input, "display_name", args.name)?;
             input_json::insert(&mut input, "description", args.description)?;
-            input_json::insert(&mut input, "agent_id", args.agent_id)?;
-            input_json::insert(&mut input, "persona_id", args.persona_id)?;
-            input_json::insert(&mut input, "test_set_id", args.test_set_id)?;
+            input_json::insert(&mut input, "agent_ids", args.agent_ids)?;
+            input_json::insert(&mut input, "persona_ids", args.persona_ids)?;
+            input_json::insert(&mut input, "test_set_ids", args.test_set_ids)?;
             input_json::insert(&mut input, "metric_ids", args.metric_ids)?;
             input_json::insert(&mut input, "mutation_ids", args.mutation_ids)?;
             input_json::insert(&mut input, "iteration_count", args.iteration_count)?;
@@ -178,9 +178,9 @@ pub async fn execute(
             let mut input = args.input_json.object()?;
             input_json::insert(&mut input, "display_name", args.name)?;
             input_json::insert(&mut input, "description", args.description)?;
-            input_json::insert(&mut input, "agent_id", args.agent_id)?;
-            input_json::insert(&mut input, "persona_id", args.persona_id)?;
-            input_json::insert(&mut input, "test_set_id", args.test_set_id)?;
+            input_json::insert(&mut input, "agent_ids", args.agent_ids)?;
+            input_json::insert(&mut input, "persona_ids", args.persona_ids)?;
+            input_json::insert(&mut input, "test_set_ids", args.test_set_ids)?;
             input_json::insert(&mut input, "metric_ids", args.metric_ids)?;
             input_json::insert(&mut input, "mutation_ids", args.mutation_ids)?;
             input_json::insert(&mut input, "iteration_count", args.iteration_count)?;

@@ -12,18 +12,26 @@ fn truncate(s: &str, max: usize) -> String {
     }
 }
 
+fn summarize_ids(ids: &[String]) -> String {
+    match ids.len() {
+        0 => String::new(),
+        1 => ids[0].clone(),
+        n => format!("{} (+{})", ids[0], n - 1),
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunTemplate {
     pub id: String,
     pub display_name: String,
     #[serde(default)]
     pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub agent_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub persona_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub test_set_id: Option<String>,
+    #[serde(default)]
+    pub agent_ids: Vec<String>,
+    #[serde(default)]
+    pub persona_ids: Vec<String>,
+    #[serde(default)]
+    pub test_set_ids: Vec<String>,
     #[serde(default)]
     pub metric_ids: Vec<String>,
     #[serde(default)]
@@ -50,12 +58,9 @@ pub struct CreateRunTemplateRequest {
     pub display_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub agent_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub persona_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub test_set_id: Option<String>,
+    pub agent_ids: Vec<String>,
+    pub persona_ids: Vec<String>,
+    pub test_set_ids: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metric_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -79,11 +84,11 @@ pub struct UpdateRunTemplateRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub agent_id: Option<String>,
+    pub agent_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub persona_id: Option<String>,
+    pub persona_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub test_set_id: Option<String>,
+    pub test_set_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metric_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -126,9 +131,9 @@ impl Tabular for RunTemplate {
         vec![
             "ID",
             "NAME",
-            "AGENT",
-            "PERSONA",
-            "TEST SET",
+            "AGENTS",
+            "PERSONAS",
+            "TEST SETS",
             "ITERATIONS",
             "CONCURRENCY",
         ]
@@ -138,9 +143,9 @@ impl Tabular for RunTemplate {
         vec![
             self.id.clone(),
             truncate(&self.display_name, 25),
-            self.agent_id.clone().unwrap_or_default(),
-            self.persona_id.clone().unwrap_or_default(),
-            self.test_set_id.clone().unwrap_or_default(),
+            summarize_ids(&self.agent_ids),
+            summarize_ids(&self.persona_ids),
+            summarize_ids(&self.test_set_ids),
             self.iteration_count
                 .map(|c| c.to_string())
                 .unwrap_or_default(),
