@@ -1880,6 +1880,104 @@ async fn test_input_json_stdin() {
         .stdout(predicate::str::contains("dash123"));
 }
 
+#[tokio::test]
+async fn test_dashboard_create_with_full_fields() {
+    let mock_server = MockServer::start().await;
+
+    // body_partial_json asserts the new flags are serialized into the request body;
+    // a mismatch yields no matching mock (404) and the command fails.
+    Mock::given(method("POST"))
+        .and(path("/v1/dashboards"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "display_name": "Ops",
+            "description": "desc",
+            "is_favorite": true,
+            "is_default": true,
+            "position": 3,
+            "config": {"date_preferences": {"preset": "last-7-days"}}
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "dashboard": {
+                "name": "dashboards/dash123",
+                "display_name": "Ops",
+                "description": "desc",
+                "is_default": true,
+                "is_favorite": true,
+                "position": 3,
+                "config": {"date_preferences": {"preset": "last-7-days"}},
+                "create_time": "2025-01-15T10:30:00Z",
+                "update_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("dashboards")
+        .arg("create")
+        .arg("--name")
+        .arg("Ops")
+        .arg("--description")
+        .arg("desc")
+        .arg("--favorite")
+        .arg("true")
+        .arg("--default")
+        .arg("true")
+        .arg("--position")
+        .arg("3")
+        .arg("--config")
+        .arg(r#"{"date_preferences":{"preset":"last-7-days"}}"#)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("dash123"));
+}
+
+#[tokio::test]
+async fn test_dashboard_update_sets_default_and_position() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/dashboards/dash123"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "is_default": true,
+            "position": 5
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "dashboard": {
+                "name": "dashboards/dash123",
+                "display_name": "Ops",
+                "is_default": true,
+                "position": 5,
+                "create_time": "2025-01-15T10:30:00Z",
+                "update_time": "2025-01-16T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("dashboards")
+        .arg("update")
+        .arg("dash123")
+        .arg("--default")
+        .arg("true")
+        .arg("--position")
+        .arg("5")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("dash123"));
+}
+
 #[test]
 fn test_input_json_invalid_agent_error() {
     let value = stdout_json(
