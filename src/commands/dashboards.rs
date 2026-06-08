@@ -203,6 +203,15 @@ fn validate_widget_grid(grid_w: Option<i32>, grid_h: Option<i32>) -> Result<()> 
     Ok(())
 }
 
+fn validate_position(position: Option<i64>) -> Result<()> {
+    if let Some(p) = position {
+        if p < 0 {
+            bail!("--position must be >= 0");
+        }
+    }
+    Ok(())
+}
+
 fn parse_config(raw: &str) -> Result<serde_json::Value> {
     if let Some(path) = raw.strip_prefix('@') {
         let contents = std::fs::read_to_string(path)?;
@@ -254,6 +263,7 @@ pub async fn execute(
             );
         }
         DashboardCommands::Create(args) => {
+            validate_position(args.position)?;
             let mut input = args.input_json.object()?;
             let config = args.config.as_ref().map(|c| parse_config(c)).transpose()?;
             input_json::insert(&mut input, "display_name", args.name)?;
@@ -274,6 +284,7 @@ pub async fn execute(
             );
         }
         DashboardCommands::Update(args) => {
+            validate_position(args.position)?;
             let mut input = args.input_json.object()?;
             let config = args.config.as_ref().map(|c| parse_config(c)).transpose()?;
             input_json::insert(&mut input, "display_name", args.name)?;

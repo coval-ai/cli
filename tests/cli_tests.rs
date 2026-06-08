@@ -1979,6 +1979,39 @@ async fn test_dashboard_update_sets_default_and_position() {
 }
 
 #[test]
+fn test_dashboard_create_rejects_negative_position() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg("http://localhost:1")
+        .arg("dashboards")
+        .arg("create")
+        .arg("--name")
+        .arg("Ops")
+        .arg("--position=-1")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--position must be >= 0"));
+}
+
+#[test]
+fn test_dashboard_update_rejects_negative_position() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg("http://localhost:1")
+        .arg("dashboards")
+        .arg("update")
+        .arg("dash123")
+        .arg("--position=-1")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--position must be >= 0"));
+}
+
+#[test]
 fn test_input_json_invalid_agent_error() {
     let value = stdout_json(
         coval()
