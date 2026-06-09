@@ -109,6 +109,12 @@ coval test-sets create \
 coval test-cases create \
   --test-set-id ts123456 \
   --input "I need help with my order"
+
+# Create a dashboard and make it the organization default
+coval dashboards create \
+  --name "Production Metrics" \
+  --description "Latency and quality overview" \
+  --default true
 ```
 
 ### JSON Output for Scripting

@@ -62,6 +62,20 @@ pub struct CreateArgs {
     input_json: InputJsonArg,
     #[arg(long)]
     name: Option<String>,
+    #[arg(long)]
+    description: Option<String>,
+    /// Mark as a favorite (true/false).
+    #[arg(long)]
+    favorite: Option<bool>,
+    /// Make this the organization's default dashboard (true/false). Omit to auto-default the first dashboard.
+    #[arg(long)]
+    default: Option<bool>,
+    /// Ordering position (>= 0). Omit to append to the end.
+    #[arg(long)]
+    position: Option<i64>,
+    /// Free-form JSON config: a JSON string or @path to a file.
+    #[arg(long)]
+    config: Option<String>,
 }
 
 #[derive(Args)]
@@ -71,6 +85,20 @@ pub struct UpdateArgs {
     input_json: InputJsonArg,
     #[arg(long)]
     name: Option<String>,
+    #[arg(long)]
+    description: Option<String>,
+    /// Mark as a favorite (true/false).
+    #[arg(long)]
+    favorite: Option<bool>,
+    /// Make this the organization's default dashboard (true/false). Setting true unsets any other default.
+    #[arg(long)]
+    default: Option<bool>,
+    /// Ordering position (>= 0).
+    #[arg(long)]
+    position: Option<i64>,
+    /// Replacement free-form JSON config: a JSON string or @path to a file.
+    #[arg(long)]
+    config: Option<String>,
 }
 
 #[derive(Args)]
@@ -175,6 +203,15 @@ fn validate_widget_grid(grid_w: Option<i32>, grid_h: Option<i32>) -> Result<()> 
     Ok(())
 }
 
+fn validate_position(position: Option<i64>) -> Result<()> {
+    if let Some(p) = position {
+        if p < 0 {
+            bail!("--position must be >= 0");
+        }
+    }
+    Ok(())
+}
+
 fn parse_config(raw: &str) -> Result<serde_json::Value> {
     if let Some(path) = raw.strip_prefix('@') {
         let contents = std::fs::read_to_string(path)?;
@@ -226,8 +263,15 @@ pub async fn execute(
             );
         }
         DashboardCommands::Create(args) => {
+            validate_position(args.position)?;
             let mut input = args.input_json.object()?;
+            let config = args.config.as_ref().map(|c| parse_config(c)).transpose()?;
             input_json::insert(&mut input, "display_name", args.name)?;
+            input_json::insert(&mut input, "description", args.description)?;
+            input_json::insert(&mut input, "is_favorite", args.favorite)?;
+            input_json::insert(&mut input, "is_default", args.default)?;
+            input_json::insert(&mut input, "position", args.position)?;
+            input_json::insert(&mut input, "config", config)?;
             let req: CreateDashboardRequest = input_json::finish(input)?;
             let dashboard = client.dashboards().create(req).await?;
             let dashboard_id = resource_id(&dashboard.name);
@@ -240,8 +284,15 @@ pub async fn execute(
             );
         }
         DashboardCommands::Update(args) => {
+            validate_position(args.position)?;
             let mut input = args.input_json.object()?;
+            let config = args.config.as_ref().map(|c| parse_config(c)).transpose()?;
             input_json::insert(&mut input, "display_name", args.name)?;
+            input_json::insert(&mut input, "description", args.description)?;
+            input_json::insert(&mut input, "is_favorite", args.favorite)?;
+            input_json::insert(&mut input, "is_default", args.default)?;
+            input_json::insert(&mut input, "position", args.position)?;
+            input_json::insert(&mut input, "config", config)?;
             let req: UpdateDashboardRequest = input_json::finish(input)?;
             let dashboard = client.dashboards().update(&args.dashboard_id, req).await?;
             emit_one_with_actions(
