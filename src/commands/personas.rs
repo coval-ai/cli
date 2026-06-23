@@ -1,10 +1,17 @@
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+
 use anyhow::Result;
 use clap::{Args, Subcommand};
 
-use crate::client::models::{CreatePersonaRequest, ListParams, UpdatePersonaRequest};
+use crate::client::models::{
+    BackgroundSoundUpdateStatus, CreateBackgroundSoundRequest, CreatePersonaRequest, ListParams,
+    UpdateBackgroundSoundRequest, UpdatePersonaRequest,
+};
 use crate::client::CovalClient;
 use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
+use crate::output::NextAction;
 use crate::output::{
     emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, OutputContext,
 };
@@ -17,6 +24,11 @@ pub enum PersonaCommands {
     Create(CreateArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
+    #[command(name = "background-sounds")]
+    BackgroundSounds {
+        #[command(subcommand)]
+        command: BackgroundSoundCommands,
+    },
     #[command(name = "phone-numbers")]
     PhoneNumbers,
 }
@@ -30,7 +42,25 @@ impl PersonaCommands {
             Self::Create(_) => "create",
             Self::Update(_) => "update",
             Self::Delete(_) => "delete",
+            Self::BackgroundSounds { command } => command.operation(),
             Self::PhoneNumbers => "phone-numbers",
+        }
+    }
+}
+
+#[derive(Subcommand)]
+pub enum BackgroundSoundCommands {
+    List(BackgroundSoundListArgs),
+    Upload(BackgroundSoundUploadArgs),
+    Update(BackgroundSoundUpdateArgs),
+}
+
+impl BackgroundSoundCommands {
+    pub fn operation(&self) -> &'static str {
+        match self {
+            Self::List(_) => "background-sounds.list",
+            Self::Upload(_) => "background-sounds.upload",
+            Self::Update(_) => "background-sounds.update",
         }
     }
 }
@@ -105,6 +135,48 @@ pub struct UpdateArgs {
 #[derive(Args)]
 pub struct DeleteArgs {
     persona_id: String,
+}
+
+#[derive(Args)]
+pub struct BackgroundSoundListArgs {
+    /// Include archived custom background sounds
+    #[arg(long)]
+    include_archived: bool,
+}
+
+#[derive(Args)]
+pub struct BackgroundSoundUploadArgs {
+    /// Local WAV or MP3 file to upload
+    file: PathBuf,
+    /// Display name for the custom background sound. Defaults to the filename stem.
+    #[arg(long)]
+    display_name: Option<String>,
+    /// Audio content type. Defaults from file extension (.mp3 or .wav).
+    #[arg(long)]
+    content_type: Option<String>,
+    /// Default volume multiplier for simulations (0.0-1.0)
+    #[arg(long)]
+    default_volume: Option<f64>,
+    /// Metadata as key=value (repeat for multiple)
+    #[arg(long = "metadata", value_parser = parse_metadata_kv)]
+    metadata: Vec<(String, String)>,
+}
+
+#[derive(Args)]
+pub struct BackgroundSoundUpdateArgs {
+    /// Custom background sound asset id. Accepts either `sound_id` or `custom:sound_id`.
+    background_sound_id: String,
+    #[command(flatten)]
+    input_json: InputJsonArg,
+    /// New display name
+    #[arg(long)]
+    display_name: Option<String>,
+    /// New default volume multiplier (0.0-1.0)
+    #[arg(long)]
+    default_volume: Option<f64>,
+    /// Archive or restore the custom background sound
+    #[arg(long, value_enum)]
+    status: Option<BackgroundSoundUpdateStatus>,
 }
 
 pub async fn execute(
@@ -192,6 +264,9 @@ pub async fn execute(
                 next_actions::delete_result("personas"),
             );
         }
+        PersonaCommands::BackgroundSounds { command } => {
+            execute_background_sound(command, client, ctx, operation).await?;
+        }
         PersonaCommands::PhoneNumbers => {
             let response = client.personas().list_phone_numbers().await?;
             emit_list_with_actions(
@@ -204,4 +279,201 @@ pub async fn execute(
         }
     }
     Ok(())
+}
+
+async fn execute_background_sound(
+    cmd: BackgroundSoundCommands,
+    client: &CovalClient,
+    ctx: &OutputContext,
+    operation: &'static str,
+) -> Result<()> {
+    match cmd {
+        BackgroundSoundCommands::List(args) => {
+            let response = client
+                .personas()
+                .list_background_sounds(args.include_archived)
+                .await?;
+            emit_list_with_actions(
+                ctx,
+                "background-sounds",
+                operation,
+                &response.background_sounds,
+                background_sound_list_actions(),
+            );
+        }
+        BackgroundSoundCommands::Upload(args) => {
+            let content_type = match args.content_type {
+                Some(content_type) => content_type,
+                None => infer_audio_content_type(&args.file).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "could not infer content type from {}; pass --content-type audio/mpeg or audio/wav",
+                        args.file.display()
+                    )
+                })?,
+            };
+
+            let original_filename = file_name(&args.file)?;
+            let bytes = std::fs::read(&args.file)
+                .map_err(|err| anyhow::anyhow!("failed to read {}: {err}", args.file.display()))?;
+            let display_name = args
+                .display_name
+                .unwrap_or_else(|| display_name_from_path(&args.file));
+            let metadata = metadata_map(args.metadata);
+            let create = client
+                .personas()
+                .create_background_sound(CreateBackgroundSoundRequest {
+                    display_name,
+                    original_filename: original_filename.clone(),
+                    content_type: content_type.clone(),
+                    default_volume: args.default_volume,
+                    metadata,
+                })
+                .await?;
+
+            let size = bytes.len() as u64;
+            if size > create.max_size_bytes {
+                anyhow::bail!(
+                    "audio file is too large: {} bytes exceeds max {} bytes",
+                    size,
+                    create.max_size_bytes
+                );
+            }
+
+            upload_file_with_signed_post(
+                &create.upload_url,
+                &create.upload_fields,
+                bytes,
+                &original_filename,
+                &content_type,
+            )
+            .await?;
+
+            let background_sound = client
+                .personas()
+                .complete_background_sound_upload(&create.background_sound.id)
+                .await?;
+            emit_one_with_actions(
+                ctx,
+                "background-sounds",
+                operation,
+                &background_sound,
+                background_sound_item_actions(&background_sound.value),
+            );
+        }
+        BackgroundSoundCommands::Update(args) => {
+            let mut input = args.input_json.object()?;
+            input_json::insert(&mut input, "display_name", args.display_name)?;
+            input_json::insert(&mut input, "default_volume", args.default_volume)?;
+            input_json::insert(&mut input, "status", args.status)?;
+            let req: UpdateBackgroundSoundRequest = input_json::finish(input)?;
+            let id = normalize_background_sound_id(&args.background_sound_id);
+            let background_sound = client.personas().update_background_sound(&id, req).await?;
+            emit_one_with_actions(
+                ctx,
+                "background-sounds",
+                operation,
+                &background_sound,
+                background_sound_item_actions(&background_sound.value),
+            );
+        }
+    }
+    Ok(())
+}
+
+fn parse_metadata_kv(raw: &str) -> Result<(String, String), String> {
+    let (key, value) = raw
+        .split_once('=')
+        .ok_or_else(|| format!("expected key=value, got '{raw}'"))?;
+    if key.is_empty() {
+        return Err(format!("metadata key is empty in '{raw}'"));
+    }
+    Ok((key.to_string(), value.to_string()))
+}
+
+fn metadata_map(values: Vec<(String, String)>) -> Option<BTreeMap<String, String>> {
+    if values.is_empty() {
+        return None;
+    }
+    Some(values.into_iter().collect())
+}
+
+fn infer_audio_content_type(path: &Path) -> Option<String> {
+    match path.extension()?.to_str()?.to_ascii_lowercase().as_str() {
+        "mp3" => Some("audio/mpeg".to_string()),
+        "wav" => Some("audio/wav".to_string()),
+        _ => None,
+    }
+}
+
+fn file_name(path: &Path) -> Result<String> {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| anyhow::anyhow!("file path has no valid filename: {}", path.display()))?;
+    Ok(name.to_string())
+}
+
+fn display_name_from_path(path: &Path) -> String {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .filter(|stem| !stem.is_empty())
+        .unwrap_or("Background sound")
+        .to_string()
+}
+
+async fn upload_file_with_signed_post(
+    upload_url: &str,
+    fields: &BTreeMap<String, String>,
+    bytes: Vec<u8>,
+    original_filename: &str,
+    content_type: &str,
+) -> Result<()> {
+    let mut form = reqwest::multipart::Form::new();
+    for (key, value) in fields {
+        form = form.text(key.clone(), value.clone());
+    }
+    let file_part = reqwest::multipart::Part::bytes(bytes)
+        .file_name(original_filename.to_string())
+        .mime_str(content_type)?;
+    let response = reqwest::Client::new()
+        .post(upload_url)
+        .multipart(form.part("file", file_part))
+        .send()
+        .await?;
+    if !response.status().is_success() {
+        anyhow::bail!("background sound upload failed: HTTP {}", response.status());
+    }
+    Ok(())
+}
+
+fn normalize_background_sound_id(value: &str) -> String {
+    value.strip_prefix("custom:").unwrap_or(value).to_string()
+}
+
+fn background_sound_list_actions() -> Vec<NextAction> {
+    vec![NextAction::new(
+        "background-sounds.upload",
+        "Upload background sound",
+        next_actions::argv(["personas", "background-sounds", "upload", "<audio_file>"]),
+        false,
+    )]
+}
+
+fn background_sound_item_actions(value: &str) -> Vec<NextAction> {
+    vec![
+        NextAction::new(
+            "personas.update_background_sound",
+            "Use on persona",
+            next_actions::argv(["personas", "update", "<persona_id>", "--background", value]),
+            false,
+        )
+        .primary()
+        .with_description("Set this custom sound on a persona."),
+        NextAction::new(
+            "background-sounds.list",
+            "List background sounds",
+            next_actions::argv(["personas", "background-sounds", "list"]),
+            true,
+        ),
+    ]
 }

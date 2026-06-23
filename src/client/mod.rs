@@ -68,6 +68,19 @@ impl CovalClient {
         self.handle_response(resp).await
     }
 
+    pub async fn post_empty<T: serde::de::DeserializeOwned>(
+        &self,
+        url: Url,
+    ) -> Result<T, ApiError> {
+        let resp = self
+            .http
+            .post(url)
+            .header("X-API-Key", &self.api_key)
+            .send()
+            .await?;
+        self.handle_response(resp).await
+    }
+
     pub async fn patch<T: serde::de::DeserializeOwned, B: serde::Serialize>(
         &self,
         url: Url,
@@ -517,6 +530,47 @@ impl PersonasClient<'_> {
     pub async fn list_phone_numbers(&self) -> Result<models::ListPhoneNumbersResponse, ApiError> {
         let url = self.0.url("/v1/personas/phone-numbers");
         self.0.get(url).await
+    }
+
+    pub async fn list_background_sounds(
+        &self,
+        include_archived: bool,
+    ) -> Result<models::ListBackgroundSoundsResponse, ApiError> {
+        let mut url = self.0.url("/v1/personas/background-sounds");
+        if include_archived {
+            url.query_pairs_mut()
+                .append_pair("include_archived", "true");
+        }
+        self.0.get(url).await
+    }
+
+    pub async fn create_background_sound(
+        &self,
+        req: models::CreateBackgroundSoundRequest,
+    ) -> Result<models::CreateBackgroundSoundResponse, ApiError> {
+        let url = self.0.url("/v1/personas/background-sounds");
+        self.0.post(url, &req).await
+    }
+
+    pub async fn complete_background_sound_upload(
+        &self,
+        id: &str,
+    ) -> Result<models::BackgroundSoundResource, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/personas/background-sounds/{id}:complete"));
+        let resp: models::CompleteBackgroundSoundResponse = self.0.post_empty(url).await?;
+        Ok(resp.background_sound)
+    }
+
+    pub async fn update_background_sound(
+        &self,
+        id: &str,
+        req: models::UpdateBackgroundSoundRequest,
+    ) -> Result<models::BackgroundSoundResource, ApiError> {
+        let url = self.0.url(&format!("/v1/personas/background-sounds/{id}"));
+        let resp: models::UpdateBackgroundSoundResponse = self.0.patch(url, &req).await?;
+        Ok(resp.background_sound)
     }
 }
 

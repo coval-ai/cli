@@ -120,7 +120,10 @@ impl Commands {
             Self::Simulations { .. } => "simulations",
             Self::TestSets { .. } => "test-sets",
             Self::TestCases { .. } => "test-cases",
-            Self::Personas { .. } => "personas",
+            Self::Personas { command } => match command {
+                commands::personas::PersonaCommands::BackgroundSounds { .. } => "background-sounds",
+                _ => "personas",
+            },
             Self::Metrics { .. } => "metrics",
             Self::Mutations { .. } => "mutations",
             Self::ApiKeys { .. } => "api-keys",
