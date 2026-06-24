@@ -106,6 +106,10 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::review_projects::ReviewProjectCommands,
     },
+    Reports {
+        #[command(subcommand)]
+        command: commands::reports::ReportCommands,
+    },
 }
 
 impl Commands {
@@ -135,6 +139,7 @@ impl Commands {
             },
             Self::ReviewAnnotations { .. } => "review-annotations",
             Self::ReviewProjects { .. } => "review-projects",
+            Self::Reports { .. } => "reports",
         }
     }
 
@@ -159,6 +164,7 @@ impl Commands {
             Self::Dashboards { command } => command.operation(),
             Self::ReviewAnnotations { command } => command.operation(),
             Self::ReviewProjects { command } => command.operation(),
+            Self::Reports { command } => command.operation(),
         }
     }
 }
@@ -245,6 +251,9 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
         Commands::ReviewProjects {
             command: commands::review_projects::ReviewProjectCommands::Context,
         } => commands::agent::resource_context("review-projects", ctx),
+        Commands::Reports {
+            command: commands::reports::ReportCommands::Context,
+        } => commands::agent::resource_context("reports", ctx),
         _ => {
             let api_key = api_key.ok_or_else(|| {
                 anyhow::anyhow!(
@@ -296,6 +305,9 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
                 }
                 Commands::ReviewProjects { command } => {
                     commands::review_projects::execute(command, &client, ctx).await
+                }
+                Commands::Reports { command } => {
+                    commands::reports::execute(command, &client, ctx).await
                 }
                 _ => unreachable!(),
             }

@@ -136,6 +136,18 @@ pub struct CreateMetricRequest {
     pub min_pause_duration_seconds: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_condition: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub criteria_source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub criteria_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub criteria: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reporting_method: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_prompt_template: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub include_traces: Option<bool>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -172,6 +184,18 @@ pub struct UpdateMetricRequest {
     pub min_pause_duration_seconds: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_condition: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub criteria_source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub criteria_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub criteria: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reporting_method: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_prompt_template: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub include_traces: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]

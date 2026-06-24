@@ -550,4 +550,32 @@ const RESOURCE_SPECS: &[ResourceSpec] = &[
         }],
         pitfalls: &["Assignee lists are comma-delimited in CLI flags."],
     },
+    ResourceSpec {
+        name: "reports",
+        commands: &["context", "list", "get", "create", "update", "delete"],
+        description: "Reports save a comparison view across multiple runs, grouped by a chosen dimension.",
+        id_name: "report_id",
+        id_format: "26-character ULID",
+        requires: &["runs"],
+        optional: &[],
+        produces: &["shareable report views"],
+        related: &["runs", "agents", "personas", "mutations"],
+        workflows: &[WorkflowSpec {
+            name: "Compare runs by test case",
+            argv: &[
+                "reports",
+                "create",
+                "--name",
+                "<name>",
+                "--run-ids",
+                "<run_id>",
+                "--compare-by",
+                "test_case",
+            ],
+        }],
+        pitfalls: &[
+            "metadata_key is required when compare-by is metadata and rejected otherwise.",
+            "PUBLIC reports also mark their runs public.",
+        ],
+    },
 ];
