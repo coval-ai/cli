@@ -3221,3 +3221,87 @@ async fn test_reports_delete() {
         .success()
         .stdout(predicate::str::contains("deleted"));
 }
+
+#[tokio::test]
+async fn test_reports_create_lowercase_permissions_serializes_uppercase() {
+    let mock_server = MockServer::start().await;
+
+    // The CLI accepts lowercase `public` to match the other enums, but must
+    // serialize the uppercase wire value the v1 API requires.
+    Mock::given(method("POST"))
+        .and(path("/v1/reports"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "name": "Public Scorecard",
+            "run_ids": ["run1"],
+            "permissions": "PUBLIC"
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "report": {
+                "id": "01HXXXXXXXXXXXXXXXXXXXXXXX",
+                "name": "Public Scorecard",
+                "run_ids": ["run1"],
+                "compare_by": "none",
+                "permissions": "PUBLIC"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Public Scorecard")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--permissions")
+        .arg("public")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("01HXXXXXXXXXXXXXXXXXXXXXXX"));
+}
+
+#[test]
+fn test_reports_create_metadata_requires_metadata_key() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Bad Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("metadata")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--metadata-key is required"));
+}
+
+#[test]
+fn test_reports_create_metadata_key_rejected_without_metadata_compare_by() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Bad Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("test_case")
+        .arg("--metadata-key")
+        .arg("region")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "can only be set when --compare-by is metadata",
+        ));
+}

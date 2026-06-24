@@ -45,10 +45,10 @@ pub enum CompareBy {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ValueEnum)]
 pub enum ReportPermission {
     #[serde(rename = "PUBLIC")]
-    #[value(name = "PUBLIC")]
+    #[value(name = "public")]
     Public,
     #[serde(rename = "PRIVATE")]
-    #[value(name = "PRIVATE")]
+    #[value(name = "private")]
     Private,
 }
 

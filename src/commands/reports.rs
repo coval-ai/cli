@@ -137,6 +137,7 @@ pub async fn execute(cmd: ReportCommands, client: &CovalClient, ctx: &OutputCont
             input_json::insert(&mut input, "compare_by", args.compare_by)?;
             input_json::insert(&mut input, "metadata_key", args.metadata_key)?;
             input_json::insert(&mut input, "permissions", args.permissions)?;
+            validate_metadata_key(&input)?;
             let req: CreateReportRequest = input_json::finish(input)?;
             if req.run_ids.is_empty() {
                 anyhow::bail!("--run-ids requires at least one run ID");
@@ -157,6 +158,7 @@ pub async fn execute(cmd: ReportCommands, client: &CovalClient, ctx: &OutputCont
             input_json::insert(&mut input, "compare_by", args.compare_by)?;
             input_json::insert(&mut input, "metadata_key", args.metadata_key)?;
             input_json::insert(&mut input, "permissions", args.permissions)?;
+            validate_metadata_key(&input)?;
             let req: UpdateReportRequest = input_json::finish(input)?;
             let report = client.reports().update(&args.report_id, req).await?;
             emit_one_with_actions(
@@ -177,6 +179,27 @@ pub async fn execute(cmd: ReportCommands, client: &CovalClient, ctx: &OutputCont
                 next_actions::delete_result("reports"),
             );
         }
+    }
+    Ok(())
+}
+
+/// Validate the metadata_key / compare_by pairing before sending.
+///
+/// The API requires `metadata_key` when `compare_by` is metadata and rejects it
+/// otherwise. Only enforced against the fields present in the assembled request,
+/// so partial updates that touch neither field are untouched.
+fn validate_metadata_key(input: &serde_json::Map<String, serde_json::Value>) -> Result<()> {
+    let is_metadata =
+        input.get("compare_by").and_then(serde_json::Value::as_str) == Some("metadata");
+    let has_metadata_key = input.contains_key("metadata_key");
+
+    if is_metadata && !has_metadata_key {
+        anyhow::bail!("--metadata-key is required when --compare-by is metadata");
+    }
+    // Anything other than compare_by=metadata (including compare_by absent, where
+    // the API defaults it to none) rejects a metadata_key, so guard it client-side.
+    if !is_metadata && has_metadata_key {
+        anyhow::bail!("--metadata-key can only be set when --compare-by is metadata");
     }
     Ok(())
 }
