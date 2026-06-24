@@ -110,6 +110,13 @@ coval test-cases create \
   --test-set-id ts123456 \
   --input "I need help with my order"
 
+# Upload a custom background sound
+coval personas background-sounds upload ./lobby-noise.mp3 \
+  --display-name "Lobby Noise"
+
+# Use the returned value, e.g. custom:bg123, on a persona
+coval personas update <persona_id> --background custom:bg123
+
 # Create a dashboard and make it the organization default
 coval dashboards create \
   --name "Production Metrics" \

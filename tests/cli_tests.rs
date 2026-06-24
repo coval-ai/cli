@@ -57,6 +57,7 @@ const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
     &["test-cases", "update", "--help"],
     &["personas", "create", "--help"],
     &["personas", "update", "--help"],
+    &["personas", "background-sounds", "update", "--help"],
     &["metrics", "create", "--help"],
     &["metrics", "update", "--help"],
     &["mutations", "create", "--help"],
@@ -1216,6 +1217,193 @@ async fn test_api_error_handling_agent_mode() {
     assert_eq!(value["operation"], "get");
     assert_eq!(value["error"]["code"], "not_found");
     assert_eq!(value["error"]["message"], "Agent not found");
+}
+
+#[tokio::test]
+async fn test_personas_background_sounds_list() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/personas/background-sounds"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "background_sounds": [
+                {
+                    "id": "off",
+                    "value": "off",
+                    "source": "built_in",
+                    "display_name": "Off",
+                    "status": "active",
+                    "default_volume": 1.0
+                },
+                {
+                    "id": "sound1",
+                    "value": "custom:sound1",
+                    "source": "custom",
+                    "display_name": "Lobby Noise",
+                    "status": "active",
+                    "preview_url": "https://preview.example/sound1.mp3",
+                    "preview_url_expires_at": "2026-01-01T00:00:00Z",
+                    "default_volume": 0.3,
+                    "content_type": "audio/mpeg",
+                    "original_filename": "lobby-noise.mp3",
+                    "metadata": { "size_bytes": 12 },
+                    "created_at": "2025-01-15T10:30:00Z",
+                    "last_updated_at": "2025-01-15T10:30:00Z"
+                }
+            ]
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("personas")
+        .arg("background-sounds")
+        .arg("list")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("custom:sound1"))
+        .stdout(predicate::str::contains("Lobby Noise"));
+}
+
+#[tokio::test]
+async fn test_personas_background_sounds_upload() {
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let audio_path = temp_dir.path().join("lobby-noise.mp3");
+    std::fs::write(&audio_path, b"ID3 test audio").unwrap();
+
+    Mock::given(method("POST"))
+        .and(path("/v1/personas/background-sounds"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "display_name": "Lobby Noise",
+            "original_filename": "lobby-noise.mp3",
+            "content_type": "audio/mpeg",
+            "default_volume": 0.42,
+            "metadata": { "source": "cli-test" }
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "background_sound": {
+                "id": "sound1",
+                "value": "custom:sound1",
+                "source": "custom",
+                "display_name": "Lobby Noise",
+                "status": "pending_upload",
+                "default_volume": 0.42,
+                "content_type": "audio/mpeg",
+                "original_filename": "lobby-noise.mp3"
+            },
+            "upload_url": format!("{}/s3-upload", mock_server.uri()),
+            "upload_fields": {
+                "key": "background-sounds/org/sound1/lobby-noise.mp3",
+                "Content-Type": "audio/mpeg",
+                "policy": "policy",
+                "x-amz-signature": "signature"
+            },
+            "expires_at": "2026-01-01T00:00:00Z",
+            "max_size_bytes": 52428800
+        })))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/s3-upload"))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/personas/background-sounds/sound1:complete"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "background_sound": {
+                "id": "sound1",
+                "value": "custom:sound1",
+                "source": "custom",
+                "display_name": "Lobby Noise",
+                "status": "active",
+                "default_volume": 0.42,
+                "content_type": "audio/mpeg",
+                "original_filename": "lobby-noise.mp3",
+                "created_at": "2025-01-15T10:30:00Z",
+                "last_updated_at": "2025-01-15T10:31:00Z"
+            }
+        })))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("personas")
+        .arg("background-sounds")
+        .arg("upload")
+        .arg(&audio_path)
+        .arg("--display-name")
+        .arg("Lobby Noise")
+        .arg("--default-volume")
+        .arg("0.42")
+        .arg("--metadata")
+        .arg("source=cli-test")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("custom:sound1"))
+        .stdout(predicate::str::contains("active"));
+}
+
+#[tokio::test]
+async fn test_personas_background_sounds_update_accepts_custom_value() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/personas/background-sounds/sound1"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "display_name": "Archived Lobby Noise",
+            "status": "archived"
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "background_sound": {
+                "id": "sound1",
+                "value": "custom:sound1",
+                "source": "custom",
+                "display_name": "Archived Lobby Noise",
+                "status": "archived",
+                "default_volume": 0.42,
+                "content_type": "audio/mpeg",
+                "original_filename": "lobby-noise.mp3"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("personas")
+        .arg("background-sounds")
+        .arg("update")
+        .arg("custom:sound1")
+        .arg("--display-name")
+        .arg("Archived Lobby Noise")
+        .arg("--status")
+        .arg("archived")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Archived Lobby Noise"))
+        .stdout(predicate::str::contains("archived"));
 }
 
 #[tokio::test]

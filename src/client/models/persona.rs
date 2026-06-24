@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 use crate::output::Tabular;
 
@@ -158,4 +159,97 @@ impl Tabular for PhoneNumberMapping {
     fn row(&self) -> Vec<String> {
         vec![self.index.to_string(), self.phone_number.clone()]
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackgroundSoundResource {
+    pub id: String,
+    pub value: String,
+    pub source: String,
+    pub display_name: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview_url_expires_at: Option<DateTime<Utc>>,
+    pub default_volume: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub original_filename: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_updated_at: Option<DateTime<Utc>>,
+}
+
+impl Tabular for BackgroundSoundResource {
+    fn headers() -> Vec<&'static str> {
+        vec!["ID", "VALUE", "SOURCE", "STATUS", "DISPLAY NAME", "VOLUME"]
+    }
+
+    fn row(&self) -> Vec<String> {
+        vec![
+            self.id.clone(),
+            self.value.clone(),
+            self.source.clone(),
+            self.status.clone(),
+            truncate(&self.display_name, 25),
+            format!("{:.2}", self.default_volume),
+        ]
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListBackgroundSoundsResponse {
+    pub background_sounds: Vec<BackgroundSoundResource>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateBackgroundSoundRequest {
+    pub display_name: String,
+    pub original_filename: String,
+    pub content_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_volume: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<BTreeMap<String, String>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateBackgroundSoundResponse {
+    pub background_sound: BackgroundSoundResource,
+    pub upload_url: String,
+    pub upload_fields: BTreeMap<String, String>,
+    pub expires_at: DateTime<Utc>,
+    pub max_size_bytes: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CompleteBackgroundSoundResponse {
+    pub background_sound: BackgroundSoundResource,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub enum BackgroundSoundUpdateStatus {
+    Active,
+    Archived,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct UpdateBackgroundSoundRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_volume: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<BackgroundSoundUpdateStatus>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateBackgroundSoundResponse {
+    pub background_sound: BackgroundSoundResource,
 }
