@@ -1308,12 +1308,14 @@ async fn test_personas_background_sounds_upload() {
             "expires_at": "2026-01-01T00:00:00Z",
             "max_size_bytes": 52428800
         })))
+        .expect(1)
         .mount(&mock_server)
         .await;
 
     Mock::given(method("POST"))
         .and(path("/s3-upload"))
         .respond_with(ResponseTemplate::new(204))
+        .expect(1)
         .mount(&mock_server)
         .await;
 
@@ -1334,6 +1336,7 @@ async fn test_personas_background_sounds_upload() {
                 "last_updated_at": "2025-01-15T10:31:00Z"
             }
         })))
+        .expect(1)
         .mount(&mock_server)
         .await;
 

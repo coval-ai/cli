@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use clap::{Args, Subcommand};
 
+const BACKGROUND_SOUND_UPLOAD_TIMEOUT_SECONDS: u64 = 300;
+
 use crate::client::models::{
     BackgroundSoundUpdateStatus, CreateBackgroundSoundRequest, CreatePersonaRequest, ListParams,
     UpdateBackgroundSoundRequest, UpdatePersonaRequest,
@@ -313,7 +315,8 @@ async fn execute_background_sound(
             };
 
             let original_filename = file_name(&args.file)?;
-            let bytes = std::fs::read(&args.file)
+            let size = std::fs::metadata(&args.file)
+                .map(|metadata| metadata.len())
                 .map_err(|err| anyhow::anyhow!("failed to read {}: {err}", args.file.display()))?;
             let display_name = args
                 .display_name
@@ -330,14 +333,25 @@ async fn execute_background_sound(
                 })
                 .await?;
 
-            let size = bytes.len() as u64;
             if size > create.max_size_bytes {
+                let _ = client
+                    .personas()
+                    .update_background_sound(
+                        &create.background_sound.id,
+                        UpdateBackgroundSoundRequest {
+                            status: Some(BackgroundSoundUpdateStatus::Archived),
+                            ..Default::default()
+                        },
+                    )
+                    .await;
                 anyhow::bail!(
                     "audio file is too large: {} bytes exceeds max {} bytes",
                     size,
                     create.max_size_bytes
                 );
             }
+            let bytes = std::fs::read(&args.file)
+                .map_err(|err| anyhow::anyhow!("failed to read {}: {err}", args.file.display()))?;
 
             upload_file_with_signed_post(
                 &create.upload_url,
@@ -435,13 +449,19 @@ async fn upload_file_with_signed_post(
     let file_part = reqwest::multipart::Part::bytes(bytes)
         .file_name(original_filename.to_string())
         .mime_str(content_type)?;
-    let response = reqwest::Client::new()
+    let response = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(
+            BACKGROUND_SOUND_UPLOAD_TIMEOUT_SECONDS,
+        ))
+        .build()?
         .post(upload_url)
         .multipart(form.part("file", file_part))
         .send()
         .await?;
     if !response.status().is_success() {
-        anyhow::bail!("background sound upload failed: HTTP {}", response.status());
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        anyhow::bail!("background sound upload failed: HTTP {status}\n{body}");
     }
     Ok(())
 }

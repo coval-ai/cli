@@ -10,6 +10,10 @@ use self::error::ApiError;
 pub const DEFAULT_BASE_URL: &str = "https://api.coval.dev";
 const USER_AGENT: &str = concat!("coval-cli/", env!("CARGO_PKG_VERSION"));
 
+fn encode_path_segment(value: &str) -> String {
+    url::form_urlencoded::byte_serialize(value.as_bytes()).collect()
+}
+
 pub struct CovalClient {
     http: Client,
     base_url: Url,
@@ -556,6 +560,7 @@ impl PersonasClient<'_> {
         &self,
         id: &str,
     ) -> Result<models::BackgroundSoundResource, ApiError> {
+        let id = encode_path_segment(id);
         let url = self
             .0
             .url(&format!("/v1/personas/background-sounds/{id}:complete"));
@@ -568,6 +573,7 @@ impl PersonasClient<'_> {
         id: &str,
         req: models::UpdateBackgroundSoundRequest,
     ) -> Result<models::BackgroundSoundResource, ApiError> {
+        let id = encode_path_segment(id);
         let url = self.0.url(&format!("/v1/personas/background-sounds/{id}"));
         let resp: models::UpdateBackgroundSoundResponse = self.0.patch(url, &req).await?;
         Ok(resp.background_sound)
