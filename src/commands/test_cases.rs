@@ -68,14 +68,20 @@ pub struct CreateArgs {
     /// Test case input text
     #[arg(long)]
     input: Option<String>,
-    /// Expected output text
+    /// Single expected output text (deprecated; prefer --expected-behavior)
     #[arg(long)]
     expected: Option<String>,
+    /// Expected behavior; repeat the flag for multiple behaviors
+    #[arg(long = "expected-behavior")]
+    expected_behavior: Vec<String>,
     /// Human-readable description
     #[arg(long)]
     description: Option<String>,
+    /// Input type (default SCENARIO)
+    #[arg(long)]
+    input_type: Option<String>,
     /// Read JSON lines from stdin for bulk creation
-    #[arg(long, conflicts_with_all = ["input", "expected", "description"])]
+    #[arg(long, conflicts_with_all = ["input", "expected", "expected_behavior", "description", "input_type"])]
     stdin: bool,
 }
 
@@ -85,7 +91,11 @@ struct StdinTestCase {
     #[serde(default)]
     expected_output_str: Option<String>,
     #[serde(default)]
+    expected_behaviors: Option<Vec<String>>,
+    #[serde(default)]
     description: Option<String>,
+    #[serde(default)]
+    input_type: Option<String>,
 }
 
 #[derive(Args)]
@@ -96,12 +106,18 @@ pub struct UpdateArgs {
     /// Updated test case input text
     #[arg(long)]
     input: Option<String>,
-    /// Updated expected output text
+    /// Updated single expected output text (deprecated; prefer --expected-behavior)
     #[arg(long)]
     expected: Option<String>,
+    /// Updated expected behavior; repeat the flag to replace with multiple behaviors
+    #[arg(long = "expected-behavior")]
+    expected_behavior: Vec<String>,
     /// Updated description
     #[arg(long)]
     description: Option<String>,
+    /// Updated input type
+    #[arg(long)]
+    input_type: Option<String>,
 }
 
 #[derive(Args)]
@@ -181,9 +197,9 @@ pub async fn execute(
                         input_str: tc.input_str,
                         expected_output_str: tc.expected_output_str,
                         description: tc.description,
-                        expected_behaviors: None,
+                        expected_behaviors: tc.expected_behaviors,
                         expected_output_json: None,
-                        input_type: None,
+                        input_type: tc.input_type,
                         simulation_metadata_input: None,
                         metric_input: None,
                         user_notes: None,
@@ -217,7 +233,13 @@ pub async fn execute(
             } else {
                 input_json::insert(&mut input, "input_str", args.input)?;
                 input_json::insert(&mut input, "expected_output_str", args.expected)?;
+                input_json::insert(
+                    &mut input,
+                    "expected_behaviors",
+                    vec_to_option(args.expected_behavior),
+                )?;
                 input_json::insert(&mut input, "description", args.description)?;
+                input_json::insert(&mut input, "input_type", args.input_type)?;
                 let req: CreateTestCaseRequest = input_json::finish(input)?;
                 let test_case = client.test_cases().create(req).await?;
                 emit_one_with_actions(
@@ -233,7 +255,13 @@ pub async fn execute(
             let mut input = args.input_json.object()?;
             input_json::insert(&mut input, "input_str", args.input)?;
             input_json::insert(&mut input, "expected_output_str", args.expected)?;
+            input_json::insert(
+                &mut input,
+                "expected_behaviors",
+                vec_to_option(args.expected_behavior),
+            )?;
             input_json::insert(&mut input, "description", args.description)?;
+            input_json::insert(&mut input, "input_type", args.input_type)?;
             let req: UpdateTestCaseRequest = input_json::finish(input)?;
             let test_case = client.test_cases().update(&args.test_case_id, req).await?;
             emit_one_with_actions(
@@ -267,6 +295,14 @@ fn list_actions(id: Option<&str>) -> Vec<NextAction> {
         actions.insert(0, next_actions::get("test-cases", id).primary());
     }
     actions
+}
+
+fn vec_to_option(values: Vec<String>) -> Option<Vec<String>> {
+    if values.is_empty() {
+        None
+    } else {
+        Some(values)
+    }
 }
 
 fn item_actions(test_case_id: &str, test_set_id: Option<&str>) -> Vec<NextAction> {

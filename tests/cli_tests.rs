@@ -43,6 +43,7 @@ const AGENT_RESOURCES: &[&str] = &[
     "dashboards",
     "review-annotations",
     "review-projects",
+    "reports",
 ];
 
 const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
@@ -76,6 +77,8 @@ const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
     &["review-annotations", "update", "--help"],
     &["review-projects", "create", "--help"],
     &["review-projects", "update", "--help"],
+    &["reports", "create", "--help"],
+    &["reports", "update", "--help"],
 ];
 
 #[test]
@@ -2947,4 +2950,358 @@ async fn test_review_projects_delete() {
         .assert()
         .success()
         .stdout(predicate::str::contains("deleted"));
+}
+
+#[tokio::test]
+async fn test_metrics_create_composite_test_case() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/metrics"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "metric_type": "METRIC_COMPOSITE_EVALUATION",
+            "criteria_source": "test_case",
+            "criteria_path": "expected_behaviors",
+            "reporting_method": "all_criteria_met"
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "metric": {
+                "name": "metrics/comp1",
+                "id": "comp1",
+                "metric_name": "Adversarial Composite",
+                "description": "All behaviors met",
+                "metric_type": "METRIC_COMPOSITE_EVALUATION",
+                "criteria_source": "test_case",
+                "criteria_path": "expected_behaviors",
+                "reporting_method": "all_criteria_met",
+                "create_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("metrics")
+        .arg("create")
+        .arg("--name")
+        .arg("Adversarial Composite")
+        .arg("--description")
+        .arg("All behaviors met")
+        .arg("--type")
+        .arg("composite")
+        .arg("--criteria-source")
+        .arg("test_case")
+        .arg("--criteria-path")
+        .arg("expected_behaviors")
+        .arg("--reporting-method")
+        .arg("all_criteria_met")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("comp1"));
+}
+
+#[test]
+fn test_metrics_create_composite_test_case_requires_criteria_path() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("metrics")
+        .arg("create")
+        .arg("--name")
+        .arg("Bad Composite")
+        .arg("--description")
+        .arg("missing path")
+        .arg("--type")
+        .arg("composite")
+        .arg("--criteria-source")
+        .arg("test_case")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--criteria-path is required"));
+}
+
+#[test]
+fn test_metrics_create_composite_metadata_requires_criteria() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("metrics")
+        .arg("create")
+        .arg("--name")
+        .arg("Bad Composite")
+        .arg("--description")
+        .arg("missing criteria")
+        .arg("--type")
+        .arg("composite")
+        .arg("--criteria-source")
+        .arg("metric_metadata")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--criteria is required"));
+}
+
+#[tokio::test]
+async fn test_test_cases_create_with_expected_behaviors() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/test-cases"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "test_set_id": "ts123",
+            "input_str": "probe",
+            "expected_behaviors": ["refuses", "stays on policy"]
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "test_case": {
+                "name": "test-cases/tc1",
+                "id": "tc1",
+                "test_set_id": "ts123",
+                "input_str": "probe",
+                "expected_behaviors": ["refuses", "stays on policy"],
+                "create_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("test-cases")
+        .arg("create")
+        .arg("--test-set-id")
+        .arg("ts123")
+        .arg("--input")
+        .arg("probe")
+        .arg("--expected-behavior")
+        .arg("refuses")
+        .arg("--expected-behavior")
+        .arg("stays on policy")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("tc1"));
+}
+
+#[tokio::test]
+async fn test_reports_create_compare_by_test_case() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/reports"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "name": "Adversarial Scorecard",
+            "run_ids": ["run1", "run2"],
+            "compare_by": "test_case"
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "report": {
+                "id": "01HXXXXXXXXXXXXXXXXXXXXXXX",
+                "name": "Adversarial Scorecard",
+                "run_ids": ["run1", "run2"],
+                "compare_by": "test_case",
+                "permissions": "PRIVATE"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Adversarial Scorecard")
+        .arg("--run-ids")
+        .arg("run1,run2")
+        .arg("--compare-by")
+        .arg("test_case")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("01HXXXXXXXXXXXXXXXXXXXXXXX"));
+}
+
+#[tokio::test]
+async fn test_reports_list() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/reports"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "reports": [
+                {
+                    "id": "01HXXXXXXXXXXXXXXXXXXXXXXX",
+                    "name": "Adversarial Scorecard",
+                    "run_ids": ["run1"],
+                    "compare_by": "test_case",
+                    "permissions": "PRIVATE"
+                }
+            ],
+            "next_cursor": null
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("list")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Adversarial Scorecard"));
+}
+
+#[tokio::test]
+async fn test_reports_get() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/reports/01HXXXXXXXXXXXXXXXXXXXXXXX"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "report": {
+                "id": "01HXXXXXXXXXXXXXXXXXXXXXXX",
+                "name": "Adversarial Scorecard",
+                "run_ids": ["run1"],
+                "compare_by": "test_case",
+                "permissions": "PRIVATE"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("get")
+        .arg("01HXXXXXXXXXXXXXXXXXXXXXXX")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("01HXXXXXXXXXXXXXXXXXXXXXXX"));
+}
+
+#[tokio::test]
+async fn test_reports_delete() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("DELETE"))
+        .and(path("/v1/reports/01HXXXXXXXXXXXXXXXXXXXXXXX"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("delete")
+        .arg("01HXXXXXXXXXXXXXXXXXXXXXXX")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("deleted"));
+}
+
+#[tokio::test]
+async fn test_reports_create_lowercase_permissions_serializes_uppercase() {
+    let mock_server = MockServer::start().await;
+
+    // The CLI accepts lowercase `public` to match the other enums, but must
+    // serialize the uppercase wire value the v1 API requires.
+    Mock::given(method("POST"))
+        .and(path("/v1/reports"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "name": "Public Scorecard",
+            "run_ids": ["run1"],
+            "permissions": "PUBLIC"
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "report": {
+                "id": "01HXXXXXXXXXXXXXXXXXXXXXXX",
+                "name": "Public Scorecard",
+                "run_ids": ["run1"],
+                "compare_by": "none",
+                "permissions": "PUBLIC"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Public Scorecard")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--permissions")
+        .arg("public")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("01HXXXXXXXXXXXXXXXXXXXXXXX"));
+}
+
+#[test]
+fn test_reports_create_metadata_requires_metadata_key() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Bad Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("metadata")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--metadata-key is required"));
+}
+
+#[test]
+fn test_reports_create_metadata_key_rejected_without_metadata_compare_by() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Bad Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("test_case")
+        .arg("--metadata-key")
+        .arg("region")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "can only be set when --compare-by is metadata",
+        ));
 }

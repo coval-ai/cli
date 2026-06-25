@@ -201,6 +201,10 @@ impl CovalClient {
         ReviewProjectsClient(self)
     }
 
+    pub fn reports(&self) -> ReportsClient<'_> {
+        ReportsClient(self)
+    }
+
     pub fn widgets(&self, dashboard_id: &str) -> WidgetsClient<'_> {
         WidgetsClient {
             client: self,
@@ -227,6 +231,7 @@ pub struct ScheduledRunsClient<'a>(&'a CovalClient);
 pub struct DashboardsClient<'a>(&'a CovalClient);
 pub struct ReviewAnnotationsClient<'a>(&'a CovalClient);
 pub struct ReviewProjectsClient<'a>(&'a CovalClient);
+pub struct ReportsClient<'a>(&'a CovalClient);
 pub struct WidgetsClient<'a> {
     client: &'a CovalClient,
     dashboard_id: String,
@@ -934,6 +939,56 @@ impl ReviewProjectsClient<'_> {
 
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
         let url = self.0.url(&format!("/v1/review-projects/{id}"));
+        self.0.delete(url).await
+    }
+}
+
+impl ReportsClient<'_> {
+    pub async fn list(
+        &self,
+        cursor: Option<&str>,
+        limit: Option<u32>,
+    ) -> Result<models::ListReportsResponse, ApiError> {
+        let mut url = self.0.url("/v1/reports");
+        {
+            let mut pairs = url.query_pairs_mut();
+            if let Some(cursor) = cursor {
+                pairs.append_pair("cursor", cursor);
+            }
+            if let Some(limit) = limit {
+                pairs.append_pair("limit", &limit.to_string());
+            }
+        }
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::Report, ApiError> {
+        let url = self.0.url(&format!("/v1/reports/{id}"));
+        let resp: models::GetReportResponse = self.0.get(url).await?;
+        Ok(resp.report)
+    }
+
+    pub async fn create(
+        &self,
+        req: models::CreateReportRequest,
+    ) -> Result<models::Report, ApiError> {
+        let url = self.0.url("/v1/reports");
+        let resp: models::CreateReportResponse = self.0.post(url, &req).await?;
+        Ok(resp.report)
+    }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        req: models::UpdateReportRequest,
+    ) -> Result<models::Report, ApiError> {
+        let url = self.0.url(&format!("/v1/reports/{id}"));
+        let resp: models::UpdateReportResponse = self.0.patch(url, &req).await?;
+        Ok(resp.report)
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/reports/{id}"));
         self.0.delete(url).await
     }
 }

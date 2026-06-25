@@ -14,8 +14,8 @@ pub enum MetricCommands {
     Context,
     List(ListArgs),
     Get(GetArgs),
-    Create(CreateArgs),
-    Update(UpdateArgs),
+    Create(Box<CreateArgs>),
+    Update(Box<UpdateArgs>),
     Delete(DeleteArgs),
 }
 
@@ -55,7 +55,7 @@ pub struct GetArgs {
 
 #[derive(Args)]
 #[command(
-    after_help = "Required fields by metric type:\n  llm-binary          --prompt\n  categorical         --prompt --categories\n  numerical           --prompt --min-value --max-value\n  audio-binary        --prompt\n  audio-categorical   --prompt --categories\n  audio-numerical     --prompt --min-value --max-value\n  toolcall            --prompt\n  metadata            --metadata-field-type --metadata-field-key\n  regex               --regex-pattern\n  pause               --min-pause-duration"
+    after_help = "Required fields by metric type:\n  llm-binary          --prompt\n  categorical         --prompt --categories\n  numerical           --prompt --min-value --max-value\n  audio-binary        --prompt\n  audio-categorical   --prompt --categories\n  audio-numerical     --prompt --min-value --max-value\n  toolcall            --prompt\n  metadata            --metadata-field-type --metadata-field-key\n  regex               --regex-pattern\n  pause               --min-pause-duration\n  composite           --criteria-source test_case --criteria-path expected_behaviors\n                      or --criteria-source metric_metadata --criteria \"a,b,c\""
 )]
 pub struct CreateArgs {
     #[command(flatten)]
@@ -106,6 +106,24 @@ pub struct CreateArgs {
     /// JSON string for pass/fail target condition
     #[arg(long)]
     target_condition: Option<String>,
+    /// Composite: where per-criterion checks come from (test_case or metric_metadata)
+    #[arg(long)]
+    criteria_source: Option<String>,
+    /// Composite: test-case field holding the criteria list (required when criteria-source=test_case, e.g. expected_behaviors)
+    #[arg(long)]
+    criteria_path: Option<String>,
+    /// Composite: comma-separated static criteria (required when criteria-source=metric_metadata)
+    #[arg(long, value_delimiter = ',')]
+    criteria: Option<Vec<String>>,
+    /// Composite: how to score (percentage_of_criteria_met, count_of_criteria_met, or all_criteria_met)
+    #[arg(long)]
+    reporting_method: Option<String>,
+    /// Composite: optional base prompt template for the judge
+    #[arg(long)]
+    base_prompt_template: Option<String>,
+    /// Composite: include traces in the evaluation
+    #[arg(long)]
+    include_traces: Option<bool>,
 }
 
 #[derive(Args)]
@@ -159,6 +177,24 @@ pub struct UpdateArgs {
     /// JSON string for pass/fail target condition
     #[arg(long)]
     target_condition: Option<String>,
+    /// Composite: where per-criterion checks come from (test_case or metric_metadata)
+    #[arg(long)]
+    criteria_source: Option<String>,
+    /// Composite: test-case field holding the criteria list (e.g. expected_behaviors)
+    #[arg(long)]
+    criteria_path: Option<String>,
+    /// Composite: comma-separated static criteria (used when criteria-source=metric_metadata)
+    #[arg(long, value_delimiter = ',')]
+    criteria: Option<Vec<String>>,
+    /// Composite: how to score (percentage_of_criteria_met, count_of_criteria_met, or all_criteria_met)
+    #[arg(long)]
+    reporting_method: Option<String>,
+    /// Composite: optional base prompt template for the judge
+    #[arg(long)]
+    base_prompt_template: Option<String>,
+    /// Composite: include traces in the evaluation
+    #[arg(long)]
+    include_traces: Option<bool>,
 }
 
 #[derive(Args)]
@@ -200,6 +236,7 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
             );
         }
         MetricCommands::Create(args) => {
+            let args = *args;
             let mut input = args.input_json.object()?;
             let target_condition: Option<serde_json::Value> = args
                 .target_condition
@@ -227,6 +264,17 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 args.min_pause_duration,
             )?;
             input_json::insert(&mut input, "target_condition", target_condition)?;
+            input_json::insert(&mut input, "criteria_source", args.criteria_source)?;
+            input_json::insert(&mut input, "criteria_path", args.criteria_path)?;
+            input_json::insert(&mut input, "criteria", args.criteria)?;
+            input_json::insert(&mut input, "reporting_method", args.reporting_method)?;
+            input_json::insert(
+                &mut input,
+                "base_prompt_template",
+                args.base_prompt_template,
+            )?;
+            input_json::insert(&mut input, "include_traces", args.include_traces)?;
+            validate_composite(&input)?;
             let req: CreateMetricRequest = input_json::finish(input)?;
             let metric = client.metrics().create(req).await?;
             emit_one_with_actions(
@@ -238,6 +286,7 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
             );
         }
         MetricCommands::Update(args) => {
+            let args = *args;
             let mut input = args.input_json.object()?;
             let target_condition: Option<serde_json::Value> = args
                 .target_condition
@@ -265,6 +314,16 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 args.min_pause_duration,
             )?;
             input_json::insert(&mut input, "target_condition", target_condition)?;
+            input_json::insert(&mut input, "criteria_source", args.criteria_source)?;
+            input_json::insert(&mut input, "criteria_path", args.criteria_path)?;
+            input_json::insert(&mut input, "criteria", args.criteria)?;
+            input_json::insert(&mut input, "reporting_method", args.reporting_method)?;
+            input_json::insert(
+                &mut input,
+                "base_prompt_template",
+                args.base_prompt_template,
+            )?;
+            input_json::insert(&mut input, "include_traces", args.include_traces)?;
             let req: UpdateMetricRequest = input_json::finish(input)?;
             let metric = client.metrics().update(&args.metric_id, req).await?;
             emit_one_with_actions(
@@ -283,6 +342,53 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 operation,
                 "Metric deleted.",
                 next_actions::delete_result("metrics"),
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Validate the required composite-metric field combinations before sending.
+///
+/// Only enforced when the assembled request is a composite metric, so other
+/// metric types and non-composite `--input-json` payloads are untouched.
+fn validate_composite(input: &serde_json::Map<String, serde_json::Value>) -> Result<()> {
+    let is_composite = input.get("metric_type").and_then(serde_json::Value::as_str)
+        == Some("METRIC_COMPOSITE_EVALUATION");
+    if !is_composite {
+        return Ok(());
+    }
+
+    let source = input
+        .get("criteria_source")
+        .and_then(serde_json::Value::as_str);
+    match source {
+        Some("test_case") => {
+            if input
+                .get("criteria_path")
+                .and_then(serde_json::Value::as_str)
+                .is_none()
+            {
+                anyhow::bail!(
+                    "--criteria-path is required when --criteria-source is test_case (e.g. expected_behaviors)"
+                );
+            }
+        }
+        Some("metric_metadata") => {
+            let has_criteria = input
+                .get("criteria")
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|criteria| !criteria.is_empty());
+            if !has_criteria {
+                anyhow::bail!("--criteria is required when --criteria-source is metric_metadata");
+            }
+        }
+        Some(other) => {
+            anyhow::bail!("--criteria-source must be test_case or metric_metadata, got '{other}'");
+        }
+        None => {
+            anyhow::bail!(
+                "composite metrics require --criteria-source (test_case or metric_metadata)"
             );
         }
     }
