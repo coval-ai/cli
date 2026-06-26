@@ -269,10 +269,7 @@ impl Tabular for Voice {
     }
 
     fn row(&self) -> Vec<String> {
-        vec![
-            self.voice_name.clone(),
-            self.supported_languages.join(", "),
-        ]
+        vec![self.voice_name.clone(), self.supported_languages.join(", ")]
     }
 }
 
