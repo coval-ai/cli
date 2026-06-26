@@ -1109,9 +1109,7 @@ impl MonitorsClient<'_> {
         monitor_id: &str,
         params: models::ListParams,
     ) -> Result<models::ListMonitorEventsResponse, ApiError> {
-        let mut url = self
-            .0
-            .url(&format!("/v1/monitors/{monitor_id}/events"));
+        let mut url = self.0.url(&format!("/v1/monitors/{monitor_id}/events"));
         params.apply_to(&mut url);
         self.0.get(url).await
     }
