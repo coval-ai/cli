@@ -583,6 +583,11 @@ impl PersonasClient<'_> {
         let resp: models::UpdateBackgroundSoundResponse = self.0.patch(url, &req).await?;
         Ok(resp.background_sound)
     }
+
+    pub async fn list_voices(&self) -> Result<models::ListVoicesResponse, ApiError> {
+        let url = self.0.url("/v1/personas/voices");
+        self.0.get(url).await
+    }
 }
 
 impl MetricsClient<'_> {

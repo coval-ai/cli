@@ -33,6 +33,7 @@ pub enum PersonaCommands {
     },
     #[command(name = "phone-numbers")]
     PhoneNumbers,
+    Voices,
 }
 
 impl PersonaCommands {
@@ -46,6 +47,7 @@ impl PersonaCommands {
             Self::Delete(_) => "delete",
             Self::BackgroundSounds { command } => command.operation(),
             Self::PhoneNumbers => "phone-numbers",
+            Self::Voices => "voices",
         }
     }
 }
@@ -276,6 +278,16 @@ pub async fn execute(
                 "personas",
                 operation,
                 &response.phone_numbers,
+                vec![next_actions::context("personas")],
+            );
+        }
+        PersonaCommands::Voices => {
+            let response = client.personas().list_voices().await?;
+            emit_list_with_actions(
+                ctx,
+                "personas",
+                operation,
+                &response.voices,
                 vec![next_actions::context("personas")],
             );
         }
