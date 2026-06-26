@@ -75,10 +75,7 @@ pub async fn execute(cmd: TagCommands, client: &CovalClient, ctx: &OutputContext
                 "tags",
                 operation,
                 &response.tags,
-                next_actions::list_result(
-                    "tags",
-                    response.tags.first().map(|t| t.id.as_str()),
-                ),
+                next_actions::list_result("tags", response.tags.first().map(|t| t.id.as_str())),
             );
         }
         TagCommands::Get(args) => {

@@ -318,9 +318,7 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
                 Commands::Reports { command } => {
                     commands::reports::execute(command, &client, ctx).await
                 }
-                Commands::Tags { command } => {
-                    commands::tags::execute(command, &client, ctx).await
-                }
+                Commands::Tags { command } => commands::tags::execute(command, &client, ctx).await,
                 _ => unreachable!(),
             }
         }
