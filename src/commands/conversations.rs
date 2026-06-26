@@ -29,6 +29,7 @@ pub enum ConversationCommands {
     Metrics(MetricsArgs),
     #[command(name = "metric-detail")]
     MetricDetail(MetricDetailArgs),
+    Patch(PatchArgs),
 }
 
 impl ConversationCommands {
@@ -42,6 +43,7 @@ impl ConversationCommands {
             Self::Submit(_) => "submit",
             Self::Metrics(_) => "metrics",
             Self::MetricDetail(_) => "metric-detail",
+            Self::Patch(_) => "patch",
         }
     }
 }
@@ -125,6 +127,15 @@ pub struct MetricsArgs {
 pub struct MetricDetailArgs {
     conversation_id: String,
     metric_id: String,
+}
+
+#[derive(Args)]
+pub struct PatchArgs {
+    conversation_id: String,
+    #[arg(long)]
+    audio_url: Option<String>,
+    #[arg(long)]
+    audio: Option<PathBuf>,
 }
 
 pub async fn execute(
@@ -246,6 +257,30 @@ pub async fn execute(
         ConversationCommands::Submit(args) => {
             let req = build_submit_request(args)?;
             let conversation = client.conversations().submit(req).await?;
+            emit_one_with_actions(
+                ctx,
+                "conversations",
+                operation,
+                &conversation,
+                conversation_actions(&conversation.conversation_id),
+            );
+        }
+        ConversationCommands::Patch(args) => {
+            use crate::client::models::PatchConversationRequest;
+            let audio_b64 = match args.audio {
+                Some(path) => {
+                    let data = std::fs::read(&path)
+                        .with_context(|| format!("Failed to read audio file: {}", path.display()))?;
+                    Some(BASE64.encode(&data))
+                }
+                None => None,
+            };
+            let req = PatchConversationRequest {
+                audio: audio_b64,
+                audio_url: args.audio_url,
+                audio_reference: None,
+            };
+            let conversation = client.conversations().patch(&args.conversation_id, req).await?;
             emit_one_with_actions(
                 ctx,
                 "conversations",
