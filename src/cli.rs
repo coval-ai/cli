@@ -110,6 +110,10 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::reports::ReportCommands,
     },
+    Monitors {
+        #[command(subcommand)]
+        command: commands::monitors::MonitorCommands,
+    },
 }
 
 impl Commands {
@@ -140,6 +144,7 @@ impl Commands {
             Self::ReviewAnnotations { .. } => "review-annotations",
             Self::ReviewProjects { .. } => "review-projects",
             Self::Reports { .. } => "reports",
+            Self::Monitors { .. } => "monitors",
         }
     }
 
@@ -165,6 +170,7 @@ impl Commands {
             Self::ReviewAnnotations { command } => command.operation(),
             Self::ReviewProjects { command } => command.operation(),
             Self::Reports { command } => command.operation(),
+            Self::Monitors { command } => command.operation(),
         }
     }
 }
@@ -254,6 +260,9 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
         Commands::Reports {
             command: commands::reports::ReportCommands::Context,
         } => commands::agent::resource_context("reports", ctx),
+        Commands::Monitors {
+            command: commands::monitors::MonitorCommands::Context,
+        } => commands::agent::resource_context("monitors", ctx),
         _ => {
             let api_key = api_key.ok_or_else(|| {
                 anyhow::anyhow!(
@@ -308,6 +317,9 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
                 }
                 Commands::Reports { command } => {
                     commands::reports::execute(command, &client, ctx).await
+                }
+                Commands::Monitors { command } => {
+                    commands::monitors::execute(command, &client, ctx).await
                 }
                 _ => unreachable!(),
             }
