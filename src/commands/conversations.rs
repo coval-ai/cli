@@ -269,8 +269,9 @@ pub async fn execute(
             use crate::client::models::PatchConversationRequest;
             let audio_b64 = match args.audio {
                 Some(path) => {
-                    let data = std::fs::read(&path)
-                        .with_context(|| format!("Failed to read audio file: {}", path.display()))?;
+                    let data = std::fs::read(&path).with_context(|| {
+                        format!("Failed to read audio file: {}", path.display())
+                    })?;
                     Some(BASE64.encode(&data))
                 }
                 None => None,
@@ -280,7 +281,10 @@ pub async fn execute(
                 audio_url: args.audio_url,
                 audio_reference: None,
             };
-            let conversation = client.conversations().patch(&args.conversation_id, req).await?;
+            let conversation = client
+                .conversations()
+                .patch(&args.conversation_id, req)
+                .await?;
             emit_one_with_actions(
                 ctx,
                 "conversations",
