@@ -494,6 +494,20 @@ impl TestCasesClient<'_> {
         let url = self.0.url(&format!("/v1/test-cases/{id}"));
         self.0.delete(url).await
     }
+
+    pub async fn media_upload_url(
+        &self,
+        test_case_id: &str,
+        filename: &str,
+        mime_type: &str,
+    ) -> Result<models::MediaUploadUrlResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/test-cases/{test_case_id}/media:upload-url"));
+        let req = models::MediaUploadUrlRequest {
+            filename: filename.to_string(),
+            mime_type: mime_type.to_string(),
+        };
+        self.0.post(url, &req).await
+    }
 }
 
 impl PersonasClient<'_> {
