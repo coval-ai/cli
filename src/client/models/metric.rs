@@ -320,7 +320,14 @@ pub struct Baseline {
 
 impl Tabular for Baseline {
     fn headers() -> Vec<&'static str> {
-        vec!["ID", "Display Name", "Status", "Direction", "Obs", "Baseline"]
+        vec![
+            "ID",
+            "Display Name",
+            "Status",
+            "Direction",
+            "Obs",
+            "Baseline",
+        ]
     }
     fn row(&self) -> Vec<String> {
         vec![
@@ -329,7 +336,9 @@ impl Tabular for Baseline {
             self.status.as_deref().unwrap_or("").to_string(),
             self.direction.as_deref().unwrap_or("").to_string(),
             self.observation_count.unwrap_or(0).to_string(),
-            self.baseline_float.map(|v| format!("{:.4}", v)).unwrap_or_default(),
+            self.baseline_float
+                .map(|v| format!("{:.4}", v))
+                .unwrap_or_default(),
         ]
     }
 }
@@ -371,9 +380,16 @@ impl Tabular for Threshold {
     fn row(&self) -> Vec<String> {
         vec![
             self.name.clone(),
-            self.comparison_operator.as_deref().unwrap_or("").to_string(),
-            self.target_float_upper.map(|v| v.to_string()).unwrap_or_default(),
-            self.target_float_lower.map(|v| v.to_string()).unwrap_or_default(),
+            self.comparison_operator
+                .as_deref()
+                .unwrap_or("")
+                .to_string(),
+            self.target_float_upper
+                .map(|v| v.to_string())
+                .unwrap_or_default(),
+            self.target_float_lower
+                .map(|v| v.to_string())
+                .unwrap_or_default(),
             self.source.as_deref().unwrap_or("").to_string(),
         ]
     }
