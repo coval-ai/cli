@@ -258,7 +258,10 @@ pub async fn execute(
             }
         }
         SimulationCommands::Resimulate(args) => {
-            let simulation = client.simulations().resimulate(&args.simulation_id, args.dev_id.as_deref()).await?;
+            let simulation = client
+                .simulations()
+                .resimulate(&args.simulation_id, args.dev_id.as_deref())
+                .await?;
             emit_one_with_actions(
                 ctx,
                 "simulations",
@@ -268,7 +271,10 @@ pub async fn execute(
             );
         }
         SimulationCommands::Update(args) => {
-            let simulation = client.simulations().update(&args.simulation_id, args.notes.clone(), args.is_public).await?;
+            let simulation = client
+                .simulations()
+                .update(&args.simulation_id, args.notes.clone(), args.is_public)
+                .await?;
             emit_one_with_actions(
                 ctx,
                 "simulations",
