@@ -167,6 +167,19 @@ pub enum MetricDetailResponse {
     },
 }
 
+#[derive(Debug, Serialize)]
+pub struct ResimulateRequest {
+    pub dev_id: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UpdateSimulationRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_public: Option<bool>,
+}
+
 impl Tabular for SimpleMetricOutput {
     fn headers() -> Vec<&'static str> {
         vec!["OUTPUT ID", "METRIC ID", "STATUS", "VALUE", "SUBVALUES"]
