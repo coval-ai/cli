@@ -298,7 +298,10 @@ pub async fn execute(
             );
         }
         TestCaseCommands::MediaUploadUrl(args) => {
-            let result = client.test_cases().media_upload_url(&args.test_case_id, &args.filename, &args.mime_type).await?;
+            let result = client
+                .test_cases()
+                .media_upload_url(&args.test_case_id, &args.filename, &args.mime_type)
+                .await?;
             emit_one_with_actions(ctx, "test-cases", operation, &result, vec![]);
         }
     }
