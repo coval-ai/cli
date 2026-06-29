@@ -412,7 +412,7 @@ const RESOURCE_SPECS: &[ResourceSpec] = &[
     },
     ResourceSpec {
         name: "metrics",
-        commands: &["context", "list", "get", "create", "update", "delete"],
+        commands: &["context", "list", "get", "create", "update", "delete", "test"],
         description: "Metrics score conversations and simulations with built-in or configured evaluation logic.",
         id_name: "metric_id",
         id_format: "22-character Coval ID",

@@ -219,6 +219,18 @@ pub struct UpdateMetricResponse {
     pub metric: Metric,
 }
 
+#[derive(Debug, Serialize)]
+pub struct TestMetricRequest {
+    pub simulation_output_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dev_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct TestMetricResponse {
+    pub metric_output_ulid: String,
+}
+
 impl Tabular for Metric {
     fn headers() -> Vec<&'static str> {
         vec!["ID", "NAME", "TYPE", "CREATED"]
