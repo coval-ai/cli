@@ -1,7 +1,9 @@
 use anyhow::Result;
 use clap::{Args, Subcommand};
 
-use crate::client::models::{CreateMetricRequest, ListParams, MetricType, TestMetricRequest, UpdateMetricRequest};
+use crate::client::models::{
+    CreateMetricRequest, ListParams, MetricType, TestMetricRequest, UpdateMetricRequest,
+};
 use crate::client::CovalClient;
 use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
