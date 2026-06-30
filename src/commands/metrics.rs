@@ -371,7 +371,10 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 "metrics",
                 operation,
                 &response,
-                next_actions::item_result("metrics", &args.metric_id),
+                vec![
+                    next_actions::get("metrics", &args.metric_id).primary(),
+                    next_actions::context("metrics"),
+                ],
             );
         }
     }

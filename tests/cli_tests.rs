@@ -3077,6 +3077,40 @@ async fn test_metrics_test_subcommand() {
 }
 
 #[tokio::test]
+async fn test_metrics_test_subcommand_with_dev_id() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/metrics/met_abc/test"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "simulation_output_id": "simout_def456",
+            "dev_id": "debug-trace-001"
+        })))
+        .respond_with(ResponseTemplate::new(202).set_body_json(json!({
+            "metric_output_ulid": "01HXKZ4M5N6P7Q8R9STVWXYZAB"
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("metrics")
+        .arg("test")
+        .arg("met_abc")
+        .arg("--simulation-output-id")
+        .arg("simout_def456")
+        .arg("--dev-id")
+        .arg("debug-trace-001")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("01HXKZ4M5N6P7Q8R9STVWXYZAB"));
+}
+
+#[tokio::test]
 async fn test_test_cases_create_with_expected_behaviors() {
     let mock_server = MockServer::start().await;
 
