@@ -1,7 +1,9 @@
 use anyhow::Result;
 use clap::{Args, Subcommand};
 
-use crate::client::models::{CreateMetricRequest, ListParams, MetricType, UpdateMetricRequest};
+use crate::client::models::{
+    CreateMetricRequest, ListParams, MetricType, TestMetricRequest, UpdateMetricRequest,
+};
 use crate::client::CovalClient;
 use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
@@ -17,6 +19,7 @@ pub enum MetricCommands {
     Create(Box<CreateArgs>),
     Update(Box<UpdateArgs>),
     Delete(DeleteArgs),
+    Test(TestArgs),
 }
 
 impl MetricCommands {
@@ -28,6 +31,7 @@ impl MetricCommands {
             Self::Create(_) => "create",
             Self::Update(_) => "update",
             Self::Delete(_) => "delete",
+            Self::Test(_) => "test",
         }
     }
 }
@@ -202,6 +206,18 @@ pub struct DeleteArgs {
     metric_id: String,
 }
 
+#[derive(Args)]
+pub struct TestArgs {
+    /// The metric ID to test
+    metric_id: String,
+    /// The simulation output ID to run the metric against
+    #[arg(long)]
+    simulation_output_id: String,
+    /// Optional developer identifier for debugging
+    #[arg(long)]
+    dev_id: Option<String>,
+}
+
 pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputContext) -> Result<()> {
     let operation = cmd.operation();
     match cmd {
@@ -342,6 +358,23 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 operation,
                 "Metric deleted.",
                 next_actions::delete_result("metrics"),
+            );
+        }
+        MetricCommands::Test(args) => {
+            let req = TestMetricRequest {
+                simulation_output_id: args.simulation_output_id,
+                dev_id: args.dev_id,
+            };
+            let response = client.metrics().test(&args.metric_id, req).await?;
+            emit_one_with_actions(
+                ctx,
+                "metrics",
+                operation,
+                &response,
+                vec![
+                    next_actions::get("metrics", &args.metric_id).primary(),
+                    next_actions::context("metrics"),
+                ],
             );
         }
     }

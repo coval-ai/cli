@@ -628,6 +628,15 @@ impl MetricsClient<'_> {
         let url = self.0.url(&format!("/v1/metrics/{id}"));
         self.0.delete(url).await
     }
+
+    pub async fn test(
+        &self,
+        id: &str,
+        req: models::TestMetricRequest,
+    ) -> Result<models::TestMetricResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{id}/test"));
+        self.0.post(url, &req).await
+    }
 }
 
 impl MutationsClient<'_> {
