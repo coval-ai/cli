@@ -216,6 +216,10 @@ impl CovalClient {
         }
     }
 
+    pub fn monitors(&self) -> MonitorsClient<'_> {
+        MonitorsClient(self)
+    }
+
     pub fn tags(&self) -> TagsClient<'_> {
         TagsClient(self)
     }
@@ -246,6 +250,8 @@ pub struct WidgetsClient<'a> {
     dashboard_id: String,
 }
 pub struct TagsClient<'a>(&'a CovalClient);
+
+pub struct MonitorsClient<'a>(&'a CovalClient);
 
 impl AgentsClient<'_> {
     pub async fn list(
@@ -1229,6 +1235,69 @@ impl WidgetsClient<'_> {
             self.dashboard_id
         ));
         self.client.delete(url).await
+    }
+}
+
+impl MonitorsClient<'_> {
+    pub async fn list(
+        &self,
+        params: models::ListParams,
+    ) -> Result<models::ListMonitorsResponse, ApiError> {
+        let mut url = self.0.url("/v1/monitors");
+        params.apply_to(&mut url);
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::Monitor, ApiError> {
+        let url = self.0.url(&format!("/v1/monitors/{id}"));
+        let resp: models::GetMonitorResponse = self.0.get(url).await?;
+        Ok(resp.monitor)
+    }
+
+    pub async fn create(
+        &self,
+        req: models::CreateMonitorRequest,
+    ) -> Result<models::Monitor, ApiError> {
+        let url = self.0.url("/v1/monitors");
+        self.0.post(url, &req).await
+    }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        req: models::UpdateMonitorRequest,
+    ) -> Result<models::Monitor, ApiError> {
+        let url = self.0.url(&format!("/v1/monitors/{id}"));
+        self.0.patch(url, &req).await
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/monitors/{id}"));
+        self.0.delete(url).await
+    }
+
+    pub async fn test_evaluate(
+        &self,
+        monitor_id: &str,
+        run_id: &str,
+    ) -> Result<models::TestEvaluateResponse, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/monitors/{monitor_id}/test-evaluate"));
+        let req = models::TestEvaluateRequest {
+            run_id: run_id.to_string(),
+        };
+        self.0.post(url, &req).await
+    }
+
+    pub async fn list_events(
+        &self,
+        monitor_id: &str,
+        params: models::ListParams,
+    ) -> Result<models::ListMonitorEventsResponse, ApiError> {
+        let mut url = self.0.url(&format!("/v1/monitors/{monitor_id}/events"));
+        params.apply_to(&mut url);
+        self.0.get(url).await
     }
 }
 

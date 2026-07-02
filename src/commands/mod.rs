@@ -7,6 +7,7 @@ pub mod conversations;
 pub mod dashboards;
 pub mod metrics;
 pub mod models;
+pub mod monitors;
 pub mod mutations;
 pub mod personas;
 pub mod reports;

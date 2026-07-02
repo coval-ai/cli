@@ -54,6 +54,8 @@ const AGENT_RESOURCES: &[&str] = &[
     "review-annotations",
     "review-projects",
     "reports",
+    "monitors",
+    "tags",
 ];
 
 const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
@@ -100,6 +102,10 @@ const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
     &["review-projects", "update", "--help"],
     &["reports", "create", "--help"],
     &["reports", "update", "--help"],
+    &["monitors", "create", "--help"],
+    &["monitors", "update", "--help"],
+    &["tags", "create", "--help"],
+    &["tags", "update", "--help"],
 ];
 
 #[test]
@@ -2164,6 +2170,88 @@ async fn test_input_json_stdin() {
         .assert()
         .success()
         .stdout(predicate::str::contains("dash123"));
+}
+
+#[tokio::test]
+async fn test_monitors_create_preserves_input_json_evaluation_type() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/monitors"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "name": "Scheduled monitor",
+            "evaluation_type": "SCHEDULED",
+            "conditions": [{"type": "metric"}]
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "id": "mon123",
+            "name": "Scheduled monitor",
+            "status": "ACTIVE",
+            "evaluation_type": "SCHEDULED",
+            "conditions": [{"type": "metric"}],
+            "create_time": "2026-01-01T00:00:00Z",
+            "update_time": "2026-01-01T00:00:00Z"
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("monitors")
+        .arg("create")
+        .arg("--input-json")
+        .arg(
+            r#"{"name":"Scheduled monitor","evaluation_type":"SCHEDULED","conditions":[{"type":"metric"}]}"#,
+        )
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("mon123"));
+}
+
+#[tokio::test]
+async fn test_monitors_create_evaluation_type_flag_overrides_input_json() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/monitors"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "name": "Run monitor",
+            "evaluation_type": "ON_RUN_COMPLETE",
+            "conditions": [{"type": "metric"}]
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "id": "mon456",
+            "name": "Run monitor",
+            "status": "ACTIVE",
+            "evaluation_type": "ON_RUN_COMPLETE",
+            "conditions": [{"type": "metric"}],
+            "create_time": "2026-01-01T00:00:00Z",
+            "update_time": "2026-01-01T00:00:00Z"
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("monitors")
+        .arg("create")
+        .arg("--input-json")
+        .arg(
+            r#"{"name":"Run monitor","evaluation_type":"SCHEDULED","conditions":[{"type":"metric"}]}"#,
+        )
+        .arg("--evaluation-type")
+        .arg("ON_RUN_COMPLETE")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("mon456"));
 }
 
 #[tokio::test]
