@@ -106,6 +106,10 @@ pub async fn execute(cmd: TagCommands, client: &CovalClient, ctx: &OutputContext
             let mut input = args.input_json.object()?;
             input_json::insert(&mut input, "tag_name", args.tag_name)?;
             input_json::insert(&mut input, "color", args.color)?;
+            anyhow::ensure!(
+                !input.is_empty(),
+                "provide at least --tag-name or --color to update"
+            );
             let req = input_json::finish(input)?;
             let tag = client.tags().update(&args.tag_id, req).await?;
             emit_one_with_actions(

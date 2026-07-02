@@ -18,7 +18,7 @@ pub struct Tag {
 
 impl Tabular for Tag {
     fn headers() -> Vec<&'static str> {
-        vec!["ID", "Name", "Color"]
+        vec!["ID", "Name", "Color", "Created By", "Created At"]
     }
 
     fn row(&self) -> Vec<String> {
@@ -26,6 +26,8 @@ impl Tabular for Tag {
             self.id.clone(),
             self.tag_name.clone(),
             self.color.as_deref().unwrap_or("").to_string(),
+            self.created_by.as_deref().unwrap_or("").to_string(),
+            self.create_time.as_deref().unwrap_or("").to_string(),
         ]
     }
 }
