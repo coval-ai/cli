@@ -193,6 +193,10 @@ impl CovalClient {
         DashboardsClient(self)
     }
 
+    pub fn models(&self) -> ModelsClient<'_> {
+        ModelsClient(self)
+    }
+
     pub fn review_annotations(&self) -> ReviewAnnotationsClient<'_> {
         ReviewAnnotationsClient(self)
     }
@@ -229,6 +233,7 @@ pub struct ApiKeysClient<'a>(&'a CovalClient);
 pub struct RunTemplatesClient<'a>(&'a CovalClient);
 pub struct ScheduledRunsClient<'a>(&'a CovalClient);
 pub struct DashboardsClient<'a>(&'a CovalClient);
+pub struct ModelsClient<'a>(&'a CovalClient);
 pub struct ReviewAnnotationsClient<'a>(&'a CovalClient);
 pub struct ReviewProjectsClient<'a>(&'a CovalClient);
 pub struct ReportsClient<'a>(&'a CovalClient);
@@ -826,6 +831,13 @@ impl ScheduledRunsClient<'_> {
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
         let url = self.0.url(&format!("/v1/scheduled-runs/{id}"));
         self.0.delete(url).await
+    }
+}
+
+impl ModelsClient<'_> {
+    pub async fn list_metric_models(&self) -> Result<models::ListMetricModelsResponse, ApiError> {
+        let url = self.0.url("/v1/models/metric");
+        self.0.get(url).await
     }
 }
 

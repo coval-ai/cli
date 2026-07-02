@@ -73,6 +73,10 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::metrics::MetricCommands,
     },
+    Models {
+        #[command(subcommand)]
+        command: commands::models::ModelCommands,
+    },
     Mutations {
         #[command(subcommand)]
         command: commands::mutations::MutationCommands,
@@ -129,6 +133,7 @@ impl Commands {
                 _ => "personas",
             },
             Self::Metrics { .. } => "metrics",
+            Self::Models { .. } => "models",
             Self::Mutations { .. } => "mutations",
             Self::ApiKeys { .. } => "api-keys",
             Self::RunTemplates { .. } => "run-templates",
@@ -157,6 +162,7 @@ impl Commands {
             Self::TestCases { command } => command.operation(),
             Self::Personas { command } => command.operation(),
             Self::Metrics { command } => command.operation(),
+            Self::Models { command } => command.operation(),
             Self::Mutations { command } => command.operation(),
             Self::ApiKeys { command } => command.operation(),
             Self::RunTemplates { command } => command.operation(),
@@ -284,6 +290,9 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
                 }
                 Commands::Metrics { command } => {
                     commands::metrics::execute(command, &client, ctx).await
+                }
+                Commands::Models { command } => {
+                    commands::models::execute(command, &client, ctx).await
                 }
                 Commands::Mutations { command } => {
                     commands::mutations::execute(command, &client, ctx).await
