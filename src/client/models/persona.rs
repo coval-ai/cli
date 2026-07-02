@@ -253,3 +253,28 @@ pub struct UpdateBackgroundSoundRequest {
 pub struct UpdateBackgroundSoundResponse {
     pub background_sound: BackgroundSoundResource,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Voice {
+    pub voice_name: String,
+    #[serde(default)]
+    pub supported_languages: Vec<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+impl Tabular for Voice {
+    fn headers() -> Vec<&'static str> {
+        vec!["VOICE NAME", "SUPPORTED LANGUAGES"]
+    }
+
+    fn row(&self) -> Vec<String> {
+        let languages = self.supported_languages.join(", ");
+        vec![self.voice_name.clone(), truncate(&languages, 60)]
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListVoicesResponse {
+    pub voices: Vec<Voice>,
+}

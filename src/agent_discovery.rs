@@ -412,7 +412,7 @@ const RESOURCE_SPECS: &[ResourceSpec] = &[
     },
     ResourceSpec {
         name: "metrics",
-        commands: &["context", "list", "get", "create", "update", "delete"],
+        commands: &["context", "list", "get", "create", "update", "delete", "test"],
         description: "Metrics score conversations and simulations with built-in or configured evaluation logic.",
         id_name: "metric_id",
         id_format: "22-character Coval ID",
@@ -605,5 +605,21 @@ const RESOURCE_SPECS: &[ResourceSpec] = &[
             "Create requests require at least one condition.",
             "Channel auth tokens are redacted in CLI output.",
         ],
+    },
+    ResourceSpec {
+        name: "tags",
+        commands: &["context", "list", "get", "create", "update", "delete"],
+        description: "Tags label Coval resources for filtering, organization, and monitor targeting.",
+        id_name: "tag_id",
+        id_format: "Coval tag ID",
+        requires: &[],
+        optional: &["agents", "monitors"],
+        produces: &["resource labels"],
+        related: &["agents", "monitors"],
+        workflows: &[WorkflowSpec {
+            name: "Inspect tags",
+            argv: &["tags", "list"],
+        }],
+        pitfalls: &["Tag colors should be valid CSS-style color values when provided."],
     },
 ];

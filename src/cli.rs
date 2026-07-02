@@ -73,6 +73,10 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::metrics::MetricCommands,
     },
+    Models {
+        #[command(subcommand)]
+        command: commands::models::ModelCommands,
+    },
     Mutations {
         #[command(subcommand)]
         command: commands::mutations::MutationCommands,
@@ -114,6 +118,10 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::monitors::MonitorCommands,
     },
+    Tags {
+        #[command(subcommand)]
+        command: commands::tags::TagCommands,
+    },
 }
 
 impl Commands {
@@ -133,6 +141,7 @@ impl Commands {
                 _ => "personas",
             },
             Self::Metrics { .. } => "metrics",
+            Self::Models { .. } => "models",
             Self::Mutations { .. } => "mutations",
             Self::ApiKeys { .. } => "api-keys",
             Self::RunTemplates { .. } => "run-templates",
@@ -145,6 +154,7 @@ impl Commands {
             Self::ReviewProjects { .. } => "review-projects",
             Self::Reports { .. } => "reports",
             Self::Monitors { .. } => "monitors",
+            Self::Tags { .. } => "tags",
         }
     }
 
@@ -162,6 +172,7 @@ impl Commands {
             Self::TestCases { command } => command.operation(),
             Self::Personas { command } => command.operation(),
             Self::Metrics { command } => command.operation(),
+            Self::Models { command } => command.operation(),
             Self::Mutations { command } => command.operation(),
             Self::ApiKeys { command } => command.operation(),
             Self::RunTemplates { command } => command.operation(),
@@ -171,6 +182,7 @@ impl Commands {
             Self::ReviewProjects { command } => command.operation(),
             Self::Reports { command } => command.operation(),
             Self::Monitors { command } => command.operation(),
+            Self::Tags { command } => command.operation(),
         }
     }
 }
@@ -263,6 +275,9 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
         Commands::Monitors {
             command: commands::monitors::MonitorCommands::Context,
         } => commands::agent::resource_context("monitors", ctx),
+        Commands::Tags {
+            command: commands::tags::TagCommands::Context,
+        } => commands::agent::resource_context("tags", ctx),
         _ => {
             let api_key = api_key.ok_or_else(|| {
                 anyhow::anyhow!(
@@ -294,6 +309,9 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
                 Commands::Metrics { command } => {
                     commands::metrics::execute(command, &client, ctx).await
                 }
+                Commands::Models { command } => {
+                    commands::models::execute(command, &client, ctx).await
+                }
                 Commands::Mutations { command } => {
                     commands::mutations::execute(command, &client, ctx).await
                 }
@@ -321,6 +339,7 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
                 Commands::Monitors { command } => {
                     commands::monitors::execute(command, &client, ctx).await
                 }
+                Commands::Tags { command } => commands::tags::execute(command, &client, ctx).await,
                 _ => unreachable!(),
             }
         }

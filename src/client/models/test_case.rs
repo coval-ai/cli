@@ -122,3 +122,17 @@ fn truncate(s: &str, max: usize) -> String {
         format!("{}...", end)
     }
 }
+
+#[derive(Debug, Serialize)]
+pub struct MediaUploadUrlRequest {
+    pub filename: String,
+    pub mime_type: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MediaUploadUrlResponse {
+    pub upload_url: String,
+    pub s3_key: String,
+    pub s3_bucket: String,
+    pub url_expires_in_seconds: i64,
+}

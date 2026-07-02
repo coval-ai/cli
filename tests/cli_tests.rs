@@ -2,7 +2,7 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 use serde_json::{json, Value};
 use wiremock::matchers::{body_partial_json, header, method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Match, Mock, MockServer, Request, ResponseTemplate};
 
 fn coval() -> Command {
     #[allow(deprecated)]
@@ -11,6 +11,16 @@ fn coval() -> Command {
 
 fn stdout_json(assert: assert_cmd::assert::Assert) -> Value {
     serde_json::from_slice(&assert.get_output().stdout).unwrap()
+}
+
+struct BodyExcludes(&'static str);
+
+impl Match for BodyExcludes {
+    fn matches(&self, request: &Request) -> bool {
+        std::str::from_utf8(&request.body)
+            .map(|body| !body.contains(self.0))
+            .unwrap_or(false)
+    }
 }
 
 fn write_skill(root: &std::path::Path, id: &str, description: &str) {
@@ -45,6 +55,7 @@ const AGENT_RESOURCES: &[&str] = &[
     "review-projects",
     "reports",
     "monitors",
+    "tags",
 ];
 
 const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
@@ -62,6 +73,17 @@ const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
     &["personas", "background-sounds", "update", "--help"],
     &["metrics", "create", "--help"],
     &["metrics", "update", "--help"],
+    &["metrics", "baselines", "metric123", "create", "--help"],
+    &[
+        "metrics",
+        "baselines",
+        "metric123",
+        "update",
+        "baseline123",
+        "--help",
+    ],
+    &["metrics", "thresholds", "metric123", "create", "--help"],
+    &["metrics", "thresholds", "metric123", "update", "--help"],
     &["mutations", "create", "--help"],
     &["mutations", "update", "--help"],
     &["api-keys", "create", "--help"],
@@ -82,6 +104,8 @@ const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
     &["reports", "update", "--help"],
     &["monitors", "create", "--help"],
     &["monitors", "update", "--help"],
+    &["tags", "create", "--help"],
+    &["tags", "update", "--help"],
 ];
 
 #[test]
@@ -1714,6 +1738,80 @@ async fn test_simulations_audio_url() {
 }
 
 #[tokio::test]
+async fn test_simulations_update_notes_does_not_send_is_public() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/simulations/sim123"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "notes": "Updated notes"
+        })))
+        .and(BodyExcludes("is_public"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "simulation": {
+                "name": "Simulation 123",
+                "simulation_id": "sim123",
+                "run_id": "run123",
+                "status": "COMPLETED",
+                "create_time": "2026-01-01T00:00:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("simulations")
+        .arg("update")
+        .arg("sim123")
+        .arg("--notes")
+        .arg("Updated notes")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("sim123"));
+}
+
+#[tokio::test]
+async fn test_simulations_update_is_public_sends_true() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/simulations/sim123"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "is_public": true
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "simulation": {
+                "name": "Simulation 123",
+                "simulation_id": "sim123",
+                "run_id": "run123",
+                "status": "COMPLETED",
+                "create_time": "2026-01-01T00:00:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("simulations")
+        .arg("update")
+        .arg("sim123")
+        .arg("--is-public")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("sim123"));
+}
+
+#[tokio::test]
 async fn test_simulations_metrics_with_subvalues() {
     let mock_server = MockServer::start().await;
 
@@ -3128,6 +3226,71 @@ fn test_metrics_create_composite_metadata_requires_criteria() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("--criteria is required"));
+}
+
+#[tokio::test]
+async fn test_metrics_test_subcommand() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/metrics/met_abc/test"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "simulation_output_id": "simout_def456"
+        })))
+        .respond_with(ResponseTemplate::new(202).set_body_json(json!({
+            "metric_output_ulid": "01HXKZ4M5N6P7Q8R9STVWXYZAB"
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("metrics")
+        .arg("test")
+        .arg("met_abc")
+        .arg("--simulation-output-id")
+        .arg("simout_def456")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("01HXKZ4M5N6P7Q8R9STVWXYZAB"));
+}
+
+#[tokio::test]
+async fn test_metrics_test_subcommand_with_dev_id() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/metrics/met_abc/test"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "simulation_output_id": "simout_def456",
+            "dev_id": "debug-trace-001"
+        })))
+        .respond_with(ResponseTemplate::new(202).set_body_json(json!({
+            "metric_output_ulid": "01HXKZ4M5N6P7Q8R9STVWXYZAB"
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("metrics")
+        .arg("test")
+        .arg("met_abc")
+        .arg("--simulation-output-id")
+        .arg("simout_def456")
+        .arg("--dev-id")
+        .arg("debug-trace-001")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("01HXKZ4M5N6P7Q8R9STVWXYZAB"));
 }
 
 #[tokio::test]

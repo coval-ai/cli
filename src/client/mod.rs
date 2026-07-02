@@ -193,6 +193,10 @@ impl CovalClient {
         DashboardsClient(self)
     }
 
+    pub fn models(&self) -> ModelsClient<'_> {
+        ModelsClient(self)
+    }
+
     pub fn review_annotations(&self) -> ReviewAnnotationsClient<'_> {
         ReviewAnnotationsClient(self)
     }
@@ -215,6 +219,10 @@ impl CovalClient {
     pub fn monitors(&self) -> MonitorsClient<'_> {
         MonitorsClient(self)
     }
+
+    pub fn tags(&self) -> TagsClient<'_> {
+        TagsClient(self)
+    }
 }
 
 pub struct AgentsClient<'a>(&'a CovalClient);
@@ -233,6 +241,7 @@ pub struct ApiKeysClient<'a>(&'a CovalClient);
 pub struct RunTemplatesClient<'a>(&'a CovalClient);
 pub struct ScheduledRunsClient<'a>(&'a CovalClient);
 pub struct DashboardsClient<'a>(&'a CovalClient);
+pub struct ModelsClient<'a>(&'a CovalClient);
 pub struct ReviewAnnotationsClient<'a>(&'a CovalClient);
 pub struct ReviewProjectsClient<'a>(&'a CovalClient);
 pub struct ReportsClient<'a>(&'a CovalClient);
@@ -240,6 +249,7 @@ pub struct WidgetsClient<'a> {
     client: &'a CovalClient,
     dashboard_id: String,
 }
+pub struct TagsClient<'a>(&'a CovalClient);
 
 pub struct MonitorsClient<'a>(&'a CovalClient);
 
@@ -372,6 +382,16 @@ impl ConversationsClient<'_> {
             .url(&format!("/v1/conversations/{id}/metrics/{metric_path_id}"));
         self.0.get(url).await
     }
+
+    pub async fn patch(
+        &self,
+        id: &str,
+        req: models::PatchConversationRequest,
+    ) -> Result<models::Conversation, ApiError> {
+        let url = self.0.url(&format!("/v1/conversations/{id}"));
+        let resp: models::GetConversationResponse = self.0.patch(url, &req).await?;
+        Ok(resp.conversation)
+    }
 }
 
 impl SimulationsClient<'_> {
@@ -417,6 +437,31 @@ impl SimulationsClient<'_> {
             .0
             .url(&format!("/v1/simulations/{id}/metrics/{metric_path_id}"));
         self.0.get(url).await
+    }
+
+    pub async fn resimulate(
+        &self,
+        id: &str,
+        dev_id: Option<&str>,
+    ) -> Result<models::Simulation, ApiError> {
+        let url = self.0.url(&format!("/v1/simulations/{id}/resimulate"));
+        let req = models::ResimulateRequest {
+            dev_id: dev_id.map(String::from),
+        };
+        let resp: models::GetSimulationResponse = self.0.post(url, &req).await?;
+        Ok(resp.simulation)
+    }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        notes: Option<String>,
+        is_public: Option<bool>,
+    ) -> Result<models::Simulation, ApiError> {
+        let url = self.0.url(&format!("/v1/simulations/{id}"));
+        let req = models::UpdateSimulationRequest { notes, is_public };
+        let resp: models::GetSimulationResponse = self.0.patch(url, &req).await?;
+        Ok(resp.simulation)
     }
 }
 
@@ -499,6 +544,22 @@ impl TestCasesClient<'_> {
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
         let url = self.0.url(&format!("/v1/test-cases/{id}"));
         self.0.delete(url).await
+    }
+
+    pub async fn media_upload_url(
+        &self,
+        test_case_id: &str,
+        filename: &str,
+        mime_type: &str,
+    ) -> Result<models::MediaUploadUrlResponse, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/test-cases/{test_case_id}/media:upload-url"));
+        let req = models::MediaUploadUrlRequest {
+            filename: filename.to_string(),
+            mime_type: mime_type.to_string(),
+        };
+        self.0.post(url, &req).await
     }
 }
 
@@ -589,6 +650,11 @@ impl PersonasClient<'_> {
         let resp: models::UpdateBackgroundSoundResponse = self.0.patch(url, &req).await?;
         Ok(resp.background_sound)
     }
+
+    pub async fn list_voices(&self) -> Result<models::ListVoicesResponse, ApiError> {
+        let url = self.0.url("/v1/personas/voices");
+        self.0.get(url).await
+    }
 }
 
 impl MetricsClient<'_> {
@@ -632,6 +698,118 @@ impl MetricsClient<'_> {
 
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
         let url = self.0.url(&format!("/v1/metrics/{id}"));
+        self.0.delete(url).await
+    }
+
+    pub async fn test(
+        &self,
+        id: &str,
+        req: models::TestMetricRequest,
+    ) -> Result<models::TestMetricResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{id}/test"));
+        self.0.post(url, &req).await
+    }
+
+    pub async fn list_versions(
+        &self,
+        metric_id: &str,
+    ) -> Result<models::ListMetricVersionsResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/versions"));
+        self.0.get(url).await
+    }
+
+    pub async fn list_baselines(
+        &self,
+        metric_id: &str,
+        params: models::ListParams,
+    ) -> Result<models::ListBaselinesResponse, ApiError> {
+        let mut url = self.0.url(&format!("/v1/metrics/{metric_id}/baselines"));
+        params.apply_to(&mut url);
+        self.0.get(url).await
+    }
+
+    pub async fn get_baseline(
+        &self,
+        metric_id: &str,
+        baseline_id: &str,
+    ) -> Result<models::Baseline, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/metrics/{metric_id}/baselines/{baseline_id}"));
+        self.0.get(url).await
+    }
+
+    pub async fn create_baseline(
+        &self,
+        metric_id: &str,
+        req: serde_json::Value,
+    ) -> Result<models::Baseline, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/baselines"));
+        self.0.post(url, &req).await
+    }
+
+    pub async fn update_baseline(
+        &self,
+        metric_id: &str,
+        baseline_id: &str,
+        req: serde_json::Value,
+    ) -> Result<models::Baseline, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/metrics/{metric_id}/baselines/{baseline_id}"));
+        self.0.patch(url, &req).await
+    }
+
+    pub async fn delete_baseline(
+        &self,
+        metric_id: &str,
+        baseline_id: &str,
+    ) -> Result<(), ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/metrics/{metric_id}/baselines/{baseline_id}"));
+        self.0.delete(url).await
+    }
+
+    pub async fn list_thresholds(
+        &self,
+        metric_id: &str,
+    ) -> Result<models::ListThresholdsResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/thresholds"));
+        self.0.get(url).await
+    }
+
+    pub async fn get_threshold(&self, metric_id: &str) -> Result<models::Threshold, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/threshold"));
+        self.0.get(url).await
+    }
+
+    pub async fn create_threshold(
+        &self,
+        metric_id: &str,
+        req: serde_json::Value,
+    ) -> Result<models::Threshold, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/thresholds"));
+        self.0.post(url, &req).await
+    }
+
+    pub async fn update_threshold(
+        &self,
+        metric_id: &str,
+        req: serde_json::Value,
+    ) -> Result<models::Threshold, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/threshold"));
+        self.0.patch(url, &req).await
+    }
+
+    pub async fn delete_threshold(
+        &self,
+        metric_id: &str,
+        threshold_id: &str,
+    ) -> Result<(), ApiError> {
+        let url = self.0.url(&format!(
+            "/v1/metrics/{metric_id}/thresholds/{threshold_id}"
+        ));
         self.0.delete(url).await
     }
 }
@@ -823,6 +1001,13 @@ impl ScheduledRunsClient<'_> {
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
         let url = self.0.url(&format!("/v1/scheduled-runs/{id}"));
         self.0.delete(url).await
+    }
+}
+
+impl ModelsClient<'_> {
+    pub async fn list_metric_models(&self) -> Result<models::ListMetricModelsResponse, ApiError> {
+        let url = self.0.url("/v1/models/metric");
+        self.0.get(url).await
     }
 }
 
@@ -1113,5 +1298,39 @@ impl MonitorsClient<'_> {
         let mut url = self.0.url(&format!("/v1/monitors/{monitor_id}/events"));
         params.apply_to(&mut url);
         self.0.get(url).await
+    }
+}
+
+impl TagsClient<'_> {
+    pub async fn list(&self) -> Result<models::ListTagsResponse, ApiError> {
+        let url = self.0.url("/v1/tags");
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::Tag, ApiError> {
+        let url = self.0.url(&format!("/v1/tags/{id}"));
+        let resp: models::GetTagResponse = self.0.get(url).await?;
+        Ok(resp.tag)
+    }
+
+    pub async fn create(&self, req: models::CreateTagRequest) -> Result<models::Tag, ApiError> {
+        let url = self.0.url("/v1/tags");
+        let resp: models::GetTagResponse = self.0.post(url, &req).await?;
+        Ok(resp.tag)
+    }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        req: models::UpdateTagRequest,
+    ) -> Result<models::Tag, ApiError> {
+        let url = self.0.url(&format!("/v1/tags/{id}"));
+        let resp: models::GetTagResponse = self.0.patch(url, &req).await?;
+        Ok(resp.tag)
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/tags/{id}"));
+        self.0.delete(url).await
     }
 }

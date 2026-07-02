@@ -22,6 +22,8 @@ pub enum TestCaseCommands {
     Create(CreateArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
+    #[command(name = "media-upload-url")]
+    MediaUploadUrl(MediaUploadUrlArgs),
 }
 
 impl TestCaseCommands {
@@ -33,6 +35,7 @@ impl TestCaseCommands {
             Self::Create(_) => "create",
             Self::Update(_) => "update",
             Self::Delete(_) => "delete",
+            Self::MediaUploadUrl(_) => "media-upload-url",
         }
     }
 }
@@ -123,6 +126,18 @@ pub struct UpdateArgs {
 #[derive(Args)]
 pub struct DeleteArgs {
     test_case_id: String,
+}
+
+#[derive(Args)]
+pub struct MediaUploadUrlArgs {
+    /// Test case ID (8-char)
+    test_case_id: String,
+    /// Name of the file to upload
+    #[arg(long)]
+    filename: String,
+    /// MIME type of the file to upload
+    #[arg(long, default_value = "application/octet-stream")]
+    mime_type: String,
 }
 
 pub async fn execute(
@@ -284,6 +299,13 @@ pub async fn execute(
                     next_actions::context("test-cases"),
                 ],
             );
+        }
+        TestCaseCommands::MediaUploadUrl(args) => {
+            let result = client
+                .test_cases()
+                .media_upload_url(&args.test_case_id, &args.filename, &args.mime_type)
+                .await?;
+            emit_one_with_actions(ctx, "test-cases", operation, &result, vec![]);
         }
     }
     Ok(())

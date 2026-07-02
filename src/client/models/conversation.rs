@@ -126,6 +126,16 @@ pub struct ConversationAudioUrlResponse {
     pub peaks_url: Option<String>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct PatchConversationRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio_reference: Option<serde_json::Value>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ListConversationMetricsResponse {
     pub metrics: Vec<super::SimpleMetricOutput>,
