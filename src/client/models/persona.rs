@@ -265,11 +265,12 @@ pub struct Voice {
 
 impl Tabular for Voice {
     fn headers() -> Vec<&'static str> {
-        vec!["Voice Name", "Supported Languages"]
+        vec!["VOICE NAME", "SUPPORTED LANGUAGES"]
     }
 
     fn row(&self) -> Vec<String> {
-        vec![self.voice_name.clone(), self.supported_languages.join(", ")]
+        let languages = self.supported_languages.join(", ");
+        vec![self.voice_name.clone(), truncate(&languages, 60)]
     }
 }
 
