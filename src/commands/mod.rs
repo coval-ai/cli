@@ -16,5 +16,6 @@ pub mod run_templates;
 pub mod runs;
 pub mod scheduled_runs;
 pub mod simulations;
+pub mod tags;
 pub mod test_cases;
 pub mod test_sets;

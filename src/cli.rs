@@ -114,6 +114,10 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::reports::ReportCommands,
     },
+    Tags {
+        #[command(subcommand)]
+        command: commands::tags::TagCommands,
+    },
 }
 
 impl Commands {
@@ -145,6 +149,7 @@ impl Commands {
             Self::ReviewAnnotations { .. } => "review-annotations",
             Self::ReviewProjects { .. } => "review-projects",
             Self::Reports { .. } => "reports",
+            Self::Tags { .. } => "tags",
         }
     }
 
@@ -171,6 +176,7 @@ impl Commands {
             Self::ReviewAnnotations { command } => command.operation(),
             Self::ReviewProjects { command } => command.operation(),
             Self::Reports { command } => command.operation(),
+            Self::Tags { command } => command.operation(),
         }
     }
 }
@@ -260,6 +266,9 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
         Commands::Reports {
             command: commands::reports::ReportCommands::Context,
         } => commands::agent::resource_context("reports", ctx),
+        Commands::Tags {
+            command: commands::tags::TagCommands::Context,
+        } => commands::agent::resource_context("tags", ctx),
         _ => {
             let api_key = api_key.ok_or_else(|| {
                 anyhow::anyhow!(
@@ -318,6 +327,7 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
                 Commands::Reports { command } => {
                     commands::reports::execute(command, &client, ctx).await
                 }
+                Commands::Tags { command } => commands::tags::execute(command, &client, ctx).await,
                 _ => unreachable!(),
             }
         }

@@ -215,6 +215,10 @@ impl CovalClient {
             dashboard_id: dashboard_id.to_string(),
         }
     }
+
+    pub fn tags(&self) -> TagsClient<'_> {
+        TagsClient(self)
+    }
 }
 
 pub struct AgentsClient<'a>(&'a CovalClient);
@@ -241,6 +245,7 @@ pub struct WidgetsClient<'a> {
     client: &'a CovalClient,
     dashboard_id: String,
 }
+pub struct TagsClient<'a>(&'a CovalClient);
 
 impl AgentsClient<'_> {
     pub async fn list(
@@ -1224,5 +1229,39 @@ impl WidgetsClient<'_> {
             self.dashboard_id
         ));
         self.client.delete(url).await
+    }
+}
+
+impl TagsClient<'_> {
+    pub async fn list(&self) -> Result<models::ListTagsResponse, ApiError> {
+        let url = self.0.url("/v1/tags");
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::Tag, ApiError> {
+        let url = self.0.url(&format!("/v1/tags/{id}"));
+        let resp: models::GetTagResponse = self.0.get(url).await?;
+        Ok(resp.tag)
+    }
+
+    pub async fn create(&self, req: models::CreateTagRequest) -> Result<models::Tag, ApiError> {
+        let url = self.0.url("/v1/tags");
+        let resp: models::GetTagResponse = self.0.post(url, &req).await?;
+        Ok(resp.tag)
+    }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        req: models::UpdateTagRequest,
+    ) -> Result<models::Tag, ApiError> {
+        let url = self.0.url(&format!("/v1/tags/{id}"));
+        let resp: models::GetTagResponse = self.0.patch(url, &req).await?;
+        Ok(resp.tag)
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/tags/{id}"));
+        self.0.delete(url).await
     }
 }
