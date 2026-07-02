@@ -135,7 +135,7 @@ pub struct PatchArgs {
     #[arg(long)]
     audio_url: Option<String>,
     #[arg(long)]
-    audio: Option<PathBuf>,
+    audio_file: Option<PathBuf>,
 }
 
 pub async fn execute(
@@ -267,7 +267,13 @@ pub async fn execute(
         }
         ConversationCommands::Patch(args) => {
             use crate::client::models::PatchConversationRequest;
-            let audio_b64 = match args.audio {
+            if args.audio_file.is_some() && args.audio_url.is_some() {
+                anyhow::bail!("--audio-file and --audio-url are mutually exclusive");
+            }
+            if args.audio_file.is_none() && args.audio_url.is_none() {
+                anyhow::bail!("must provide at least one of: --audio-file, --audio-url");
+            }
+            let audio_b64 = match args.audio_file {
                 Some(path) => {
                     let data = std::fs::read(&path).with_context(|| {
                         format!("Failed to read audio file: {}", path.display())
@@ -281,17 +287,29 @@ pub async fn execute(
                 audio_url: args.audio_url,
                 audio_reference: None,
             };
-            let conversation = client
+            match client
                 .conversations()
                 .patch(&args.conversation_id, req)
-                .await?;
-            emit_one_with_actions(
-                ctx,
-                "conversations",
-                operation,
-                &conversation,
-                conversation_actions(&conversation.conversation_id),
-            );
+                .await
+            {
+                Ok(conversation) => emit_one_with_actions(
+                    ctx,
+                    "conversations",
+                    operation,
+                    &conversation,
+                    conversation_actions(&conversation.conversation_id),
+                ),
+                Err(ApiError::NotFound { .. }) => {
+                    if !ctx.agent {
+                        print_not_found_hint(&args.conversation_id, "simulations");
+                    }
+                    return Err(ApiError::NotFound {
+                        resource: format!("Conversation '{}'", args.conversation_id),
+                    }
+                    .into());
+                }
+                Err(e) => return Err(e.into()),
+            }
         }
         ConversationCommands::Audio(args) => {
             let audio = client.conversations().audio(&args.conversation_id).await?;
