@@ -1,7 +1,9 @@
 use anyhow::Result;
 use clap::{Args, Subcommand};
 
-use crate::client::models::{CreateMetricRequest, ListParams, MetricType, UpdateMetricRequest};
+use crate::client::models::{
+    CreateMetricRequest, ListParams, MetricType, TestMetricRequest, UpdateMetricRequest,
+};
 use crate::client::CovalClient;
 use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
@@ -252,9 +254,12 @@ pub struct DeleteArgs {
 
 #[derive(Args)]
 pub struct TestArgs {
+    /// The metric ID to test
     metric_id: String,
+    /// The simulation output ID to run the metric against
     #[arg(long)]
     simulation_output_id: String,
+    /// Optional developer identifier for debugging
     #[arg(long)]
     dev_id: Option<String>,
 }
@@ -278,7 +283,6 @@ pub struct DeleteBaselineArgs {
 
 #[derive(Args)]
 pub struct CreateBaselineArgs {
-    metric_id: String,
     #[command(flatten)]
     input_json: InputJsonArg,
     #[arg(long)]
@@ -299,7 +303,6 @@ pub struct CreateBaselineArgs {
 
 #[derive(Args)]
 pub struct UpdateBaselineArgs {
-    metric_id: String,
     baseline_id: String,
     #[command(flatten)]
     input_json: InputJsonArg,
@@ -315,7 +318,6 @@ pub struct UpdateBaselineArgs {
 
 #[derive(Args)]
 pub struct CreateThresholdArgs {
-    metric_id: String,
     #[command(flatten)]
     input_json: InputJsonArg,
     #[arg(long)]
@@ -330,7 +332,6 @@ pub struct CreateThresholdArgs {
 
 #[derive(Args)]
 pub struct UpdateThresholdArgs {
-    metric_id: String,
     #[command(flatten)]
     input_json: InputJsonArg,
     #[arg(long)]
@@ -345,7 +346,6 @@ pub struct UpdateThresholdArgs {
 
 #[derive(Args)]
 pub struct DeleteThresholdArgs {
-    metric_id: String,
     threshold_id: String,
 }
 
@@ -492,15 +492,21 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
             );
         }
         MetricCommands::Test(args) => {
-            let result = client
-                .metrics()
-                .test(
-                    &args.metric_id,
-                    &args.simulation_output_id,
-                    args.dev_id.as_deref(),
-                )
-                .await?;
-            emit_one_with_actions(ctx, "metrics", operation, &result, vec![]);
+            let req = TestMetricRequest {
+                simulation_output_id: args.simulation_output_id,
+                dev_id: args.dev_id,
+            };
+            let response = client.metrics().test(&args.metric_id, req).await?;
+            emit_one_with_actions(
+                ctx,
+                "metrics",
+                operation,
+                &response,
+                vec![
+                    next_actions::get("metrics", &args.metric_id).primary(),
+                    next_actions::context("metrics"),
+                ],
+            );
         }
         MetricCommands::Versions(args) => {
             let response = client.metrics().list_versions(&args.metric_id).await?;

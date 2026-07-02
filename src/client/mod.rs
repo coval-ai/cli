@@ -631,15 +631,10 @@ impl MetricsClient<'_> {
 
     pub async fn test(
         &self,
-        metric_id: &str,
-        simulation_output_id: &str,
-        dev_id: Option<&str>,
+        id: &str,
+        req: models::TestMetricRequest,
     ) -> Result<models::TestMetricResponse, ApiError> {
-        let url = self.0.url(&format!("/v1/metrics/{metric_id}/test"));
-        let req = models::TestMetricRequest {
-            simulation_output_id: simulation_output_id.to_string(),
-            dev_id: dev_id.map(String::from),
-        };
+        let url = self.0.url(&format!("/v1/metrics/{id}/test"));
         self.0.post(url, &req).await
     }
 

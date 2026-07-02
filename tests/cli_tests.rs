@@ -61,6 +61,17 @@ const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
     &["personas", "background-sounds", "update", "--help"],
     &["metrics", "create", "--help"],
     &["metrics", "update", "--help"],
+    &["metrics", "baselines", "metric123", "create", "--help"],
+    &[
+        "metrics",
+        "baselines",
+        "metric123",
+        "update",
+        "baseline123",
+        "--help",
+    ],
+    &["metrics", "thresholds", "metric123", "create", "--help"],
+    &["metrics", "thresholds", "metric123", "update", "--help"],
     &["mutations", "create", "--help"],
     &["mutations", "update", "--help"],
     &["api-keys", "create", "--help"],
@@ -3043,6 +3054,71 @@ fn test_metrics_create_composite_metadata_requires_criteria() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("--criteria is required"));
+}
+
+#[tokio::test]
+async fn test_metrics_test_subcommand() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/metrics/met_abc/test"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "simulation_output_id": "simout_def456"
+        })))
+        .respond_with(ResponseTemplate::new(202).set_body_json(json!({
+            "metric_output_ulid": "01HXKZ4M5N6P7Q8R9STVWXYZAB"
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("metrics")
+        .arg("test")
+        .arg("met_abc")
+        .arg("--simulation-output-id")
+        .arg("simout_def456")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("01HXKZ4M5N6P7Q8R9STVWXYZAB"));
+}
+
+#[tokio::test]
+async fn test_metrics_test_subcommand_with_dev_id() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/metrics/met_abc/test"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "simulation_output_id": "simout_def456",
+            "dev_id": "debug-trace-001"
+        })))
+        .respond_with(ResponseTemplate::new(202).set_body_json(json!({
+            "metric_output_ulid": "01HXKZ4M5N6P7Q8R9STVWXYZAB"
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("metrics")
+        .arg("test")
+        .arg("met_abc")
+        .arg("--simulation-output-id")
+        .arg("simout_def456")
+        .arg("--dev-id")
+        .arg("debug-trace-001")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("01HXKZ4M5N6P7Q8R9STVWXYZAB"));
 }
 
 #[tokio::test]
