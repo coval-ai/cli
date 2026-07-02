@@ -95,8 +95,8 @@ pub struct UpdateArgs {
     simulation_id: String,
     #[arg(long)]
     notes: Option<String>,
-    #[arg(long)]
-    is_public: Option<bool>,
+    #[arg(long, action = clap::ArgAction::SetTrue)]
+    is_public: bool,
 }
 
 pub async fn execute(
@@ -273,7 +273,7 @@ pub async fn execute(
         SimulationCommands::Update(args) => {
             let simulation = client
                 .simulations()
-                .update(&args.simulation_id, args.notes.clone(), args.is_public)
+                .update(&args.simulation_id, args.notes, Some(args.is_public))
                 .await?;
             emit_one_with_actions(
                 ctx,

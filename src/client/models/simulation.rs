@@ -169,6 +169,7 @@ pub enum MetricDetailResponse {
 
 #[derive(Debug, Serialize)]
 pub struct ResimulateRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub dev_id: Option<String>,
 }
 
