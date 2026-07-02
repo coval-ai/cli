@@ -1,4 +1,5 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 
 use crate::output::Tabular;
 
@@ -31,8 +32,8 @@ pub struct Monitor {
     pub last_triggered_at: Option<String>,
     #[serde(default)]
     pub conditions: Option<Vec<serde_json::Value>>,
-    #[serde(default)]
-    pub channels: Option<Vec<serde_json::Value>>,
+    #[serde(default, deserialize_with = "deserialize_redacted_json_values")]
+    pub channels: Option<Vec<Value>>,
     pub create_time: String,
     pub update_time: String,
     #[serde(flatten)]
@@ -154,8 +155,8 @@ pub struct MonitorEvent {
     pub outcome: String,
     #[serde(default)]
     pub condition_results: Option<Vec<serde_json::Value>>,
-    #[serde(default)]
-    pub dispatched_channels: Option<Vec<serde_json::Value>>,
+    #[serde(default, deserialize_with = "deserialize_redacted_json_values")]
+    pub dispatched_channels: Option<Vec<Value>>,
     #[serde(default)]
     pub message_sent: Option<bool>,
     #[serde(default)]
@@ -186,4 +187,89 @@ pub struct ListMonitorEventsResponse {
     pub next_page_token: Option<String>,
     #[serde(default)]
     pub total_count: Option<i64>,
+}
+
+fn deserialize_redacted_json_values<'de, D>(deserializer: D) -> Result<Option<Vec<Value>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let mut values = Option::<Vec<Value>>::deserialize(deserializer)?;
+    if let Some(items) = values.as_mut() {
+        for item in items {
+            redact_auth_tokens(item);
+        }
+    }
+    Ok(values)
+}
+
+fn redact_auth_tokens(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            if map.contains_key("auth_token") {
+                map.insert(
+                    "auth_token".to_string(),
+                    Value::String("<redacted>".to_string()),
+                );
+            }
+            for child in map.values_mut() {
+                redact_auth_tokens(child);
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                redact_auth_tokens(item);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::{Monitor, MonitorEvent};
+
+    #[test]
+    fn monitor_channels_redact_auth_tokens() {
+        let monitor: Monitor = serde_json::from_value(json!({
+            "ulid": "mon_123",
+            "name": "Webhook monitor",
+            "status": "ACTIVE",
+            "evaluation_type": "RUN",
+            "channels": [{
+                "type": "WEBHOOK",
+                "config": {
+                    "url": "https://example.com/webhook",
+                    "auth_token": "secret-token"
+                }
+            }],
+            "create_time": "2026-01-01T00:00:00Z",
+            "update_time": "2026-01-01T00:00:00Z"
+        }))
+        .unwrap();
+
+        let rendered = serde_json::to_string(&monitor).unwrap();
+        assert!(!rendered.contains("secret-token"));
+        assert!(rendered.contains("<redacted>"));
+    }
+
+    #[test]
+    fn monitor_events_redact_dispatched_channel_auth_tokens() {
+        let event: MonitorEvent = serde_json::from_value(json!({
+            "ulid": "evt_123",
+            "monitor_ulid": "mon_123",
+            "outcome": "TRIGGERED",
+            "dispatched_channels": [{
+                "config": {
+                    "auth_token": "event-secret"
+                }
+            }]
+        }))
+        .unwrap();
+
+        let rendered = serde_json::to_string(&event).unwrap();
+        assert!(!rendered.contains("event-secret"));
+        assert!(rendered.contains("<redacted>"));
+    }
 }
