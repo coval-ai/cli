@@ -371,6 +371,16 @@ impl ConversationsClient<'_> {
             .url(&format!("/v1/conversations/{id}/metrics/{metric_path_id}"));
         self.0.get(url).await
     }
+
+    pub async fn patch(
+        &self,
+        id: &str,
+        req: models::PatchConversationRequest,
+    ) -> Result<models::Conversation, ApiError> {
+        let url = self.0.url(&format!("/v1/conversations/{id}"));
+        let resp: models::GetConversationResponse = self.0.patch(url, &req).await?;
+        Ok(resp.conversation)
+    }
 }
 
 impl SimulationsClient<'_> {
