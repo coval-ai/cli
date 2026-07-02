@@ -130,10 +130,13 @@ pub struct DeleteArgs {
 
 #[derive(Args)]
 pub struct MediaUploadUrlArgs {
+    /// Test case ID (8-char)
     test_case_id: String,
+    /// Name of the file to upload
     #[arg(long)]
     filename: String,
-    #[arg(long, default_value = "image/png")]
+    /// MIME type of the file to upload
+    #[arg(long, default_value = "application/octet-stream")]
     mime_type: String,
 }
 
