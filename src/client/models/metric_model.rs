@@ -5,11 +5,8 @@ use crate::output::Tabular;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetricModel {
     pub model_id: String,
-    #[serde(default)]
     pub display_name: Option<String>,
-    #[serde(default)]
     pub provider: Option<String>,
-    #[serde(default)]
     pub tier: Option<String>,
     #[serde(default)]
     pub supports_thinking: bool,

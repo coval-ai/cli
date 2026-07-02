@@ -19,10 +19,11 @@ impl ModelCommands {
 }
 
 pub async fn execute(cmd: ModelCommands, client: &CovalClient, ctx: &OutputContext) -> Result<()> {
+    let operation = cmd.operation();
     match cmd {
         ModelCommands::Metric => {
             let response = client.models().list_metric_models().await?;
-            emit_list_with_actions(ctx, "models", "metric-models", &response.models, vec![]);
+            emit_list_with_actions(ctx, "models", operation, &response.models, vec![]);
         }
     }
     Ok(())
