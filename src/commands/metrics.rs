@@ -36,10 +36,10 @@ pub enum MetricCommands {
 #[derive(Subcommand)]
 pub enum BaselineCommands {
     List,
-    Get(GetArgs),
+    Get(GetBaselineArgs),
     Create(CreateBaselineArgs),
     Update(UpdateBaselineArgs),
-    Delete(DeleteArgs),
+    Delete(DeleteBaselineArgs),
 }
 
 #[derive(Subcommand)]
@@ -265,6 +265,18 @@ pub struct VersionsArgs {
 }
 
 #[derive(Args)]
+pub struct GetBaselineArgs {
+    /// Baseline ID
+    baseline_id: String,
+}
+
+#[derive(Args)]
+pub struct DeleteBaselineArgs {
+    /// Baseline ID
+    baseline_id: String,
+}
+
+#[derive(Args)]
 pub struct CreateBaselineArgs {
     metric_id: String,
     #[command(flatten)]
@@ -312,8 +324,8 @@ pub struct CreateThresholdArgs {
     target_float_upper: Option<f64>,
     #[arg(long)]
     target_float_lower: Option<f64>,
-    #[arg(long)]
-    target_values: Option<String>,
+    #[arg(long, value_delimiter = ',')]
+    target_values: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -327,8 +339,8 @@ pub struct UpdateThresholdArgs {
     target_float_upper: Option<f64>,
     #[arg(long)]
     target_float_lower: Option<f64>,
-    #[arg(long)]
-    target_values: Option<String>,
+    #[arg(long, value_delimiter = ',')]
+    target_values: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -503,7 +515,7 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
             BaselineCommands::Get(args) => {
                 let baseline = client
                     .metrics()
-                    .get_baseline(&metric_id, &args.metric_id)
+                    .get_baseline(&metric_id, &args.baseline_id)
                     .await?;
                 emit_one_with_actions(ctx, "metrics", operation, &baseline, vec![]);
             }
@@ -536,7 +548,7 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
             BaselineCommands::Delete(args) => {
                 client
                     .metrics()
-                    .delete_baseline(&metric_id, &args.metric_id)
+                    .delete_baseline(&metric_id, &args.baseline_id)
                     .await?;
                 emit_success_with_actions(ctx, "metrics", operation, "Baseline deleted.", vec![]);
             }
@@ -555,8 +567,7 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 input_json::insert(&mut input, "comparison_operator", args.comparison_operator)?;
                 input_json::insert(&mut input, "target_float_upper", args.target_float_upper)?;
                 input_json::insert(&mut input, "target_float_lower", args.target_float_lower)?;
-                if let Some(ref v) = args.target_values {
-                    let vals: Vec<String> = v.split(',').map(|s| s.trim().to_string()).collect();
+                if let Some(vals) = args.target_values {
                     input_json::insert(&mut input, "target_values", Some(vals))?;
                 }
                 let req = input_json::finish(input)?;
@@ -568,8 +579,7 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 input_json::insert(&mut input, "comparison_operator", args.comparison_operator)?;
                 input_json::insert(&mut input, "target_float_upper", args.target_float_upper)?;
                 input_json::insert(&mut input, "target_float_lower", args.target_float_lower)?;
-                if let Some(ref v) = args.target_values {
-                    let vals: Vec<String> = v.split(',').map(|s| s.trim().to_string()).collect();
+                if let Some(vals) = args.target_values {
                     input_json::insert(&mut input, "target_values", Some(vals))?;
                 }
                 let req = input_json::finish(input)?;
