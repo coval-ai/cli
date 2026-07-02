@@ -1065,7 +1065,8 @@ impl MonitorsClient<'_> {
 
     pub async fn get(&self, id: &str) -> Result<models::Monitor, ApiError> {
         let url = self.0.url(&format!("/v1/monitors/{id}"));
-        self.0.get(url).await
+        let resp: models::GetMonitorResponse = self.0.get(url).await?;
+        Ok(resp.monitor)
     }
 
     pub async fn create(

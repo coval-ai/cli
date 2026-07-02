@@ -215,6 +215,20 @@ pub async fn execute(
                 let v: serde_json::Value = serde_json::from_str(c)?;
                 input_json::insert(&mut input, "channels", Some(v))?;
             }
+            if input
+                .get("name")
+                .and_then(serde_json::Value::as_str)
+                .is_none()
+            {
+                anyhow::bail!("--name is required (or provide it via --input-json)");
+            }
+            let has_conditions = input
+                .get("conditions")
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|c| !c.is_empty());
+            if !has_conditions {
+                anyhow::bail!("--conditions is required (or provide it via --input-json)");
+            }
             let req = input_json::finish(input)?;
             let monitor = client.monitors().create(req).await?;
             emit_one_with_actions(
