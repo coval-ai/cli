@@ -9,6 +9,8 @@ use crate::output::{
     emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, OutputContext,
 };
 
+const DEFAULT_EVALUATION_TYPE: &str = "ON_RUN_COMPLETE";
+
 #[derive(Subcommand)]
 pub enum MonitorCommands {
     Context,
@@ -72,8 +74,8 @@ pub struct CreateArgs {
     name: Option<String>,
     #[arg(long)]
     description: Option<String>,
-    #[arg(long, default_value = "ON_RUN_COMPLETE")]
-    evaluation_type: String,
+    #[arg(long)]
+    evaluation_type: Option<String>,
     #[arg(long)]
     scope: Option<String>,
     #[arg(long)]
@@ -186,7 +188,7 @@ pub async fn execute(
             let mut input = args.input_json.object()?;
             input_json::insert(&mut input, "name", args.name)?;
             input_json::insert(&mut input, "description", args.description)?;
-            input_json::insert(&mut input, "evaluation_type", Some(args.evaluation_type))?;
+            input_json::insert(&mut input, "evaluation_type", args.evaluation_type)?;
             input_json::insert(&mut input, "scope", args.scope)?;
             input_json::insert(&mut input, "match_mode", args.match_mode)?;
             input_json::insert(&mut input, "cooldown_seconds", args.cooldown_seconds)?;
@@ -214,6 +216,13 @@ pub async fn execute(
             if let Some(ref c) = args.channels {
                 let v: serde_json::Value = serde_json::from_str(c)?;
                 input_json::insert(&mut input, "channels", Some(v))?;
+            }
+            if !input.contains_key("evaluation_type") {
+                input_json::insert(
+                    &mut input,
+                    "evaluation_type",
+                    Some(DEFAULT_EVALUATION_TYPE.to_string()),
+                )?;
             }
             if input
                 .get("name")
