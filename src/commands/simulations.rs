@@ -273,7 +273,11 @@ pub async fn execute(
         SimulationCommands::Update(args) => {
             let simulation = client
                 .simulations()
-                .update(&args.simulation_id, args.notes, Some(args.is_public))
+                .update(
+                    &args.simulation_id,
+                    args.notes,
+                    args.is_public.then_some(true),
+                )
                 .await?;
             emit_one_with_actions(
                 ctx,
