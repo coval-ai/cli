@@ -20,6 +20,37 @@ pub enum MetricCommands {
     Update(Box<UpdateArgs>),
     Delete(DeleteArgs),
     Test(TestArgs),
+    Versions(VersionsArgs),
+    #[command(name = "baselines")]
+    Baselines {
+        metric_id: String,
+        #[command(subcommand)]
+        command: BaselineCommands,
+    },
+    #[command(name = "thresholds")]
+    Thresholds {
+        metric_id: String,
+        #[command(subcommand)]
+        command: ThresholdCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum BaselineCommands {
+    List,
+    Get(GetBaselineArgs),
+    Create(CreateBaselineArgs),
+    Update(UpdateBaselineArgs),
+    Delete(DeleteBaselineArgs),
+}
+
+#[derive(Subcommand)]
+pub enum ThresholdCommands {
+    List,
+    Get,
+    Create(CreateThresholdArgs),
+    Update(UpdateThresholdArgs),
+    Delete(DeleteThresholdArgs),
 }
 
 impl MetricCommands {
@@ -32,6 +63,21 @@ impl MetricCommands {
             Self::Update(_) => "update",
             Self::Delete(_) => "delete",
             Self::Test(_) => "test",
+            Self::Versions(_) => "versions",
+            Self::Baselines { command, .. } => match command {
+                BaselineCommands::List => "baselines-list",
+                BaselineCommands::Get(_) => "baselines-get",
+                BaselineCommands::Create(_) => "baselines-create",
+                BaselineCommands::Update(_) => "baselines-update",
+                BaselineCommands::Delete(_) => "baselines-delete",
+            },
+            Self::Thresholds { command, .. } => match command {
+                ThresholdCommands::List => "thresholds-list",
+                ThresholdCommands::Get => "thresholds-get",
+                ThresholdCommands::Create(_) => "thresholds-create",
+                ThresholdCommands::Update(_) => "thresholds-update",
+                ThresholdCommands::Delete(_) => "thresholds-delete",
+            },
         }
     }
 }
@@ -218,6 +264,91 @@ pub struct TestArgs {
     dev_id: Option<String>,
 }
 
+#[derive(Args)]
+pub struct VersionsArgs {
+    metric_id: String,
+}
+
+#[derive(Args)]
+pub struct GetBaselineArgs {
+    /// Baseline ID
+    baseline_id: String,
+}
+
+#[derive(Args)]
+pub struct DeleteBaselineArgs {
+    /// Baseline ID
+    baseline_id: String,
+}
+
+#[derive(Args)]
+pub struct CreateBaselineArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
+    #[arg(long)]
+    agent_id: Option<String>,
+    #[arg(long)]
+    test_set_id: Option<String>,
+    #[arg(long)]
+    persona_id: Option<String>,
+    #[arg(long)]
+    display_name: Option<String>,
+    #[arg(long)]
+    sigma_threshold: Option<f64>,
+    #[arg(long)]
+    direction: Option<String>,
+    #[arg(long)]
+    detection_method: Option<String>,
+}
+
+#[derive(Args)]
+pub struct UpdateBaselineArgs {
+    baseline_id: String,
+    #[command(flatten)]
+    input_json: InputJsonArg,
+    #[arg(long)]
+    display_name: Option<String>,
+    #[arg(long)]
+    sigma_threshold: Option<f64>,
+    #[arg(long)]
+    direction: Option<String>,
+    #[arg(long)]
+    status: Option<String>,
+}
+
+#[derive(Args)]
+pub struct CreateThresholdArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
+    #[arg(long)]
+    comparison_operator: Option<String>,
+    #[arg(long)]
+    target_float_upper: Option<f64>,
+    #[arg(long)]
+    target_float_lower: Option<f64>,
+    #[arg(long, value_delimiter = ',')]
+    target_values: Option<Vec<String>>,
+}
+
+#[derive(Args)]
+pub struct UpdateThresholdArgs {
+    #[command(flatten)]
+    input_json: InputJsonArg,
+    #[arg(long)]
+    comparison_operator: Option<String>,
+    #[arg(long)]
+    target_float_upper: Option<f64>,
+    #[arg(long)]
+    target_float_lower: Option<f64>,
+    #[arg(long, value_delimiter = ',')]
+    target_values: Option<Vec<String>>,
+}
+
+#[derive(Args)]
+pub struct DeleteThresholdArgs {
+    threshold_id: String,
+}
+
 pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputContext) -> Result<()> {
     let operation = cmd.operation();
     match cmd {
@@ -377,6 +508,98 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 ],
             );
         }
+        MetricCommands::Versions(args) => {
+            let response = client.metrics().list_versions(&args.metric_id).await?;
+            emit_list_with_actions(ctx, "metrics", operation, &response.versions, vec![]);
+        }
+        MetricCommands::Baselines { metric_id, command } => match command {
+            BaselineCommands::List => {
+                let params = ListParams::default();
+                let response = client.metrics().list_baselines(&metric_id, params).await?;
+                emit_list_with_actions(ctx, "metrics", operation, &response.baselines, vec![]);
+            }
+            BaselineCommands::Get(args) => {
+                let baseline = client
+                    .metrics()
+                    .get_baseline(&metric_id, &args.baseline_id)
+                    .await?;
+                emit_one_with_actions(ctx, "metrics", operation, &baseline, vec![]);
+            }
+            BaselineCommands::Create(args) => {
+                let mut input = args.input_json.object()?;
+                input_json::insert(&mut input, "agent_id", args.agent_id)?;
+                input_json::insert(&mut input, "test_set_id", args.test_set_id)?;
+                input_json::insert(&mut input, "persona_id", args.persona_id)?;
+                input_json::insert(&mut input, "display_name", args.display_name)?;
+                input_json::insert(&mut input, "sigma_threshold", args.sigma_threshold)?;
+                input_json::insert(&mut input, "direction", args.direction)?;
+                input_json::insert(&mut input, "detection_method", args.detection_method)?;
+                let req = input_json::finish(input)?;
+                let baseline = client.metrics().create_baseline(&metric_id, req).await?;
+                emit_one_with_actions(ctx, "metrics", operation, &baseline, vec![]);
+            }
+            BaselineCommands::Update(args) => {
+                let mut input = args.input_json.object()?;
+                input_json::insert(&mut input, "display_name", args.display_name)?;
+                input_json::insert(&mut input, "sigma_threshold", args.sigma_threshold)?;
+                input_json::insert(&mut input, "direction", args.direction)?;
+                input_json::insert(&mut input, "status", args.status)?;
+                let req = input_json::finish(input)?;
+                let baseline = client
+                    .metrics()
+                    .update_baseline(&metric_id, &args.baseline_id, req)
+                    .await?;
+                emit_one_with_actions(ctx, "metrics", operation, &baseline, vec![]);
+            }
+            BaselineCommands::Delete(args) => {
+                client
+                    .metrics()
+                    .delete_baseline(&metric_id, &args.baseline_id)
+                    .await?;
+                emit_success_with_actions(ctx, "metrics", operation, "Baseline deleted.", vec![]);
+            }
+        },
+        MetricCommands::Thresholds { metric_id, command } => match command {
+            ThresholdCommands::List => {
+                let response = client.metrics().list_thresholds(&metric_id).await?;
+                emit_list_with_actions(ctx, "metrics", operation, &response.thresholds, vec![]);
+            }
+            ThresholdCommands::Get => {
+                let threshold = client.metrics().get_threshold(&metric_id).await?;
+                emit_one_with_actions(ctx, "metrics", operation, &threshold, vec![]);
+            }
+            ThresholdCommands::Create(args) => {
+                let mut input = args.input_json.object()?;
+                input_json::insert(&mut input, "comparison_operator", args.comparison_operator)?;
+                input_json::insert(&mut input, "target_float_upper", args.target_float_upper)?;
+                input_json::insert(&mut input, "target_float_lower", args.target_float_lower)?;
+                if let Some(vals) = args.target_values {
+                    input_json::insert(&mut input, "target_values", Some(vals))?;
+                }
+                let req = input_json::finish(input)?;
+                let threshold = client.metrics().create_threshold(&metric_id, req).await?;
+                emit_one_with_actions(ctx, "metrics", operation, &threshold, vec![]);
+            }
+            ThresholdCommands::Update(args) => {
+                let mut input = args.input_json.object()?;
+                input_json::insert(&mut input, "comparison_operator", args.comparison_operator)?;
+                input_json::insert(&mut input, "target_float_upper", args.target_float_upper)?;
+                input_json::insert(&mut input, "target_float_lower", args.target_float_lower)?;
+                if let Some(vals) = args.target_values {
+                    input_json::insert(&mut input, "target_values", Some(vals))?;
+                }
+                let req = input_json::finish(input)?;
+                let threshold = client.metrics().update_threshold(&metric_id, req).await?;
+                emit_one_with_actions(ctx, "metrics", operation, &threshold, vec![]);
+            }
+            ThresholdCommands::Delete(args) => {
+                client
+                    .metrics()
+                    .delete_threshold(&metric_id, &args.threshold_id)
+                    .await?;
+                emit_success_with_actions(ctx, "metrics", operation, "Threshold deleted.", vec![]);
+            }
+        },
     }
     Ok(())
 }

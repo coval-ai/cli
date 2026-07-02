@@ -254,3 +254,148 @@ fn truncate(s: &str, max: usize) -> String {
         format!("{}...", end)
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetricVersion {
+    pub ulid: String,
+    pub version_number: i64,
+    pub change_type: String,
+    #[serde(default)]
+    pub metric_type: Option<String>,
+    #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
+    pub created_by: Option<String>,
+    #[serde(default)]
+    pub create_time: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+impl Tabular for MetricVersion {
+    fn headers() -> Vec<&'static str> {
+        vec!["Version ID", "#", "Change Type", "Label"]
+    }
+    fn row(&self) -> Vec<String> {
+        vec![
+            self.ulid.clone(),
+            self.version_number.to_string(),
+            self.change_type.clone(),
+            self.label.as_deref().unwrap_or("").to_string(),
+        ]
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListMetricVersionsResponse {
+    pub versions: Vec<MetricVersion>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Baseline {
+    pub ulid: String,
+    #[serde(default)]
+    pub metric_id: Option<String>,
+    #[serde(default)]
+    pub display_name: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub sigma_threshold: Option<f64>,
+    #[serde(default)]
+    pub direction: Option<String>,
+    #[serde(default)]
+    pub observation_count: Option<i64>,
+    #[serde(default)]
+    pub baseline_float: Option<f64>,
+    #[serde(default)]
+    pub baseline_sigma: Option<f64>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub last_updated_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+impl Tabular for Baseline {
+    fn headers() -> Vec<&'static str> {
+        vec![
+            "ID",
+            "Display Name",
+            "Status",
+            "Direction",
+            "Obs",
+            "Baseline",
+        ]
+    }
+    fn row(&self) -> Vec<String> {
+        vec![
+            self.ulid.clone(),
+            self.display_name.as_deref().unwrap_or("").to_string(),
+            self.status.as_deref().unwrap_or("").to_string(),
+            self.direction.as_deref().unwrap_or("").to_string(),
+            self.observation_count.unwrap_or(0).to_string(),
+            self.baseline_float
+                .map(|v| format!("{:.4}", v))
+                .unwrap_or_default(),
+        ]
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListBaselinesResponse {
+    pub baselines: Vec<Baseline>,
+    #[serde(default)]
+    pub next_page_token: Option<String>,
+    #[serde(default)]
+    pub total_count: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Threshold {
+    pub name: String,
+    #[serde(default)]
+    pub comparison_operator: Option<String>,
+    #[serde(default)]
+    pub target_float_upper: Option<f64>,
+    #[serde(default)]
+    pub target_float_lower: Option<f64>,
+    #[serde(default)]
+    pub target_values: Option<Vec<String>>,
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub create_time: Option<String>,
+    #[serde(default)]
+    pub update_time: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+impl Tabular for Threshold {
+    fn headers() -> Vec<&'static str> {
+        vec!["Name", "Operator", "Upper", "Lower", "Source"]
+    }
+    fn row(&self) -> Vec<String> {
+        vec![
+            self.name.clone(),
+            self.comparison_operator
+                .as_deref()
+                .unwrap_or("")
+                .to_string(),
+            self.target_float_upper
+                .map(|v| v.to_string())
+                .unwrap_or_default(),
+            self.target_float_lower
+                .map(|v| v.to_string())
+                .unwrap_or_default(),
+            self.source.as_deref().unwrap_or("").to_string(),
+        ]
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListThresholdsResponse {
+    pub thresholds: Vec<Threshold>,
+}

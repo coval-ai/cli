@@ -642,6 +642,109 @@ impl MetricsClient<'_> {
         let url = self.0.url(&format!("/v1/metrics/{id}/test"));
         self.0.post(url, &req).await
     }
+
+    pub async fn list_versions(
+        &self,
+        metric_id: &str,
+    ) -> Result<models::ListMetricVersionsResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/versions"));
+        self.0.get(url).await
+    }
+
+    pub async fn list_baselines(
+        &self,
+        metric_id: &str,
+        params: models::ListParams,
+    ) -> Result<models::ListBaselinesResponse, ApiError> {
+        let mut url = self.0.url(&format!("/v1/metrics/{metric_id}/baselines"));
+        params.apply_to(&mut url);
+        self.0.get(url).await
+    }
+
+    pub async fn get_baseline(
+        &self,
+        metric_id: &str,
+        baseline_id: &str,
+    ) -> Result<models::Baseline, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/metrics/{metric_id}/baselines/{baseline_id}"));
+        self.0.get(url).await
+    }
+
+    pub async fn create_baseline(
+        &self,
+        metric_id: &str,
+        req: serde_json::Value,
+    ) -> Result<models::Baseline, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/baselines"));
+        self.0.post(url, &req).await
+    }
+
+    pub async fn update_baseline(
+        &self,
+        metric_id: &str,
+        baseline_id: &str,
+        req: serde_json::Value,
+    ) -> Result<models::Baseline, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/metrics/{metric_id}/baselines/{baseline_id}"));
+        self.0.patch(url, &req).await
+    }
+
+    pub async fn delete_baseline(
+        &self,
+        metric_id: &str,
+        baseline_id: &str,
+    ) -> Result<(), ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/metrics/{metric_id}/baselines/{baseline_id}"));
+        self.0.delete(url).await
+    }
+
+    pub async fn list_thresholds(
+        &self,
+        metric_id: &str,
+    ) -> Result<models::ListThresholdsResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/thresholds"));
+        self.0.get(url).await
+    }
+
+    pub async fn get_threshold(&self, metric_id: &str) -> Result<models::Threshold, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/threshold"));
+        self.0.get(url).await
+    }
+
+    pub async fn create_threshold(
+        &self,
+        metric_id: &str,
+        req: serde_json::Value,
+    ) -> Result<models::Threshold, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/thresholds"));
+        self.0.post(url, &req).await
+    }
+
+    pub async fn update_threshold(
+        &self,
+        metric_id: &str,
+        req: serde_json::Value,
+    ) -> Result<models::Threshold, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{metric_id}/threshold"));
+        self.0.patch(url, &req).await
+    }
+
+    pub async fn delete_threshold(
+        &self,
+        metric_id: &str,
+        threshold_id: &str,
+    ) -> Result<(), ApiError> {
+        let url = self.0.url(&format!(
+            "/v1/metrics/{metric_id}/thresholds/{threshold_id}"
+        ));
+        self.0.delete(url).await
+    }
 }
 
 impl MutationsClient<'_> {
