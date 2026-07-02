@@ -427,6 +427,31 @@ impl SimulationsClient<'_> {
             .url(&format!("/v1/simulations/{id}/metrics/{metric_path_id}"));
         self.0.get(url).await
     }
+
+    pub async fn resimulate(
+        &self,
+        id: &str,
+        dev_id: Option<&str>,
+    ) -> Result<models::Simulation, ApiError> {
+        let url = self.0.url(&format!("/v1/simulations/{id}/resimulate"));
+        let req = models::ResimulateRequest {
+            dev_id: dev_id.map(String::from),
+        };
+        let resp: models::GetSimulationResponse = self.0.post(url, &req).await?;
+        Ok(resp.simulation)
+    }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        notes: Option<String>,
+        is_public: Option<bool>,
+    ) -> Result<models::Simulation, ApiError> {
+        let url = self.0.url(&format!("/v1/simulations/{id}"));
+        let req = models::UpdateSimulationRequest { notes, is_public };
+        let resp: models::GetSimulationResponse = self.0.patch(url, &req).await?;
+        Ok(resp.simulation)
+    }
 }
 
 impl TestSetsClient<'_> {

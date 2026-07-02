@@ -16,6 +16,8 @@ use crate::output::{
 #[derive(Subcommand)]
 pub enum SimulationCommands {
     Context,
+    Resimulate(ResimulateArgs),
+    Update(UpdateArgs),
     List(ListArgs),
     Get(GetArgs),
     Delete(DeleteArgs),
@@ -35,6 +37,8 @@ impl SimulationCommands {
             Self::Audio(_) => "audio",
             Self::Metrics(_) => "metrics",
             Self::MetricDetail(_) => "metric-detail",
+            Self::Resimulate(_) => "resimulate",
+            Self::Update(_) => "update",
         }
     }
 }
@@ -77,6 +81,22 @@ pub struct MetricsArgs {
 pub struct MetricDetailArgs {
     simulation_id: String,
     metric_id: String,
+}
+
+#[derive(Args)]
+pub struct ResimulateArgs {
+    simulation_id: String,
+    #[arg(long)]
+    dev_id: Option<String>,
+}
+
+#[derive(Args)]
+pub struct UpdateArgs {
+    simulation_id: String,
+    #[arg(long)]
+    notes: Option<String>,
+    #[arg(long, action = clap::ArgAction::SetTrue)]
+    is_public: bool,
 }
 
 pub async fn execute(
@@ -236,6 +256,36 @@ pub async fn execute(
                     }
                 }
             }
+        }
+        SimulationCommands::Resimulate(args) => {
+            let simulation = client
+                .simulations()
+                .resimulate(&args.simulation_id, args.dev_id.as_deref())
+                .await?;
+            emit_one_with_actions(
+                ctx,
+                "simulations",
+                operation,
+                &simulation,
+                vec![next_actions::get("simulations", &args.simulation_id).primary()],
+            );
+        }
+        SimulationCommands::Update(args) => {
+            let simulation = client
+                .simulations()
+                .update(
+                    &args.simulation_id,
+                    args.notes,
+                    args.is_public.then_some(true),
+                )
+                .await?;
+            emit_one_with_actions(
+                ctx,
+                "simulations",
+                operation,
+                &simulation,
+                vec![next_actions::get("simulations", &args.simulation_id).primary()],
+            );
         }
     }
     Ok(())
