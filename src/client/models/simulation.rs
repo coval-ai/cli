@@ -138,12 +138,24 @@ pub struct SubvalueByTimestamp {
 pub struct SimpleMetricOutput {
     pub metric_output_id: String,
     pub metric_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metric_version_ulid: Option<String>,
     #[serde(default)]
     pub status: Option<String>,
     #[serde(default)]
     pub value: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub explanation: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subvalues_by_timestamp: Option<Vec<SubvalueByTimestamp>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subvalues_by_timestamp_truncated: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subvalues_by_timestamp_total_count: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_metadata: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -160,7 +172,7 @@ pub struct GetSimulationMetricResponse {
 #[serde(untagged)]
 pub enum MetricDetailResponse {
     Single {
-        metric: SimpleMetricOutput,
+        metric: Box<SimpleMetricOutput>,
     },
     Collection {
         metric_outputs: Vec<SimpleMetricOutput>,

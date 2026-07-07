@@ -1823,8 +1823,10 @@ async fn test_simulations_metrics_with_subvalues() {
                 {
                     "metric_output_id": "mo123",
                     "metric_id": "met456",
+                    "metric_version_ulid": "01JMETRICVERSION000000001",
                     "status": "COMPLETED",
                     "value": 0.95,
+                    "explanation": "The agent skipped the identity check.",
                     "subvalues_by_timestamp": [
                         {
                             "start_offset": 0.0,
@@ -1844,7 +1846,29 @@ async fn test_simulations_metrics_with_subvalues() {
                             "role": null,
                             "message_index": null
                         }
-                    ]
+                    ],
+                    "subvalues_by_timestamp_truncated": false,
+                    "subvalues_by_timestamp_total_count": 2,
+                    "result": {
+                        "unit": "score",
+                        "raw_values": {
+                            "critical_failures": [
+                                {
+                                    "node_id": "identity_check",
+                                    "failure": "The bot skipped the identity check.",
+                                    "message_index": 1
+                                }
+                            ],
+                            "non_critical_failures": [
+                                {
+                                    "node_id": "wrap_up",
+                                    "failure": "The bot repeated the closing prompt.",
+                                    "message_index": 3
+                                }
+                            ]
+                        }
+                    },
+                    "runtime_metadata": {"model_version": "openai:gpt-4.1-2025-04-14"}
                 }
             ]
         })))
@@ -1865,6 +1889,41 @@ async fn test_simulations_metrics_with_subvalues() {
         .stdout(predicate::str::contains("met456"))
         .stdout(predicate::str::contains("COMPLETED"))
         .stdout(predicate::str::contains("2"));
+
+    let value = stdout_json(
+        coval()
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("--format")
+            .arg("json")
+            .arg("simulations")
+            .arg("metrics")
+            .arg("sim123")
+            .assert()
+            .success(),
+    );
+    assert_eq!(
+        value[0]["metric_version_ulid"],
+        json!("01JMETRICVERSION000000001")
+    );
+    assert_eq!(
+        value[0]["explanation"],
+        json!("The agent skipped the identity check.")
+    );
+    assert_eq!(
+        value[0]["result"]["raw_values"]["critical_failures"][0]["node_id"],
+        json!("identity_check")
+    );
+    assert_eq!(
+        value[0]["result"]["raw_values"]["non_critical_failures"][0]["node_id"],
+        json!("wrap_up")
+    );
+    assert_eq!(
+        value[0]["runtime_metadata"]["model_version"],
+        json!("openai:gpt-4.1-2025-04-14")
+    );
 }
 
 #[tokio::test]
@@ -1916,26 +1975,52 @@ async fn test_simulations_metric_detail_by_ulid() {
                 "metric_output_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
                 "metric_id": "29BlkepvvX19ebbLDB0y6Q",
                 "status": "COMPLETED",
-                "value": 2.35
+                "value": 2.35,
+                "result": {
+                    "raw_values": {
+                        "critical_failures": [
+                            {
+                                "node_id": "existing_dispute_check",
+                                "failure": "Bot did not clarify whether the dispute was new or existing.",
+                                "message_index": 7
+                            }
+                        ],
+                        "non_critical_failures": []
+                    }
+                },
+                "runtime_metadata": {"model_version": "openai:gpt-4.1-2025-04-14"}
             }
         })))
         .mount(&mock_server)
         .await;
 
-    coval()
-        .arg("--api-key")
-        .arg("test_key")
-        .arg("--api-url")
-        .arg(mock_server.uri())
-        .arg("simulations")
-        .arg("metric-detail")
-        .arg("sim123")
-        .arg("01ARZ3NDEKTSV4RRFFQ69G5FAV")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("01ARZ3NDEKTSV4RRFFQ69G5FAV"))
-        .stdout(predicate::str::contains("29BlkepvvX19ebbLDB0y6Q"))
-        .stdout(predicate::str::contains("COMPLETED"));
+    let value = stdout_json(
+        coval()
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("simulations")
+            .arg("metric-detail")
+            .arg("sim123")
+            .arg("01ARZ3NDEKTSV4RRFFQ69G5FAV")
+            .assert()
+            .success(),
+    );
+    assert_eq!(
+        value["metric_output_id"],
+        json!("01ARZ3NDEKTSV4RRFFQ69G5FAV")
+    );
+    assert_eq!(value["metric_id"], json!("29BlkepvvX19ebbLDB0y6Q"));
+    assert_eq!(value["status"], json!("COMPLETED"));
+    assert_eq!(
+        value["result"]["raw_values"]["critical_failures"][0]["node_id"],
+        json!("existing_dispute_check")
+    );
+    assert_eq!(
+        value["runtime_metadata"]["model_version"],
+        json!("openai:gpt-4.1-2025-04-14")
+    );
 }
 
 #[tokio::test]
@@ -1996,27 +2081,62 @@ async fn test_conversations_metric_detail_by_metric_id() {
                     "metric_output_id": "01KKWQYSF737ZN6X1Q1RYX8M2D",
                     "metric_id": "4HTX6gnqXtpexWSLNaKdC4",
                     "status": "COMPLETED",
-                    "value": "YES"
+                    "value": "YES",
+                    "result": {
+                        "unit": "score",
+                        "raw_values": {
+                            "critical_failures": [
+                                {
+                                    "node_id": "existing_dispute_check",
+                                    "failure": "Bot did not clarify whether the dispute was new or existing.",
+                                    "message_index": 7
+                                }
+                            ],
+                            "non_critical_failures": [
+                                {
+                                    "node_id": "existing_dispute_check",
+                                    "failure": "Bot repeated the question instead of streamlining the path.",
+                                    "message_index": 8
+                                }
+                            ]
+                        }
+                    },
+                    "runtime_metadata": {"model_version": "openai:gpt-4.1-2025-04-14"}
                 }
             ]
         })))
         .mount(&mock_server)
         .await;
 
-    coval()
-        .arg("--api-key")
-        .arg("test_key")
-        .arg("--api-url")
-        .arg(mock_server.uri())
-        .arg("conversations")
-        .arg("metric-detail")
-        .arg("conv123")
-        .arg("4HTX6gnqXtpexWSLNaKdC4")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("01KKWQYSF737ZN6X1Q1RYX8M2D"))
-        .stdout(predicate::str::contains("4HTX6gnqXtpexWSLNaKdC4"))
-        .stdout(predicate::str::contains("YES"));
+    let value = stdout_json(
+        coval()
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("--format")
+            .arg("json")
+            .arg("conversations")
+            .arg("metric-detail")
+            .arg("conv123")
+            .arg("4HTX6gnqXtpexWSLNaKdC4")
+            .assert()
+            .success(),
+    );
+    assert_eq!(
+        value[0]["metric_output_id"],
+        json!("01KKWQYSF737ZN6X1Q1RYX8M2D")
+    );
+    assert_eq!(value[0]["metric_id"], json!("4HTX6gnqXtpexWSLNaKdC4"));
+    assert_eq!(value[0]["value"], json!("YES"));
+    assert_eq!(
+        value[0]["result"]["raw_values"]["critical_failures"][0]["node_id"],
+        json!("existing_dispute_check")
+    );
+    assert_eq!(
+        value[0]["result"]["raw_values"]["non_critical_failures"][0]["message_index"],
+        json!(8)
+    );
 }
 
 #[tokio::test]
