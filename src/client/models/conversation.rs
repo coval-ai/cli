@@ -1,5 +1,6 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 use crate::output::Tabular;
 
@@ -115,6 +116,92 @@ pub struct ListConversationsResponse {
 #[derive(Debug, Deserialize)]
 pub struct GetConversationResponse {
     pub conversation: Conversation,
+}
+
+#[derive(Debug)]
+pub struct FailureBreakdownParams {
+    pub metric_id: String,
+    pub group_by_metadata: Option<String>,
+    pub failure_query: Option<String>,
+    pub start_date: Option<DateTime<Utc>>,
+    pub end_date: Option<DateTime<Utc>>,
+    pub max_examples_per_group: u8,
+}
+
+impl FailureBreakdownParams {
+    pub fn apply_to(&self, url: &mut Url) {
+        let mut pairs = url.query_pairs_mut();
+        pairs.append_pair("view", "failure_breakdown");
+        pairs.append_pair("metric_id", &self.metric_id);
+        if let Some(ref group_by_metadata) = self.group_by_metadata {
+            pairs.append_pair("group_by_metadata", group_by_metadata);
+        }
+        if let Some(ref failure_query) = self.failure_query {
+            pairs.append_pair("failure_query", failure_query);
+        }
+        if let Some(start_date) = self.start_date {
+            pairs.append_pair(
+                "start_date",
+                &start_date.to_rfc3339_opts(SecondsFormat::AutoSi, true),
+            );
+        }
+        if let Some(end_date) = self.end_date {
+            pairs.append_pair(
+                "end_date",
+                &end_date.to_rfc3339_opts(SecondsFormat::AutoSi, true),
+            );
+        }
+        pairs.append_pair(
+            "max_examples_per_group",
+            &self.max_examples_per_group.to_string(),
+        );
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FailureBreakdownResponse {
+    pub view: String,
+    pub metric_id: String,
+    #[serde(default)]
+    pub tree_definition: Vec<serde_json::Value>,
+    pub group_by_metadata: Option<String>,
+    pub failure_query: Option<String>,
+    pub scope: FailureBreakdownScope,
+    #[serde(default)]
+    pub breakdown: Vec<FailureBreakdownRow>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FailureBreakdownScope {
+    pub requested_start_date: Option<String>,
+    pub requested_end_date: Option<String>,
+    pub observed_start_date: Option<DateTime<Utc>>,
+    pub observed_end_date: Option<DateTime<Utc>>,
+    pub total_scored_conversations: u64,
+    pub structured_result_conversations: u64,
+    pub critical_failure_conversations: u64,
+    pub non_critical_failure_conversations: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FailureBreakdownRow {
+    pub failure_type: String,
+    pub node_id: String,
+    pub node_label: String,
+    pub metadata_value: Option<String>,
+    pub conversation_count: u64,
+    pub occurrence_count: u64,
+    #[serde(default)]
+    pub examples: Vec<FailureBreakdownExample>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FailureBreakdownExample {
+    pub conversation_id: String,
+    pub failure: String,
+    pub expected_bot_response: Option<String>,
+    pub message_index: Option<i64>,
+    pub occurred_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

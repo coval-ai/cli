@@ -345,6 +345,15 @@ impl ConversationsClient<'_> {
         Ok(resp.conversation)
     }
 
+    pub async fn failure_breakdown(
+        &self,
+        params: models::FailureBreakdownParams,
+    ) -> Result<models::FailureBreakdownResponse, ApiError> {
+        let mut url = self.0.url("/v1/conversations");
+        params.apply_to(&mut url);
+        self.0.get(url).await
+    }
+
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
         let url = self.0.url(&format!("/v1/conversations/{id}"));
         self.0.delete(url).await

@@ -287,6 +287,7 @@ const RESOURCE_SPECS: &[ResourceSpec] = &[
             "submit",
             "metrics",
             "metric-detail",
+            "failure-breakdown",
         ],
         description: "Conversations are submitted or monitored customer interactions that can be evaluated with metrics.",
         id_name: "conversation_id",
