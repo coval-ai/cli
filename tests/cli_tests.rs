@@ -1598,52 +1598,43 @@ async fn test_conversations_audio_json_output() {
 }
 
 #[tokio::test]
-async fn test_conversations_failure_breakdown_json_output() {
+async fn test_conversations_list_can_include_full_metric_outputs() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("GET"))
         .and(path("/v1/conversations"))
         .and(header("X-API-Key", "test_key"))
-        .and(query_param("view", "failure_breakdown"))
+        .and(query_param("include", "metric_outputs"))
         .and(query_param("metric_id", "metric123"))
-        .and(query_param("group_by_metadata", "nlp_provider"))
-        .and(query_param("failure_query", "status"))
-        .and(query_param("start_date", "2026-04-09T00:00:00Z"))
-        .and(query_param("end_date", "2026-04-09T23:59:59Z"))
-        .and(query_param("max_examples_per_group", "2"))
+        .and(query_param("page_size", "50"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "view": "failure_breakdown",
-            "metric_id": "metric123",
-            "tree_definition": [
-                {"id": "dispute_status_flow", "label": "Dispute Status Flow"}
-            ],
-            "group_by_metadata": "nlp_provider",
-            "failure_query": "status",
-            "scope": {
-                "requested_start_date": "2026-04-09T00:00:00Z",
-                "requested_end_date": "2026-04-09T23:59:59Z",
-                "observed_start_date": "2026-04-09T00:04:00Z",
-                "observed_end_date": "2026-04-09T23:51:00Z",
-                "total_scored_conversations": 29,
-                "structured_result_conversations": 29,
-                "critical_failure_conversations": 11,
-                "non_critical_failure_conversations": 26
-            },
-            "breakdown": [{
-                "failure_type": "critical",
-                "node_id": "dispute_status_flow",
-                "node_label": "Dispute Status Flow",
-                "metadata_value": "sierra",
-                "conversation_count": 7,
-                "occurrence_count": 7,
-                "examples": [{
-                    "conversation_id": "conversation123",
-                    "failure": "Wrong status guidance.",
-                    "expected_bot_response": "Give approved status guidance or escalate.",
-                    "message_index": 9,
-                    "occurred_at": "2026-04-09T12:00:00Z"
+            "conversations": [{
+                "name": "conversations/conversation123",
+                "conversation_id": "conversation123",
+                "status": "COMPLETED",
+                "create_time": "2026-04-09T12:00:00Z",
+                "occurred_at": "2026-04-09T11:55:00Z",
+                "has_audio": true,
+                "metadata": {"nlp_provider": "sierra"},
+                "metric_outputs": [{
+                    "metric_output_id": "01JMETRICOUTPUT00000000000",
+                    "metric_id": "metric123",
+                    "metric_version_ulid": "01JMETRICVERSION0000000000",
+                    "status": "COMPLETED",
+                    "value": 0.5,
+                    "result": {
+                        "raw_values": {
+                            "critical_failures": [{
+                                "node_id": "dispute_status_flow",
+                                "failure": "Wrong status guidance.",
+                                "message_index": 9
+                            }],
+                            "non_critical_failures": []
+                        }
+                    }
                 }]
-            }]
+            }],
+            "next_page_token": "page-2"
         })))
         .mount(&mock_server)
         .await;
@@ -1657,28 +1648,19 @@ async fn test_conversations_failure_breakdown_json_output() {
             .arg("--format")
             .arg("json")
             .arg("conversations")
-            .arg("failure-breakdown")
+            .arg("list")
+            .arg("--include-metric-outputs")
             .arg("metric123")
-            .arg("--group-by-metadata")
-            .arg("nlp_provider")
-            .arg("--failure-query")
-            .arg("status")
-            .arg("--start-date")
-            .arg("2026-04-09T00:00:00Z")
-            .arg("--end-date")
-            .arg("2026-04-09T23:59:59Z")
-            .arg("--max-examples-per-group")
-            .arg("2")
             .assert()
             .success()
             .stderr(predicate::str::is_empty()),
     );
 
-    assert_eq!(value["scope"]["total_scored_conversations"], 29);
-    assert_eq!(value["tree_definition"][0]["id"], "dispute_status_flow");
+    assert_eq!(value[0]["conversation_id"], "conversation123");
+    assert_eq!(value[0]["metric_outputs"][0]["metric_id"], "metric123");
     assert_eq!(
-        value["breakdown"][0]["examples"][0]["expected_bot_response"],
-        "Give approved status guidance or escalate."
+        value[0]["metric_outputs"][0]["result"]["raw_values"]["critical_failures"][0]["node_id"],
+        "dispute_status_flow"
     );
 }
 

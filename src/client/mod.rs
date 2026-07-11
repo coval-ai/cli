@@ -339,19 +339,23 @@ impl ConversationsClient<'_> {
         self.0.get(url).await
     }
 
+    pub async fn list_with_metric_outputs(
+        &self,
+        params: models::ListParams,
+        metric_id: &str,
+    ) -> Result<models::ListConversationsResponse, ApiError> {
+        let mut url = self.0.url("/v1/conversations");
+        params.apply_to(&mut url);
+        url.query_pairs_mut()
+            .append_pair("include", "metric_outputs")
+            .append_pair("metric_id", metric_id);
+        self.0.get(url).await
+    }
+
     pub async fn get(&self, id: &str) -> Result<models::Conversation, ApiError> {
         let url = self.0.url(&format!("/v1/conversations/{id}"));
         let resp: models::GetConversationResponse = self.0.get(url).await?;
         Ok(resp.conversation)
-    }
-
-    pub async fn failure_breakdown(
-        &self,
-        params: models::FailureBreakdownParams,
-    ) -> Result<models::FailureBreakdownResponse, ApiError> {
-        let mut url = self.0.url("/v1/conversations");
-        params.apply_to(&mut url);
-        self.0.get(url).await
     }
 
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {

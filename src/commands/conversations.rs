@@ -9,9 +9,7 @@ use clap::{Args, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::client::error::ApiError;
-use crate::client::models::{
-    FailureBreakdownParams, ListParams, MetricDetailResponse, SubmitConversationRequest,
-};
+use crate::client::models::{ListParams, MetricDetailResponse, SubmitConversationRequest};
 use crate::client::CovalClient;
 use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
@@ -31,8 +29,6 @@ pub enum ConversationCommands {
     Metrics(MetricsArgs),
     #[command(name = "metric-detail")]
     MetricDetail(MetricDetailArgs),
-    #[command(name = "failure-breakdown")]
-    FailureBreakdown(FailureBreakdownArgs),
     Patch(PatchArgs),
 }
 
@@ -47,7 +43,6 @@ impl ConversationCommands {
             Self::Submit(_) => "submit",
             Self::Metrics(_) => "metrics",
             Self::MetricDetail(_) => "metric-detail",
-            Self::FailureBreakdown(_) => "failure-breakdown",
             Self::Patch(_) => "patch",
         }
     }
@@ -61,6 +56,9 @@ pub struct ListArgs {
     page_size: u32,
     #[arg(long)]
     order_by: Option<String>,
+    /// Include full outputs for this metric on every conversation in the page
+    #[arg(long, value_name = "METRIC_ID")]
+    include_metric_outputs: Option<String>,
 }
 
 #[derive(Args)]
@@ -135,27 +133,6 @@ pub struct MetricDetailArgs {
 }
 
 #[derive(Args)]
-pub struct FailureBreakdownArgs {
-    /// Metric ID whose structured failures should be counted
-    metric_id: String,
-    /// Conversation metadata key used to segment counts, such as nlp_provider
-    #[arg(long)]
-    group_by_metadata: Option<String>,
-    /// Case-insensitive substring filter for failure text or node ID
-    #[arg(long)]
-    failure_query: Option<String>,
-    /// Inclusive lower bound as a timezone-aware ISO 8601 timestamp
-    #[arg(long)]
-    start_date: Option<DateTime<Utc>>,
-    /// Inclusive upper bound as a timezone-aware ISO 8601 timestamp
-    #[arg(long)]
-    end_date: Option<DateTime<Utc>>,
-    /// Representative examples returned per failure group
-    #[arg(long, default_value = "3", value_parser = clap::value_parser!(u8).range(1..=5))]
-    max_examples_per_group: u8,
-}
-
-#[derive(Args)]
 pub struct PatchArgs {
     conversation_id: String,
     #[arg(long)]
@@ -181,7 +158,15 @@ pub async fn execute(
                 order_by: args.order_by,
                 ..Default::default()
             };
-            let response = client.conversations().list(params).await?;
+            let response = match args.include_metric_outputs {
+                Some(metric_id) => {
+                    client
+                        .conversations()
+                        .list_with_metric_outputs(params, &metric_id)
+                        .await?
+                }
+                None => client.conversations().list(params).await?,
+            };
             emit_list_with_actions(
                 ctx,
                 "conversations",
@@ -279,26 +264,6 @@ pub async fn execute(
                     vec![next_actions::get("conversations", &args.conversation_id).primary()],
                 ),
             }
-        }
-        ConversationCommands::FailureBreakdown(args) => {
-            let response = client
-                .conversations()
-                .failure_breakdown(FailureBreakdownParams {
-                    metric_id: args.metric_id,
-                    group_by_metadata: args.group_by_metadata,
-                    failure_query: args.failure_query,
-                    start_date: args.start_date,
-                    end_date: args.end_date,
-                    max_examples_per_group: args.max_examples_per_group,
-                })
-                .await?;
-            emit_one_with_actions(
-                ctx,
-                "conversations",
-                operation,
-                &response,
-                vec![next_actions::context("conversations")],
-            );
         }
         ConversationCommands::Submit(args) => {
             let req = build_submit_request(args)?;
