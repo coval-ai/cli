@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::output::Tabular;
 
-use super::TranscriptMessage;
+use super::{SimpleMetricOutput, TranscriptMessage};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Conversation {
@@ -27,6 +27,8 @@ pub struct Conversation {
     pub metadata: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metric_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metric_outputs: Option<Vec<SimpleMetricOutput>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

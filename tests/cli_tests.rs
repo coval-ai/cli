@@ -1,7 +1,7 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
 use serde_json::{json, Value};
-use wiremock::matchers::{body_partial_json, header, method, path};
+use wiremock::matchers::{body_partial_json, header, method, path, query_param};
 use wiremock::{Match, Mock, MockServer, Request, ResponseTemplate};
 
 fn coval() -> Command {
@@ -1595,6 +1595,73 @@ async fn test_conversations_audio_json_output() {
         "https://storage.example.com/conversation.wav"
     );
     assert_eq!(value["conversation_id"], "conv123");
+}
+
+#[tokio::test]
+async fn test_conversations_list_can_include_full_metric_outputs() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/conversations"))
+        .and(header("X-API-Key", "test_key"))
+        .and(query_param("include", "metric_outputs"))
+        .and(query_param("metric_id", "metric123"))
+        .and(query_param("page_size", "50"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "conversations": [{
+                "name": "conversations/conversation123",
+                "conversation_id": "conversation123",
+                "status": "COMPLETED",
+                "create_time": "2026-04-09T12:00:00Z",
+                "occurred_at": "2026-04-09T11:55:00Z",
+                "has_audio": true,
+                "metadata": {"nlp_provider": "sierra"},
+                "metric_outputs": [{
+                    "metric_output_id": "01JMETRICOUTPUT00000000000",
+                    "metric_id": "metric123",
+                    "metric_version_ulid": "01JMETRICVERSION0000000000",
+                    "status": "COMPLETED",
+                    "value": 0.5,
+                    "result": {
+                        "raw_values": {
+                            "critical_failures": [{
+                                "node_id": "dispute_status_flow",
+                                "failure": "Wrong status guidance.",
+                                "message_index": 9
+                            }],
+                            "non_critical_failures": []
+                        }
+                    }
+                }]
+            }],
+            "next_page_token": "page-2"
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("--format")
+            .arg("json")
+            .arg("conversations")
+            .arg("list")
+            .arg("--include-metric-outputs")
+            .arg("metric123")
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value[0]["conversation_id"], "conversation123");
+    assert_eq!(value[0]["metric_outputs"][0]["metric_id"], "metric123");
+    assert_eq!(
+        value[0]["metric_outputs"][0]["result"]["raw_values"]["critical_failures"][0]["node_id"],
+        "dispute_status_flow"
+    );
 }
 
 #[tokio::test]

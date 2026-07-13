@@ -56,6 +56,9 @@ pub struct ListArgs {
     page_size: u32,
     #[arg(long)]
     order_by: Option<String>,
+    /// Include full outputs for this metric on every conversation in the page
+    #[arg(long, value_name = "METRIC_ID")]
+    include_metric_outputs: Option<String>,
 }
 
 #[derive(Args)]
@@ -155,7 +158,15 @@ pub async fn execute(
                 order_by: args.order_by,
                 ..Default::default()
             };
-            let response = client.conversations().list(params).await?;
+            let response = match args.include_metric_outputs {
+                Some(metric_id) => {
+                    client
+                        .conversations()
+                        .list_with_metric_outputs(params, &metric_id)
+                        .await?
+                }
+                None => client.conversations().list(params).await?,
+            };
             emit_list_with_actions(
                 ctx,
                 "conversations",
