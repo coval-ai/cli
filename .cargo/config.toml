@@ -1,0 +1,4 @@
+[alias]
+# Regenerate the do-not-edit API model modules from the external OpenAPI specs.
+# See xtask/src/main.rs and API-400.
+xtask = "run --package xtask --release --"

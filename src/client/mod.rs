@@ -1,4 +1,5 @@
 pub mod error;
+pub mod generated;
 pub mod models;
 
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};

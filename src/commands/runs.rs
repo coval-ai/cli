@@ -168,10 +168,12 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext
                 || args.test_cases.is_some()
             {
                 Some(LaunchOptions {
-                    iteration_count: args.iterations,
-                    concurrency: args.concurrency,
-                    sub_sample_size: args.sub_sample_size,
-                    sub_sample_seed: args.sub_sample_seed,
+                    // Generated types widen spec `integer` to i64; CLI args stay
+                    // in their natural widths, so bridge here.
+                    iteration_count: args.iterations.map(i64::from),
+                    concurrency: args.concurrency.map(i64::from),
+                    sub_sample_size: args.sub_sample_size.map(i64::from),
+                    sub_sample_seed: args.sub_sample_seed.map(|seed| seed as i64),
                     test_case_ids: args.test_cases,
                 })
             } else {
@@ -182,7 +184,8 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext
                 Some(LaunchMetadata {
                     display_name: args.name,
                     tags: args.tags,
-                    ..Default::default()
+                    created_by: None,
+                    customer: serde_json::Map::new(),
                 })
             } else {
                 None
@@ -192,10 +195,11 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext
                 agent_id: args.agent_id.unwrap_or_default(),
                 persona_id: args.persona_id.unwrap_or_default(),
                 test_set_id: args.test_set_id.unwrap_or_default(),
-                metric_ids: args.metric_ids,
+                // Non-required arrays are generated as plain `Vec` (empty = unset).
+                metric_ids: args.metric_ids.unwrap_or_default(),
                 mutation_id: args.mutation_id,
-                mutation_ids: args.mutation_ids,
-                persona_metrics: None,
+                mutation_ids: args.mutation_ids.unwrap_or_default(),
+                persona_metrics: Vec::new(),
                 options,
                 metadata,
             };
@@ -203,9 +207,9 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext
             input_json::insert(&mut input, "agent_id", empty_to_none(req.agent_id))?;
             input_json::insert(&mut input, "persona_id", empty_to_none(req.persona_id))?;
             input_json::insert(&mut input, "test_set_id", empty_to_none(req.test_set_id))?;
-            input_json::insert(&mut input, "metric_ids", req.metric_ids)?;
+            input_json::insert(&mut input, "metric_ids", vec_to_none(req.metric_ids))?;
             input_json::insert(&mut input, "mutation_id", req.mutation_id)?;
-            input_json::insert(&mut input, "mutation_ids", req.mutation_ids)?;
+            input_json::insert(&mut input, "mutation_ids", vec_to_none(req.mutation_ids))?;
             input_json::insert(&mut input, "options", req.options)?;
             input_json::insert(&mut input, "metadata", req.metadata)?;
             let req: LaunchRunRequest = input_json::finish(input)?;
@@ -245,6 +249,16 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext
 }
 
 fn empty_to_none(value: String) -> Option<String> {
+    if value.is_empty() {
+        None
+    } else {
+        Some(value)
+    }
+}
+
+/// Generated non-required arrays are plain `Vec` (empty = unset); collapse an
+/// empty vec to `None` so it isn't written into the request body.
+fn vec_to_none<T>(value: Vec<T>) -> Option<Vec<T>> {
     if value.is_empty() {
         None
     } else {

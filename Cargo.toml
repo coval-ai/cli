@@ -1,3 +1,10 @@
+[workspace]
+members = ["xtask"]
+# `cargo build`/`clippy`/`test` (no -p) act only on the CLI, so CI never compiles
+# the codegen xtask or its heavy deps (progenitor/openapiv3/syn). Run the xtask
+# explicitly with `cargo xtask …` (alias in .cargo/config.toml).
+default-members = ["."]
+
 [package]
 name = "coval"
 version = "0.5.0"
