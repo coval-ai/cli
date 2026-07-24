@@ -199,11 +199,6 @@ pub fn print_one<T: Serialize>(item: &T, _format: OutputFormat) {
     println!("{json}");
 }
 
-#[allow(dead_code)]
-pub fn print_id(id: &str) {
-    println!("{id}");
-}
-
 pub fn print_success(message: &str) {
     println!("{message}");
 }
