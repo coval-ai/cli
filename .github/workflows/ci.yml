@@ -38,6 +38,9 @@ jobs:
           python -m ruff format --check scripts
 
       - name: Audit live API command coverage
+        # Live API/network failures are advisory on ordinary CI runs. The
+        # repository-owned weekly parity PR is the strict reconciliation gate.
+        continue-on-error: ${{ github.event_name != 'pull_request' || github.head_ref != 'chore/weekly-api-parity' }}
         run: |
           python scripts/audit_api_coverage.py \
             --write-markdown api-coverage-report.md

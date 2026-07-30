@@ -6,6 +6,7 @@ import unittest
 from contextlib import redirect_stderr
 from contextlib import redirect_stdout
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.error import URLError
 from unittest.mock import Mock
 from unittest.mock import patch
@@ -76,6 +77,97 @@ class FetchSafetyTests(unittest.TestCase):
 
         self.assertEqual(b"ok", result)
         sleep.assert_called_once_with(1)
+
+    @patch("scripts.audit_api_coverage.time.sleep")
+    @patch("scripts.audit_api_coverage.build_opener")
+    def test_retries_server_http_error(self, build_opener, sleep):
+        server_error = HTTPError(
+            audit_api_coverage.CATALOG_URL,
+            503,
+            "Service Unavailable",
+            {},
+            None,
+        )
+        response = Mock()
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        response.geturl.return_value = audit_api_coverage.CATALOG_URL
+        response.read.return_value = b"ok"
+        build_opener.return_value.open.side_effect = [
+            server_error,
+            response,
+        ]
+
+        try:
+            result = audit_api_coverage._fetch(
+                audit_api_coverage.CATALOG_URL,
+                audit_api_coverage.DEFAULT_ALLOWED_ORIGINS,
+            )
+        finally:
+            server_error.close()
+
+        self.assertEqual(b"ok", result)
+        sleep.assert_called_once_with(1)
+
+    @patch("scripts.audit_api_coverage.time.sleep")
+    @patch("scripts.audit_api_coverage.build_opener")
+    def test_does_not_retry_client_http_error(self, build_opener, sleep):
+        client_error = HTTPError(
+            audit_api_coverage.CATALOG_URL,
+            404,
+            "Not Found",
+            {},
+            None,
+        )
+        build_opener.return_value.open.side_effect = client_error
+
+        try:
+            with self.assertRaises(HTTPError):
+                audit_api_coverage._fetch(
+                    audit_api_coverage.CATALOG_URL,
+                    audit_api_coverage.DEFAULT_ALLOWED_ORIGINS,
+                )
+        finally:
+            client_error.close()
+
+        build_opener.return_value.open.assert_called_once()
+        sleep.assert_not_called()
+
+
+class PublishedOperationsTests(unittest.TestCase):
+    @patch("scripts.audit_api_coverage._fetch")
+    def test_rejects_distinct_operations_with_same_canonical_key(self, fetch):
+        fetch.side_effect = [
+            b'{"specs":[{"url":"https://api.coval.dev/a"},'
+            b'{"url":"https://api.coval.dev/b"}]}',
+            b"paths:\n  /v1/agents/{agent_id}:\n    get: {}\n",
+            b"paths:\n  /v1/agents/{id}:\n    get: {}\n",
+        ]
+
+        with self.assertRaisesRegex(RuntimeError, "share canonical key"):
+            audit_api_coverage._published_operations(
+                audit_api_coverage.CATALOG_URL,
+                audit_api_coverage.DEFAULT_ALLOWED_ORIGINS,
+            )
+
+    @patch("scripts.audit_api_coverage._fetch")
+    def test_deduplicates_identical_operation_across_specs(self, fetch):
+        fetch.side_effect = [
+            b'{"specs":[{"url":"https://api.coval.dev/a"},'
+            b'{"url":"https://api.coval.dev/b"}]}',
+            b"paths:\n  /v1/agents/{agent_id}:\n    get: {}\n",
+            b"paths:\n  /v1/agents/{agent_id}:\n    get: {}\n",
+        ]
+
+        operations = audit_api_coverage._published_operations(
+            audit_api_coverage.CATALOG_URL,
+            audit_api_coverage.DEFAULT_ALLOWED_ORIGINS,
+        )
+
+        self.assertEqual(
+            {"GET /agents/{id}": "GET /v1/agents/{agent_id}"},
+            operations,
+        )
 
 
 class CommandCoverageTests(unittest.TestCase):

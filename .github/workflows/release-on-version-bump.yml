@@ -38,7 +38,12 @@ jobs:
         env:
           WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
+          set -euo pipefail
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$GITHUB_REF_NAME" != "main" ]; then
+              echo "::error::Manual releases must be dispatched from main (got $GITHUB_REF_NAME)."
+              exit 1
+            fi
             echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
           else
             echo "sha=$WORKFLOW_RUN_SHA" >> "$GITHUB_OUTPUT"

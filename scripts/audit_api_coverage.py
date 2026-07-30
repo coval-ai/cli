@@ -118,7 +118,14 @@ def _published_operations(
         for path, path_item in (spec.get("paths") or {}).items():
             for method in HTTP_METHODS & set(path_item):
                 canonical = _canonical_operation(method, path)
-                operations[canonical] = f"{method.upper()} {path}"
+                display = f"{method.upper()} {path}"
+                previous = operations.get(canonical)
+                if previous is not None and previous != display:
+                    raise RuntimeError(
+                        f"published operations {previous!r} and {display!r} "
+                        f"share canonical key {canonical!r}"
+                    )
+                operations[canonical] = display
     return operations
 
 
