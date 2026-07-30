@@ -1,9 +1,9 @@
 name: Weekly API parity audit
 
-# The scheduled Codex job does the judgment-heavy command implementation and
-# opens a reviewed PR. This workflow is the deterministic backstop: it runs the
-# same live audit without credentials and keeps one GitHub issue open whenever
-# the public API and first-class CLI command surface drift.
+# Repository-owned drift detection for the hand-written CLI. Unlike the SDK
+# workflow, this does not claim to regenerate command UX from OpenAPI. It runs
+# the deterministic audit without credentials and keeps one GitHub issue open
+# whenever the public API and first-class CLI command surface drift.
 
 on:
   workflow_dispatch:

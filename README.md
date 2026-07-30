@@ -202,9 +202,14 @@ The audit fails for new or stale gaps, a stale checked-in snapshot, or command
 routes absent from the public OpenAPI catalog unless they are explicitly marked
 as planned or documented extras in `api-coverage.toml`. A credential-free
 GitHub workflow runs the same audit every Monday and reuses one failure issue
-until parity recovers. A separate Monday 3:00 AM Pacific Codex automation takes
-one bounded resource family through implementation, tests, a version bump, and
-a ready-for-review PR; it never merges or releases.
+until parity recovers.
+
+The SDK regeneration workflow can open deterministic codegen PRs because its
+published clients are generated from OpenAPI. The CLI command surface is still
+hand-written, so this repository does not present an automated audit as command
+generation. Repository-owned generated-model PRs are tracked separately under
+COVAL-2079; they require the CLI's OpenAPI type-codegen migration to be
+completed first.
 
 ## Release Automation
 
