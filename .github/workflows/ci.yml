@@ -38,7 +38,10 @@ jobs:
           python -m ruff format --check scripts
 
       - name: Audit live API command coverage
-        run: python scripts/audit_api_coverage.py
+        run: |
+          python scripts/audit_api_coverage.py \
+            --write-markdown api-coverage-report.md
+          git diff --exit-code -- api-coverage-report.md
 
       - name: Validate release manifests
         run: python scripts/release_version.py

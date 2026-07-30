@@ -195,14 +195,20 @@ Run the deterministic tests and live audit after API, client, or command changes
 ```bash
 python3 -m pip install --requirement scripts/requirements-audit.txt
 python3 -m unittest scripts/test_audit_api_coverage.py
-python3 scripts/audit_api_coverage.py
+python3 scripts/audit_api_coverage.py \
+  --write-markdown api-coverage-report.md
 ```
 
 The audit fails for new or stale gaps, a stale checked-in snapshot, or command
 routes absent from the public OpenAPI catalog unless they are explicitly marked
-as planned or documented extras in `api-coverage.toml`. A credential-free
-GitHub workflow runs the same audit every Monday and reuses one failure issue
-until parity recovers.
+as planned or documented extras in `api-coverage.toml`.
+
+A repository-owned GitHub workflow runs every Monday and refreshes the
+deterministic `api-coverage-report.md`. When coverage changes, it opens or
+updates one rolling PR on `chore/weekly-api-parity`; the PR's CI remains blocked
+until the command implementation or an explicitly reviewed manifest exception
+reconciles the drift. A GitHub issue is used only if the automation itself
+fails before it can create or update that PR.
 
 The SDK regeneration workflow can open deterministic codegen PRs because its
 published clients are generated from OpenAPI. The CLI command surface is still
@@ -235,6 +241,9 @@ retries the current version without creating another tag.
 
 Repository prerequisite:
 
+- `REGEN_PR_TOKEN`: a fine-grained token with Contents and Pull requests
+  read/write access to `coval-ai/cli`. The organization does not allow
+  `GITHUB_TOKEN` to create pull requests.
 - `HOMEBREW_TAP_TOKEN`: a fine-grained token or GitHub App token with Contents
   read/write access to `coval-ai/homebrew-tap`. The Homebrew update is
   idempotent, so retrying an already-current formula succeeds without a commit.

@@ -1,7 +1,10 @@
 """Tests for the live API-coverage audit."""
 
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stderr
+from contextlib import redirect_stdout
 from pathlib import Path
 from urllib.error import URLError
 from unittest.mock import Mock
@@ -291,6 +294,68 @@ class SnapshotTests(unittest.TestCase):
             ["published_operations: recorded 10, current 11"],
             mismatches,
         )
+
+
+class MarkdownReportTests(unittest.TestCase):
+    def setUp(self):
+        self.report = {
+            "catalog_url": audit_api_coverage.CATALOG_URL,
+            "published_operation_count": 3,
+            "client_operation_count": 2,
+            "command_operation_count": 2,
+            "supported_operation_count": 2,
+            "known_gap_count": 0,
+            "new_gaps": ["GET /v1/beta"],
+            "stale_gaps": [],
+            "unexpected_cli_operations": [],
+            "stale_allowed_extras": [],
+            "stale_planned_operations": [],
+            "client_only_operations": [],
+            "unmapped_command_client_methods": [],
+            "snapshot_mismatches": ["published_operations: recorded 2, current 3"],
+            "all_current_gaps": ["GET /v1/beta"],
+        }
+
+    def test_renders_deterministic_actionable_report(self):
+        rendered = audit_api_coverage.render_markdown_report(self.report, False)
+
+        self.assertIn("| Reconciliation status | ACTION REQUIRED |", rendered)
+        self.assertIn("- `GET /v1/beta`", rendered)
+        self.assertIn(
+            "- `published_operations: recorded 2, current 3`",
+            rendered,
+        )
+        self.assertNotIn("Generated at", rendered)
+
+    @patch("scripts.audit_api_coverage.audit")
+    def test_allow_drift_writes_report_and_returns_success(self, audit):
+        audit.return_value = (self.report, False)
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "coverage.md"
+            argv = [
+                "audit_api_coverage.py",
+                "--write-markdown",
+                str(output),
+                "--allow-drift",
+            ]
+            with (
+                patch("sys.argv", argv),
+                redirect_stdout(io.StringIO()),
+            ):
+                result = audit_api_coverage.main()
+
+            self.assertEqual(0, result)
+            self.assertIn("ACTION REQUIRED", output.read_text())
+
+    def test_allow_drift_requires_markdown_output(self):
+        with (
+            patch("sys.argv", ["audit_api_coverage.py", "--allow-drift"]),
+            redirect_stderr(io.StringIO()),
+            self.assertRaises(SystemExit) as exception,
+        ):
+            audit_api_coverage.main()
+
+        self.assertEqual(2, exception.exception.code)
 
 
 if __name__ == "__main__":
