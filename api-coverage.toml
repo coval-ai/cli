@@ -1,19 +1,15 @@
 # Reviewed against the live public OpenAPI catalog by scripts/audit_api_coverage.py.
-# Every published operation must either appear in the CLI client or have a reason here.
+# Every published operation must either reach a first-class CLI command or have a reason here.
 
 [snapshot]
 catalog_url = "https://api.coval.dev/v1/openapi"
 reviewed_at = "2026-07-30"
-published_operations = 173
-cli_supported_operations = 123
+published_operations = 174
+cli_supported_operations = 124
 
 [[allowed_extra]]
 operation = "POST /test-cases/{test_case_id}/media:upload-url"
 reason = "Implemented by the public API but currently omitted from its published OpenAPI specs."
-
-[[planned_operation]]
-operation = "POST /traces/search"
-reason = "Implemented with COVAL-4307 and expected to appear after the backend change is deployed."
 
 [[known_gap]]
 operation = "GET /agents/{agent_id}/versions"

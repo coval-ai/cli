@@ -1,15 +1,50 @@
 name: Release
 
+# A human-pushed tag can still invoke this workflow directly. The gated
+# version-bump bridge calls it as a reusable workflow because tags pushed with
+# GITHUB_TOKEN do not trigger a second workflow.
+
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
+  workflow_call:
+    inputs:
+      release_ref:
+        description: Commit or tag to build
+        required: true
+        type: string
+      tag_name:
+        description: Existing v-prefixed release tag
+        required: true
+        type: string
 
 env:
   CARGO_TERM_COLOR: always
+  RELEASE_REF: ${{ inputs.release_ref || github.ref }}
+  RELEASE_TAG: ${{ inputs.tag_name || github.ref_name }}
+
+concurrency:
+  group: release-${{ inputs.tag_name || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_REF }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Match Cargo manifests and release tag
+        run: python scripts/release_version.py --expected-tag "$RELEASE_TAG"
+
   build:
+    needs: validate
     strategy:
       matrix:
         include:
@@ -38,6 +73,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_REF }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -77,8 +114,6 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v6
-
       - name: Download artifacts
         uses: actions/download-artifact@v8
         with:
@@ -92,9 +127,11 @@ jobs:
           done
           cat -- */SHA256SUMS > ../SHA256SUMS
 
-      - name: Create release
+      - name: Create or update release
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ env.RELEASE_REF }}
           files: |
             artifacts/*/*.tar.gz
             SHA256SUMS
@@ -105,15 +142,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Extract version from tag
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_REF }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
 
       - name: Download SHA256SUMS from release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download "$GITHUB_REF_NAME" \
+          gh release download "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --pattern SHA256SUMS
 
@@ -130,54 +171,107 @@ jobs:
       - name: Update Homebrew tap
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ env.RELEASE_TAG }}
           SHA_MACOS_ARM64: ${{ steps.sha.outputs.macos_arm64 }}
           SHA_MACOS_X64: ${{ steps.sha.outputs.macos_x64 }}
           SHA_LINUX_ARM64: ${{ steps.sha.outputs.linux_arm64 }}
           SHA_LINUX_X64: ${{ steps.sha.outputs.linux_x64 }}
         run: |
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/coval-ai/homebrew-tap.git" tap
-          cd tap
+          set -euo pipefail
+          if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN is not configured."
+            exit 1
+          fi
 
-          cat > Formula/coval.rb << FORMULA
-          class Coval < Formula
-            desc "CLI for Coval AI agent evaluation platform"
-            homepage "https://coval.dev"
-            version "${VERSION}"
-            license "MIT"
+          tap_dir="${RUNNER_TEMP}/homebrew-tap"
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/coval-ai/homebrew-tap.git" "$tap_dir"
+          python scripts/render_homebrew_formula.py \
+            --version "${VERSION#v}" \
+            --macos-arm64 "$SHA_MACOS_ARM64" \
+            --macos-x64 "$SHA_MACOS_X64" \
+            --linux-arm64 "$SHA_LINUX_ARM64" \
+            --linux-x64 "$SHA_LINUX_X64" \
+            --output "$tap_dir/Formula/coval.rb"
 
-            on_macos do
-              if Hardware::CPU.arm?
-                url "https://github.com/coval-ai/cli/releases/download/v${VERSION}/coval-macos-arm64.tar.gz"
-                sha256 "${SHA_MACOS_ARM64}"
-              else
-                url "https://github.com/coval-ai/cli/releases/download/v${VERSION}/coval-macos-x64.tar.gz"
-                sha256 "${SHA_MACOS_X64}"
-              end
-            end
+          if git -C "$tap_dir" diff --quiet -- Formula/coval.rb; then
+            echo "Homebrew formula already matches ${VERSION}; nothing to push."
+            exit 0
+          fi
 
-            on_linux do
-              if Hardware::CPU.arm?
-                url "https://github.com/coval-ai/cli/releases/download/v${VERSION}/coval-linux-arm64.tar.gz"
-                sha256 "${SHA_LINUX_ARM64}"
-              else
-                url "https://github.com/coval-ai/cli/releases/download/v${VERSION}/coval-linux-x64.tar.gz"
-                sha256 "${SHA_LINUX_X64}"
-              end
-            end
+          git -C "$tap_dir" config user.name "github-actions[bot]"
+          git -C "$tap_dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$tap_dir" add Formula/coval.rb
+          git -C "$tap_dir" commit -m "chore: update coval to ${VERSION#v}"
+          git -C "$tap_dir" push origin main
 
-            def install
-              bin.install "coval"
-            end
+  report-failure:
+    needs: [validate, build, release, update-homebrew]
+    if: ${{ always() && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the release failure issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = 'CLI release workflow is failing';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = `Release \`${process.env.RELEASE_TAG}\` failed: ${runUrl}`;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const existing = issues.find((issue) => !issue.pull_request && issue.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+              });
+            }
 
-            test do
-              system "#{bin}/coval", "--version"
-            end
-          end
-          FORMULA
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/coval.rb
-          git commit -m "chore: update coval to ${VERSION}"
-          git push origin main
+  close-recovered-failure:
+    needs: [validate, build, release, update-homebrew]
+    if: ${{ always() && needs.update-homebrew.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Close a recovered release failure issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = 'CLI release workflow is failing';
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const existing = issues.find((issue) => !issue.pull_request && issue.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: `Recovered in ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}.`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                state: 'closed',
+                state_reason: 'completed',
+              });
+            }

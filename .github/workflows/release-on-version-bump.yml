@@ -1,0 +1,97 @@
+name: Release on version bump
+
+# Wait for the exact main-branch CI run to pass, then release an untagged Cargo
+# version. The release workflow is called directly because a tag pushed with
+# GITHUB_TOKEN does not trigger another workflow.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: release-on-version-bump
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main'
+      )
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.tag.outputs.release }}
+      release_ref: ${{ steps.tag.outputs.release_ref }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Resolve the CI-tested commit
+        id: ref
+        env:
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=$WORKFLOW_RUN_SHA" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.ref.outputs.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Read and validate the release version
+        id: version
+        run: python scripts/release_version.py --github-output "$GITHUB_OUTPUT"
+
+      - name: Tag an unreleased version
+        id: tag
+        env:
+          RELEASE_SHA: ${{ steps.ref.outputs.sha }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+
+          if git rev-parse -q --verify "refs/tags/$RELEASE_TAG" >/dev/null; then
+            existing_sha="$(git rev-list -n 1 "$RELEASE_TAG")"
+            if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+              echo "Manual recovery will rerun the existing ${RELEASE_TAG} release."
+              echo "release=true" >> "$GITHUB_OUTPUT"
+              echo "release_ref=$existing_sha" >> "$GITHUB_OUTPUT"
+            else
+              echo "${RELEASE_TAG} is already released; nothing to do."
+              echo "release=false" >> "$GITHUB_OUTPUT"
+              echo "release_ref=$existing_sha" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$RELEASE_TAG" "$RELEASE_SHA" -m "$RELEASE_TAG"
+          git push origin "$RELEASE_TAG"
+          echo "release=true" >> "$GITHUB_OUTPUT"
+          echo "release_ref=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: prepare
+    if: needs.prepare.outputs.release == 'true'
+    uses: ./.github/workflows/release.yml
+    with:
+      release_ref: ${{ needs.prepare.outputs.release_ref }}
+      tag_name: ${{ needs.prepare.outputs.tag }}
+    secrets: inherit

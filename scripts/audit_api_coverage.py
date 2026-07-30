@@ -1,4 +1,4 @@
-"""Compare CLI HTTP operations with Coval's published OpenAPI catalog.
+"""Compare first-class CLI operations with Coval's published OpenAPI catalog.
 
 The audit is intentionally live: the public catalog is the source of truth, while
 ``api-coverage.toml`` records reviewed gaps and temporary pre-deploy operations.
@@ -17,7 +17,9 @@ import argparse
 import json
 import re
 import sys
+import time
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
@@ -27,8 +29,10 @@ import yaml
 CATALOG_URL = "https://api.coval.dev/v1/openapi"
 DEFAULT_ALLOWED_ORIGINS = frozenset({"https://api.coval.dev"})
 HTTP_METHODS = frozenset({"delete", "get", "patch", "post", "put"})
+FETCH_ATTEMPTS = 3
 ROOT = Path(__file__).resolve().parents[1]
 CLIENT_PATH = ROOT / "src" / "client" / "mod.rs"
+COMMANDS_PATH = ROOT / "src" / "commands"
 MANIFEST_PATH = ROOT / "api-coverage.toml"
 
 
@@ -83,9 +87,19 @@ def _fetch(url: str, allowed_origins: frozenset[str]) -> bytes:
         url, headers={"User-Agent": "coval-cli-api-coverage-audit"}
     )
     opener = build_opener(_AllowedOriginRedirectHandler(allowed_origins))
-    with opener.open(request, timeout=30) as response:
-        _validate_fetch_url(response.geturl(), allowed_origins)
-        return response.read()
+    for attempt in range(FETCH_ATTEMPTS):
+        try:
+            with opener.open(request, timeout=30) as response:
+                _validate_fetch_url(response.geturl(), allowed_origins)
+                return response.read()
+        except HTTPError as error:
+            if error.code < 500 or attempt == FETCH_ATTEMPTS - 1:
+                raise
+        except (TimeoutError, URLError):
+            if attempt == FETCH_ATTEMPTS - 1:
+                raise
+        time.sleep(2**attempt)
+    raise AssertionError("fetch retry loop exited unexpectedly")
 
 
 def _canonical_operation(method: str, path: str) -> str:
@@ -108,44 +122,103 @@ def _published_operations(
     return operations
 
 
-def _rust_function_blocks(source: str) -> list[str]:
-    starts = list(re.finditer(r"(?m)^    pub async fn ", source))
-    blocks: list[str] = []
+def _rust_function_blocks(source: str) -> list[tuple[str, str]]:
+    starts = list(re.finditer(r"(?m)^    pub async fn (?P<name>[A-Za-z0-9_]+)", source))
+    blocks: list[tuple[str, str]] = []
     for index, match in enumerate(starts):
         end = starts[index + 1].start() if index + 1 < len(starts) else len(source)
-        blocks.append(source[match.start() : end])
+        blocks.append((match.group("name"), source[match.start() : end]))
     return blocks
 
 
-def _client_operations() -> dict[str, str]:
+def _snake_case_client_name(name: str) -> str:
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name.removesuffix("Client")).lower()
+
+
+def _client_operations() -> dict[str, dict]:
     source = CLIENT_PATH.read_text()
-    operations: dict[str, str] = {}
-    for block in _rust_function_blocks(source):
-        paths = re.findall(r'"(/v1/[^"]+)"', block)
-        if not paths:
-            continue
+    implementations = list(
+        re.finditer(r"(?m)^impl (?P<name>[A-Za-z0-9_]+Client)<'_> \{", source)
+    )
+    operations: dict[str, dict] = {}
 
-        methods = []
-        if re.search(r"\.(?:post|post_empty)\(", block):
-            methods.append("POST")
-        if re.search(r"\.patch\(", block):
-            methods.append("PATCH")
-        if re.search(r"\.delete\(", block):
-            methods.append("DELETE")
-        if re.search(r"\.get\(", block):
-            methods.append("GET")
+    for index, implementation in enumerate(implementations):
+        end = (
+            implementations[index + 1].start()
+            if index + 1 < len(implementations)
+            else len(source)
+        )
+        accessor = _snake_case_client_name(implementation.group("name"))
+        implementation_source = source[implementation.end() : end]
 
-        if len(methods) != 1:
-            function_name = re.search(r"pub async fn ([a-zA-Z0-9_]+)", block)
-            name = function_name.group(1) if function_name else "<unknown>"
-            raise RuntimeError(
-                f"could not infer exactly one HTTP method for client function {name}: {methods}"
+        for function_name, block in _rust_function_blocks(implementation_source):
+            paths = re.findall(r'"(/v1/[^"]+)"', block)
+            if not paths:
+                continue
+
+            method_calls = set(
+                re.findall(r"\.(get|post|post_empty|patch|delete)\(", block)
             )
+            methods = {
+                "POST" if method in {"post", "post_empty"} else method.upper()
+                for method in method_calls
+            }
+            if len(methods) != 1:
+                raise RuntimeError(
+                    "could not infer exactly one HTTP method for client function "
+                    f"{accessor}.{function_name}: {sorted(methods)}"
+                )
 
-        for path in paths:
-            canonical = _canonical_operation(methods[0], path)
-            operations[canonical] = f"{methods[0]} {path.removeprefix('/v1')}"
+            method = methods.pop()
+            client_method = f"{accessor}.{function_name}"
+            for path in paths:
+                canonical = _canonical_operation(method, path)
+                operation = operations.setdefault(
+                    canonical,
+                    {
+                        "operation": f"{method} {path.removeprefix('/v1')}",
+                        "client_methods": set(),
+                    },
+                )
+                operation["client_methods"].add(client_method)
     return operations
+
+
+def _command_client_methods(allowed_accessors: set[str]) -> dict[str, set[str]]:
+    """Return resource-client methods referenced by first-class command modules."""
+
+    pattern = re.compile(
+        r"\bclient\s*\.\s*(?P<accessor>[A-Za-z0-9_]+)\s*"
+        r"\([^)]*\)\s*\.\s*(?P<method>[A-Za-z0-9_]+)\s*\(",
+        re.MULTILINE,
+    )
+    methods: dict[str, set[str]] = {}
+    for path in sorted(COMMANDS_PATH.glob("*.rs")):
+        for match in pattern.finditer(path.read_text()):
+            if match.group("accessor") not in allowed_accessors:
+                continue
+            method = f"{match.group('accessor')}.{match.group('method')}"
+            methods.setdefault(method, set()).add(path.name)
+    return methods
+
+
+def _command_operations(
+    client_operations: dict[str, dict],
+) -> tuple[dict[str, dict], list[str]]:
+    known_client_methods = {
+        method
+        for operation in client_operations.values()
+        for method in operation["client_methods"]
+    }
+    allowed_accessors = {method.partition(".")[0] for method in known_client_methods}
+    command_methods = _command_client_methods(allowed_accessors)
+    operations = {
+        canonical: operation
+        for canonical, operation in client_operations.items()
+        if operation["client_methods"] & set(command_methods)
+    }
+    unmapped_methods = sorted(set(command_methods) - known_client_methods)
+    return operations, unmapped_methods
 
 
 def _manifest_operations(entries: list[dict], section: str) -> dict[str, dict]:
@@ -171,6 +244,25 @@ def _manifest_operations(entries: list[dict], section: str) -> dict[str, dict]:
     return operations
 
 
+def _snapshot_mismatches(
+    snapshot: dict,
+    *,
+    catalog_url: str,
+    published_operation_count: int,
+    supported_operation_count: int,
+) -> list[str]:
+    expected = {
+        "catalog_url": catalog_url,
+        "published_operations": published_operation_count,
+        "cli_supported_operations": supported_operation_count,
+    }
+    return [
+        f"{field}: recorded {snapshot.get(field)!r}, current {value!r}"
+        for field, value in expected.items()
+        if snapshot.get(field) != value
+    ]
+
+
 def audit(
     catalog_url: str,
     allowed_origins: frozenset[str] = DEFAULT_ALLOWED_ORIGINS,
@@ -178,6 +270,7 @@ def audit(
     manifest = tomllib.loads(MANIFEST_PATH.read_text())
     published = _published_operations(catalog_url, allowed_origins)
     client = _client_operations()
+    commands, unmapped_command_methods = _command_operations(client)
     known_gaps = _manifest_operations(manifest.get("known_gap", []), "known_gap")
     allowed_extras = _manifest_operations(
         manifest.get("allowed_extra", []), "allowed_extra"
@@ -198,20 +291,29 @@ def audit(
 
     published_keys = set(published)
     client_keys = set(client)
-    actual_gaps = published_keys - client_keys
-    actual_extras = client_keys - published_keys
+    command_keys = set(commands)
+    actual_gaps = published_keys - command_keys
+    actual_extras = command_keys - published_keys
 
     new_gaps = actual_gaps - set(known_gaps)
     stale_gaps = set(known_gaps) - actual_gaps
     unexpected_extras = actual_extras - set(allowed_extras) - set(planned)
     stale_allowed_extras = set(allowed_extras) - actual_extras
     stale_planned = set(planned) - actual_extras
+    client_only = client_keys - command_keys
+    snapshot_mismatches = _snapshot_mismatches(
+        manifest.get("snapshot", {}),
+        catalog_url=catalog_url,
+        published_operation_count=len(published),
+        supported_operation_count=len(published_keys & command_keys),
+    )
 
     report = {
         "catalog_url": catalog_url,
         "published_operation_count": len(published),
-        "cli_operation_count": len(client),
-        "supported_operation_count": len(published_keys & client_keys),
+        "client_operation_count": len(client),
+        "command_operation_count": len(commands),
+        "supported_operation_count": len(published_keys & command_keys),
         "known_gap_count": len(actual_gaps & set(known_gaps)),
         "new_gaps": [published[item] for item in sorted(new_gaps)],
         "stale_gaps": [known_gaps[item]["operation"] for item in sorted(stale_gaps)],
@@ -224,6 +326,11 @@ def audit(
         "stale_planned_operations": [
             planned[item]["operation"] for item in sorted(stale_planned)
         ],
+        "client_only_operations": [
+            client[item]["operation"] for item in sorted(client_only)
+        ],
+        "unmapped_command_client_methods": unmapped_command_methods,
+        "snapshot_mismatches": snapshot_mismatches,
         "all_current_gaps": [published[item] for item in sorted(actual_gaps)],
     }
     passed = not (
@@ -232,6 +339,8 @@ def audit(
         or unexpected_extras
         or stale_allowed_extras
         or stale_planned
+        or unmapped_command_methods
+        or snapshot_mismatches
     )
     return report, passed
 
@@ -260,7 +369,7 @@ def main() -> int:
         status = "PASS" if passed else "FAIL"
         print(
             f"{status}: {report['supported_operation_count']}/{report['published_operation_count']} "
-            f"published operations have CLI HTTP coverage; "
+            f"published operations have first-class CLI command coverage; "
             f"{report['known_gap_count']} reviewed gaps remain."
         )
         for key in (
@@ -269,6 +378,8 @@ def main() -> int:
             "unexpected_cli_operations",
             "stale_allowed_extras",
             "stale_planned_operations",
+            "unmapped_command_client_methods",
+            "snapshot_mismatches",
         ):
             values = report[key]
             if values:
