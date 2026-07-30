@@ -223,6 +223,10 @@ impl CovalClient {
     pub fn tags(&self) -> TagsClient<'_> {
         TagsClient(self)
     }
+
+    pub fn traces(&self) -> TracesClient<'_> {
+        TracesClient(self)
+    }
 }
 
 pub struct AgentsClient<'a>(&'a CovalClient);
@@ -250,6 +254,7 @@ pub struct WidgetsClient<'a> {
     dashboard_id: String,
 }
 pub struct TagsClient<'a>(&'a CovalClient);
+pub struct TracesClient<'a>(&'a CovalClient);
 
 pub struct MonitorsClient<'a>(&'a CovalClient);
 
@@ -648,7 +653,7 @@ impl PersonasClient<'_> {
         let id = encode_path_segment(id);
         let url = self
             .0
-            .url(&format!("/v1/personas/background-sounds/{id}:complete"));
+            .url(&format!("/v1/personas/background-sounds/{id}/complete"));
         let resp: models::CompleteBackgroundSoundResponse = self.0.post_empty(url).await?;
         Ok(resp.background_sound)
     }
@@ -1345,5 +1350,53 @@ impl TagsClient<'_> {
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
         let url = self.0.url(&format!("/v1/tags/{id}"));
         self.0.delete(url).await
+    }
+}
+
+impl TracesClient<'_> {
+    pub async fn search(
+        &self,
+        request: models::TraceSearchRequest,
+    ) -> Result<models::TraceSearchResponse, ApiError> {
+        let url = self.0.url("/v1/traces/search");
+        self.0.post(url, &request).await
+    }
+
+    pub async fn summary(
+        &self,
+        simulation_id: Option<&str>,
+        conversation_id: Option<&str>,
+    ) -> Result<models::TraceSummaryResponse, ApiError> {
+        let mut url = self.0.url("/v1/traces/summary");
+        {
+            let mut pairs = url.query_pairs_mut();
+            if let Some(simulation_id) = simulation_id {
+                pairs.append_pair("simulation_id", simulation_id);
+            }
+            if let Some(conversation_id) = conversation_id {
+                pairs.append_pair("conversation_id", conversation_id);
+            }
+        }
+        self.0.get(url).await
+    }
+
+    pub async fn spans(
+        &self,
+        simulation_output_id: &str,
+        limit: Option<u32>,
+        offset: Option<u32>,
+    ) -> Result<models::TraceSpansResponse, ApiError> {
+        let mut url = self.0.url("/v1/traces/spans");
+        {
+            let mut pairs = url.query_pairs_mut();
+            pairs.append_pair("simulation_output_id", simulation_output_id);
+            if let Some(limit) = limit {
+                pairs.append_pair("limit", &limit.to_string());
+            }
+            if let Some(offset) = offset {
+                pairs.append_pair("offset", &offset.to_string());
+            }
+        }
+        self.0.get(url).await
     }
 }

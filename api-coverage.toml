@@ -1,0 +1,216 @@
+# Reviewed against the live public OpenAPI catalog by scripts/audit_api_coverage.py.
+# Every published operation must either appear in the CLI client or have a reason here.
+
+[snapshot]
+catalog_url = "https://api.coval.dev/v1/openapi"
+reviewed_at = "2026-07-30"
+published_operations = 173
+cli_supported_operations = 123
+
+[[allowed_extra]]
+operation = "POST /test-cases/{test_case_id}/media:upload-url"
+reason = "Implemented by the public API but currently omitted from its published OpenAPI specs."
+
+[[planned_operation]]
+operation = "POST /traces/search"
+reason = "Implemented with COVAL-4307 and expected to appear after the backend change is deployed."
+
+[[known_gap]]
+operation = "GET /agents/{agent_id}/versions"
+reason = "Agent version history remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /agents/{agent_id}/versions/{version_id}/revert"
+reason = "Agent version rollback remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /agents/{agent_id}/duplicate"
+reason = "Agent duplication remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /audio:upload"
+reason = "Generic audio upload has not yet been given a CLI file-upload workflow."
+
+[[known_gap]]
+operation = "GET /metrics/flows"
+reason = "Metric-flow resources remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /metrics/flows"
+reason = "Metric-flow resources remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "PATCH /metrics/flows/{flow_id}"
+reason = "Metric-flow resources remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "DELETE /metrics/flows/{flow_id}"
+reason = "Metric-flow resources remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /metrics/recently-deleted"
+reason = "Metric restore discovery remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /metrics/{metric_id}/restore"
+reason = "Metric restore remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /metrics/sql-schema"
+reason = "SQL metric authoring helpers remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /metrics/sql:test"
+reason = "SQL metric authoring helpers remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /metrics/tags"
+reason = "Metric tag-value discovery remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /metrics/template-variables"
+reason = "Metric template-variable discovery remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /metrics/outputs:batchGet"
+reason = "Batch metric-output reads remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /metrics/{metric_id}/baselines/{baseline_id}/history"
+reason = "Metric baseline history remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /metrics/{metric_id}/versions/{version_id}/revert"
+reason = "Metric version rollback remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /organization/conversation-metrics"
+reason = "Organization monitoring configuration remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "PATCH /organization/conversation-metrics"
+reason = "Organization monitoring configuration remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /organization/monitoring-metrics"
+reason = "Organization monitoring configuration remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "PATCH /organization/monitoring-metrics"
+reason = "Organization monitoring configuration remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /personas/tags"
+reason = "Persona tag-value discovery remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /personas/{persona_id}/versions"
+reason = "Persona version history remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /personas/{persona_id}/versions/{version_id}/revert"
+reason = "Persona version rollback remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /personas/{persona_id}/duplicate"
+reason = "Persona duplication remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /reports/{report_id}/rows"
+reason = "Report row expansion remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /review-annotations:withMetricOutputs"
+reason = "Advanced review reads remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /review-annotations/metric-health-stats"
+reason = "Review analytics remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /review-projects/{project_id}/insights"
+reason = "Review analytics remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /review-projects/{project_id}/metric-agreement"
+reason = "Review analytics remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /review-projects/{project_id}/progress"
+reason = "Review analytics remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /review-projects/disagreement-state"
+reason = "Review analytics remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /runs/tags"
+reason = "Run tag-value discovery remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /scheduled-runs/{scheduled_run_id}/runs"
+reason = "Scheduled-run execution history remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /simulations:rerunMetrics"
+reason = "Batch metric reruns need a dedicated confirmation-aware CLI workflow."
+
+[[known_gap]]
+operation = "GET /integrations/slack"
+reason = "Slack integration lifecycle remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /integrations/slack/connect"
+reason = "Slack integration lifecycle remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "DELETE /integrations/slack"
+reason = "Slack integration lifecycle remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /test-sets/{test_set_id}/agents"
+reason = "Test-set agent associations remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /test-sets/{test_set_id}/agents:add"
+reason = "Test-set agent associations remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "DELETE /test-sets/{test_set_id}/agents/{agent_id}"
+reason = "Test-set agent associations remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /test-sets/{test_set_id}/records"
+reason = "Test-set record export remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /test-sets/{test_set_id}/versions"
+reason = "Test-set version history remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /test-sets/{test_set_id}/versions/{version_id}/revert"
+reason = "Test-set version rollback remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /test-sets/{test_set_id}/duplicate"
+reason = "Test-set duplication remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /traces"
+reason = "OTLP ingestion is intentionally delegated to OpenTelemetry SDKs rather than JSON CLI input."
+
+[[known_gap]]
+operation = "GET /webhooks"
+reason = "Webhook resources remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /webhooks"
+reason = "Webhook resources remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "PATCH /webhooks/{webhook_id}"
+reason = "Webhook resources remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "DELETE /webhooks/{webhook_id}"
+reason = "Webhook resources remain to be modeled under COVAL-2079."

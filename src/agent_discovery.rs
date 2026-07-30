@@ -172,6 +172,13 @@ pub fn manifest() -> Manifest {
 
 pub fn resource_context(name: &str) -> Option<ResourceContext> {
     let spec = RESOURCE_SPECS.iter().find(|spec| spec.name == name)?;
+    let discovery_command = if spec.commands.contains(&"list") {
+        "list"
+    } else if spec.commands.contains(&"search") {
+        "search"
+    } else {
+        "context"
+    };
     Some(ResourceContext {
         name: spec.name,
         description: spec.description,
@@ -179,7 +186,7 @@ pub fn resource_context(name: &str) -> Option<ResourceContext> {
         id: IdContext {
             name: spec.id_name,
             format: spec.id_format,
-            find_argv: next_actions::argv([spec.name, "list"]),
+            find_argv: next_actions::argv([spec.name, discovery_command]),
         },
         commands: spec
             .commands
@@ -207,7 +214,7 @@ pub fn resource_context(name: &str) -> Option<ResourceContext> {
             .collect(),
         pitfalls: spec.pitfalls.to_vec(),
         skills: Vec::new(),
-        safe_start_argv: next_actions::argv([spec.name, "list"]),
+        safe_start_argv: next_actions::argv([spec.name, discovery_command]),
     })
 }
 
@@ -621,5 +628,25 @@ const RESOURCE_SPECS: &[ResourceSpec] = &[
             argv: &["tags", "list"],
         }],
         pitfalls: &["Tag colors should be valid CSS-style color values when provided."],
+    },
+    ResourceSpec {
+        name: "traces",
+        commands: &["context", "search", "summary", "spans"],
+        description: "Traces are OpenTelemetry spans ingested for simulation outputs and monitoring conversations.",
+        id_name: "simulation_output_id",
+        id_format: "Simulation output ID returned by trace search or simulation APIs",
+        requires: &[],
+        optional: &["agents", "test-sets", "runs", "conversations"],
+        produces: &["trace search results", "trace quality summaries", "raw spans"],
+        related: &["simulations", "conversations", "runs", "agents", "test-sets"],
+        workflows: &[WorkflowSpec {
+            name: "Find recent traced calls",
+            argv: &["traces", "search", "--sort-by", "newest"],
+        }],
+        pitfalls: &[
+            "Search cursors are opaque and must be reused with the same filters and sort order.",
+            "Summary accepts exactly one of simulation-id or conversation-id.",
+            "Raw span responses can contain customer telemetry values; handle them accordingly.",
+        ],
     },
 ];

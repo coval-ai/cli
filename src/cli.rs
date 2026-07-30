@@ -122,6 +122,10 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::tags::TagCommands,
     },
+    Traces {
+        #[command(subcommand)]
+        command: commands::traces::TraceCommands,
+    },
 }
 
 impl Commands {
@@ -155,6 +159,7 @@ impl Commands {
             Self::Reports { .. } => "reports",
             Self::Monitors { .. } => "monitors",
             Self::Tags { .. } => "tags",
+            Self::Traces { .. } => "traces",
         }
     }
 
@@ -183,6 +188,7 @@ impl Commands {
             Self::Reports { command } => command.operation(),
             Self::Monitors { command } => command.operation(),
             Self::Tags { command } => command.operation(),
+            Self::Traces { command } => command.operation(),
         }
     }
 }
@@ -278,6 +284,9 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
         Commands::Tags {
             command: commands::tags::TagCommands::Context,
         } => commands::agent::resource_context("tags", ctx),
+        Commands::Traces {
+            command: commands::traces::TraceCommands::Context,
+        } => commands::agent::resource_context("traces", ctx),
         _ => {
             let api_key = api_key.ok_or_else(|| {
                 anyhow::anyhow!(
@@ -340,6 +349,9 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
                     commands::monitors::execute(command, &client, ctx).await
                 }
                 Commands::Tags { command } => commands::tags::execute(command, &client, ctx).await,
+                Commands::Traces { command } => {
+                    commands::traces::execute(command, &client, ctx).await
+                }
                 _ => unreachable!(),
             }
         }
