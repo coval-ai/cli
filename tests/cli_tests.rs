@@ -3991,3 +3991,40 @@ fn test_traces_search_rejects_ambiguous_attribute_filter() {
             "the eq attribute operator requires a value",
         ));
 }
+
+#[test]
+fn test_traces_search_rejects_more_than_ten_attribute_filter_flags() {
+    let mut command = coval();
+    command
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("traces")
+        .arg("search");
+    for index in 0..11 {
+        command
+            .arg("--attribute-filter")
+            .arg(format!("attribute.{index}:exists"));
+    }
+    command.assert().failure().stderr(predicate::str::contains(
+        "trace search accepts at most 10 attribute filters, got 11",
+    ));
+}
+
+#[test]
+fn test_traces_search_rejects_more_than_ten_json_attribute_filters() {
+    let attribute_filters = (0..11)
+        .map(|index| json!({"key": format!("attribute.{index}"), "operator": "exists"}))
+        .collect::<Vec<_>>();
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("traces")
+        .arg("search")
+        .arg("--input-json")
+        .arg(json!({"filters": {"attribute_filters": attribute_filters}}).to_string())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "trace search accepts at most 10 attribute filters, got 11",
+        ));
+}

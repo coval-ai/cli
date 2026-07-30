@@ -18,21 +18,73 @@ import json
 import re
 import sys
 from pathlib import Path
-from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 import tomllib
 import yaml
 
 CATALOG_URL = "https://api.coval.dev/v1/openapi"
+DEFAULT_ALLOWED_ORIGINS = frozenset({"https://api.coval.dev"})
 HTTP_METHODS = frozenset({"delete", "get", "patch", "post", "put"})
 ROOT = Path(__file__).resolve().parents[1]
 CLIENT_PATH = ROOT / "src" / "client" / "mod.rs"
 MANIFEST_PATH = ROOT / "api-coverage.toml"
 
 
-def _fetch(url: str) -> bytes:
-    request = Request(url, headers={"User-Agent": "coval-cli-api-coverage-audit"})
-    with urlopen(request, timeout=30) as response:
+def _https_origin(url: str) -> str:
+    if any(character.isspace() for character in url):
+        raise ValueError(f"URL must not contain whitespace: {url!r}")
+    parsed = urlsplit(url)
+    if parsed.scheme.lower() != "https" or not parsed.hostname:
+        raise ValueError(f"URL must use HTTPS and include a host: {url!r}")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError(f"URL must not include credentials: {url!r}")
+    try:
+        port = parsed.port
+    except ValueError as exception:
+        raise ValueError(f"URL has an invalid port: {url!r}") from exception
+    host = parsed.hostname.encode("idna").decode("ascii").lower().rstrip(".")
+    return f"https://{host}" if port in (None, 443) else f"https://{host}:{port}"
+
+
+def _normalize_allowed_origin(origin: str) -> str:
+    parsed = urlsplit(origin)
+    if parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+        raise ValueError(
+            f"allowed origin must not include a path, query, or fragment: {origin!r}"
+        )
+    return _https_origin(origin)
+
+
+def _validate_fetch_url(url: str, allowed_origins: frozenset[str]) -> None:
+    parsed = urlsplit(url)
+    if parsed.fragment:
+        raise ValueError(f"fetch URL must not include a fragment: {url!r}")
+    origin = _https_origin(url)
+    if origin not in allowed_origins:
+        raise ValueError(f"URL origin {origin!r} is not allowed")
+
+
+class _AllowedOriginRedirectHandler(HTTPRedirectHandler):
+    def __init__(self, allowed_origins: frozenset[str]):
+        super().__init__()
+        self._allowed_origins = allowed_origins
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        _validate_fetch_url(newurl, self._allowed_origins)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _fetch(url: str, allowed_origins: frozenset[str]) -> bytes:
+    _validate_fetch_url(url, allowed_origins)
+    # The URL is HTTPS and origin-allowlisted above; redirects are checked by the custom handler.
+    request = Request(  # noqa: S310
+        url, headers={"User-Agent": "coval-cli-api-coverage-audit"}
+    )
+    opener = build_opener(_AllowedOriginRedirectHandler(allowed_origins))
+    with opener.open(request, timeout=30) as response:
+        _validate_fetch_url(response.geturl(), allowed_origins)
         return response.read()
 
 
@@ -42,11 +94,13 @@ def _canonical_operation(method: str, path: str) -> str:
     return f"{method.upper()} {path}"
 
 
-def _published_operations(catalog_url: str) -> dict[str, str]:
-    catalog = json.loads(_fetch(catalog_url))
+def _published_operations(
+    catalog_url: str, allowed_origins: frozenset[str]
+) -> dict[str, str]:
+    catalog = json.loads(_fetch(catalog_url, allowed_origins))
     operations: dict[str, str] = {}
     for entry in catalog["specs"]:
-        spec = yaml.safe_load(_fetch(entry["url"]))
+        spec = yaml.safe_load(_fetch(entry["url"], allowed_origins))
         for path, path_item in (spec.get("paths") or {}).items():
             for method in HTTP_METHODS & set(path_item):
                 canonical = _canonical_operation(method, path)
@@ -84,7 +138,9 @@ def _client_operations() -> dict[str, str]:
         if len(methods) != 1:
             function_name = re.search(r"pub async fn ([a-zA-Z0-9_]+)", block)
             name = function_name.group(1) if function_name else "<unknown>"
-            raise RuntimeError(f"could not infer exactly one HTTP method for client function {name}: {methods}")
+            raise RuntimeError(
+                f"could not infer exactly one HTTP method for client function {name}: {methods}"
+            )
 
         for path in paths:
             canonical = _canonical_operation(methods[0], path)
@@ -98,9 +154,15 @@ def _manifest_operations(entries: list[dict], section: str) -> dict[str, dict]:
         operation = entry.get("operation", "")
         reason = entry.get("reason", "")
         if not operation or not reason.strip():
-            raise ValueError(f"{section} entries require non-empty operation and reason fields")
+            raise ValueError(
+                f"{section} entries require non-empty operation and reason fields"
+            )
         method, separator, path = operation.partition(" ")
-        if not separator or method.lower() not in HTTP_METHODS or not path.startswith("/"):
+        if (
+            not separator
+            or method.lower() not in HTTP_METHODS
+            or not path.startswith("/")
+        ):
             raise ValueError(f"invalid operation in {section}: {operation}")
         canonical = _canonical_operation(method, path)
         if canonical in operations:
@@ -109,13 +171,20 @@ def _manifest_operations(entries: list[dict], section: str) -> dict[str, dict]:
     return operations
 
 
-def audit(catalog_url: str) -> tuple[dict, bool]:
+def audit(
+    catalog_url: str,
+    allowed_origins: frozenset[str] = DEFAULT_ALLOWED_ORIGINS,
+) -> tuple[dict, bool]:
     manifest = tomllib.loads(MANIFEST_PATH.read_text())
-    published = _published_operations(catalog_url)
+    published = _published_operations(catalog_url, allowed_origins)
     client = _client_operations()
     known_gaps = _manifest_operations(manifest.get("known_gap", []), "known_gap")
-    allowed_extras = _manifest_operations(manifest.get("allowed_extra", []), "allowed_extra")
-    planned = _manifest_operations(manifest.get("planned_operation", []), "planned_operation")
+    allowed_extras = _manifest_operations(
+        manifest.get("allowed_extra", []), "allowed_extra"
+    )
+    planned = _manifest_operations(
+        manifest.get("planned_operation", []), "planned_operation"
+    )
     overlapping_manifest_entries = (
         (set(known_gaps) & set(allowed_extras))
         | (set(known_gaps) & set(planned))
@@ -146,11 +215,15 @@ def audit(catalog_url: str) -> tuple[dict, bool]:
         "known_gap_count": len(actual_gaps & set(known_gaps)),
         "new_gaps": [published[item] for item in sorted(new_gaps)],
         "stale_gaps": [known_gaps[item]["operation"] for item in sorted(stale_gaps)],
-        "unexpected_cli_operations": [client[item] for item in sorted(unexpected_extras)],
+        "unexpected_cli_operations": [
+            client[item] for item in sorted(unexpected_extras)
+        ],
         "stale_allowed_extras": [
             allowed_extras[item]["operation"] for item in sorted(stale_allowed_extras)
         ],
-        "stale_planned_operations": [planned[item]["operation"] for item in sorted(stale_planned)],
+        "stale_planned_operations": [
+            planned[item]["operation"] for item in sorted(stale_planned)
+        ],
         "all_current_gaps": [published[item] for item in sorted(actual_gaps)],
     }
     passed = not (
@@ -166,10 +239,21 @@ def audit(catalog_url: str) -> tuple[dict, bool]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--catalog-url", default=CATALOG_URL)
-    parser.add_argument("--json", action="store_true", help="Emit the full machine-readable report")
+    parser.add_argument(
+        "--allowed-origin",
+        action="append",
+        help="HTTPS origin allowed for catalog/spec fetches; repeat for multiple origins",
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="Emit the full machine-readable report"
+    )
     args = parser.parse_args()
 
-    report, passed = audit(args.catalog_url)
+    configured_origins = args.allowed_origin or sorted(DEFAULT_ALLOWED_ORIGINS)
+    allowed_origins = frozenset(
+        _normalize_allowed_origin(origin) for origin in configured_origins
+    )
+    report, passed = audit(args.catalog_url, allowed_origins)
     if args.json:
         print(json.dumps(report, indent=2))
     else:

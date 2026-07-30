@@ -244,7 +244,15 @@ fn build_search_request(args: SearchArgs) -> Result<TraceSearchRequest> {
     if !filters.is_empty() {
         input.insert("filters".to_string(), serde_json::Value::Object(filters));
     }
-    input_json::finish(input)
+    let request: TraceSearchRequest = input_json::finish(input)?;
+    if let Some(attribute_filters) = &request.filters.attribute_filters {
+        anyhow::ensure!(
+            attribute_filters.len() <= 10,
+            "trace search accepts at most 10 attribute filters, got {}",
+            attribute_filters.len()
+        );
+    }
+    Ok(request)
 }
 
 fn parse_attribute_filter(raw: &str) -> Result<TraceSearchAttributeFilter> {

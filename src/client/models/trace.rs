@@ -113,7 +113,7 @@ impl Tabular for TraceSearchCallResult {
             "Status",
             "Matched / Total",
             "Errors",
-            "Spans",
+            "Span Names",
             "Providers",
         ]
     }
