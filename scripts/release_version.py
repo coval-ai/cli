@@ -14,12 +14,18 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
 
+class NonReleaseVersionError(ValueError):
+    """Raised when Cargo.toml intentionally contains a non-stable version."""
+
+
 def release_version(root: Path = ROOT) -> str:
     cargo = tomllib.loads((root / "Cargo.toml").read_text())
     name = cargo["package"]["name"]
     version = cargo["package"]["version"]
     if VERSION_RE.fullmatch(version) is None:
-        raise ValueError(f"Cargo.toml has a non-release version: {version!r}")
+        raise NonReleaseVersionError(
+            f"Cargo.toml has a non-release version: {version!r}"
+        )
 
     lock = tomllib.loads((root / "Cargo.lock").read_text())
     workspace_packages = [
@@ -57,12 +63,31 @@ def main() -> int:
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--expected-tag")
     parser.add_argument("--github-output", type=Path)
+    parser.add_argument(
+        "--allow-non-release",
+        action="store_true",
+        help="Exit successfully without a tag when Cargo.toml is not stable semver",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
-    metadata = release_metadata(args.root, args.expected_tag)
+    try:
+        metadata = release_metadata(args.root, args.expected_tag)
+    except NonReleaseVersionError as error:
+        if not args.allow_non_release:
+            raise
+        if args.github_output is not None:
+            with args.github_output.open("a") as output:
+                output.write("release_candidate=false\n")
+        if args.json:
+            print(json.dumps({"release_candidate": False}))
+        else:
+            print(f"No stable release candidate: {error}")
+        return 0
+
     if args.github_output is not None:
         with args.github_output.open("a") as output:
+            output.write("release_candidate=true\n")
             for key, value in metadata.items():
                 output.write(f"{key}={value}\n")
     if args.json:

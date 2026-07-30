@@ -226,7 +226,12 @@ def _manifest_operations(entries: list[dict], section: str) -> dict[str, dict]:
     for entry in entries:
         operation = entry.get("operation", "")
         reason = entry.get("reason", "")
-        if not operation or not reason.strip():
+        if (
+            not isinstance(operation, str)
+            or not operation
+            or not isinstance(reason, str)
+            or not reason.strip()
+        ):
             raise ValueError(
                 f"{section} entries require non-empty operation and reason fields"
             )
@@ -318,7 +323,7 @@ def audit(
         "new_gaps": [published[item] for item in sorted(new_gaps)],
         "stale_gaps": [known_gaps[item]["operation"] for item in sorted(stale_gaps)],
         "unexpected_cli_operations": [
-            client[item] for item in sorted(unexpected_extras)
+            client[item]["operation"] for item in sorted(unexpected_extras)
         ],
         "stale_allowed_extras": [
             allowed_extras[item]["operation"] for item in sorted(stale_allowed_extras)

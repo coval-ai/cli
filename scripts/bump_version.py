@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import tomllib
 from pathlib import Path
 
 if __package__:
@@ -33,22 +34,41 @@ def _replace_once(contents: str, pattern: str, replacement: str, path: Path) -> 
     return updated
 
 
+def _replace_package_version(
+    contents: str, current: str, updated: str, path: Path
+) -> str:
+    sections = list(re.finditer(r"(?ms)^\[package\][ \t]*\n.*?(?=^\[|\Z)", contents))
+    if len(sections) != 1:
+        raise ValueError(f"expected one [package] section in {path}")
+
+    section = sections[0]
+    updated_section = _replace_once(
+        section.group(),
+        rf'^(version[ \t]*=[ \t]*"){re.escape(current)}("[ \t]*)$',
+        rf"\g<1>{updated}\g<2>",
+        path,
+    )
+    return contents[: section.start()] + updated_section + contents[section.end() :]
+
+
 def bump_version(part: str, root: Path = ROOT) -> str:
     current = release_version(root)
     updated = next_version(current, part)
     cargo_path = root / "Cargo.toml"
     lock_path = root / "Cargo.lock"
+    cargo_contents = cargo_path.read_text()
+    package_name = tomllib.loads(cargo_contents)["package"]["name"]
 
-    cargo = _replace_once(
-        cargo_path.read_text(),
-        rf'^version = "{re.escape(current)}"$',
-        f'version = "{updated}"',
+    cargo = _replace_package_version(
+        cargo_contents,
+        current,
+        updated,
         cargo_path,
     )
     lock = _replace_once(
         lock_path.read_text(),
         (
-            rf'(^\[\[package\]\]\nname = "coval"\nversion = ")'
+            rf'(^\[\[package\]\]\nname = "{re.escape(package_name)}"\nversion = ")'
             rf"{re.escape(current)}" + r'("$)'
         ),
         rf"\g<1>{updated}\g<2>",

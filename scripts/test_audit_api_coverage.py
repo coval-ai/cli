@@ -146,6 +146,134 @@ let response = client.get(url).send().await?;
         self.assertEqual([], unmapped)
 
 
+class ManifestTests(unittest.TestCase):
+    def test_rejects_missing_reason(self):
+        with self.assertRaisesRegex(ValueError, "non-empty"):
+            audit_api_coverage._manifest_operations(
+                [{"operation": "GET /agents"}],
+                "known_gap",
+            )
+
+    def test_rejects_invalid_http_method(self):
+        with self.assertRaisesRegex(ValueError, "invalid operation"):
+            audit_api_coverage._manifest_operations(
+                [{"operation": "HEAD /agents", "reason": "Not supported"}],
+                "known_gap",
+            )
+
+    def test_rejects_duplicate_operation(self):
+        with self.assertRaisesRegex(ValueError, "duplicate operation"):
+            audit_api_coverage._manifest_operations(
+                [
+                    {"operation": "GET /agents", "reason": "First"},
+                    {"operation": "GET /agents", "reason": "Second"},
+                ],
+                "known_gap",
+            )
+
+
+class AuditAggregationTests(unittest.TestCase):
+    def _audit(
+        self,
+        manifest: str,
+        published: dict[str, str],
+        commands: dict[str, dict],
+    ) -> tuple[dict, bool]:
+        with tempfile.TemporaryDirectory() as directory:
+            manifest_path = Path(directory) / "api-coverage.toml"
+            manifest_path.write_text(manifest)
+            with (
+                patch.object(audit_api_coverage, "MANIFEST_PATH", manifest_path),
+                patch.object(
+                    audit_api_coverage,
+                    "_published_operations",
+                    return_value=published,
+                ),
+                patch.object(
+                    audit_api_coverage,
+                    "_client_operations",
+                    return_value=commands,
+                ),
+                patch.object(
+                    audit_api_coverage,
+                    "_command_operations",
+                    return_value=(commands, []),
+                ),
+            ):
+                return audit_api_coverage.audit(audit_api_coverage.CATALOG_URL)
+
+    def test_accepts_reviewed_gap_and_allowed_extra(self):
+        manifest = f"""
+[snapshot]
+catalog_url = "{audit_api_coverage.CATALOG_URL}"
+published_operations = 2
+cli_supported_operations = 1
+
+[[known_gap]]
+operation = "GET /beta"
+reason = "Reviewed"
+
+[[allowed_extra]]
+operation = "POST /gamma"
+reason = "Pre-deploy"
+"""
+        published = {
+            "GET /alpha": "GET /v1/alpha",
+            "GET /beta": "GET /v1/beta",
+        }
+        commands = {
+            "GET /alpha": {"operation": "GET /alpha"},
+            "POST /gamma": {"operation": "POST /gamma"},
+        }
+
+        report, passed = self._audit(manifest, published, commands)
+
+        self.assertTrue(passed)
+        self.assertEqual(1, report["known_gap_count"])
+        self.assertEqual([], report["new_gaps"])
+        self.assertEqual([], report["unexpected_cli_operations"])
+
+    def test_classifies_new_gap_and_unexpected_extra_as_failure(self):
+        manifest = f"""
+[snapshot]
+catalog_url = "{audit_api_coverage.CATALOG_URL}"
+published_operations = 2
+cli_supported_operations = 1
+"""
+        published = {
+            "GET /alpha": "GET /v1/alpha",
+            "GET /beta": "GET /v1/beta",
+        }
+        commands = {
+            "GET /alpha": {"operation": "GET /alpha"},
+            "POST /gamma": {"operation": "POST /gamma"},
+        }
+
+        report, passed = self._audit(manifest, published, commands)
+
+        self.assertFalse(passed)
+        self.assertEqual(["GET /v1/beta"], report["new_gaps"])
+        self.assertEqual(["POST /gamma"], report["unexpected_cli_operations"])
+
+    def test_rejects_operation_in_multiple_manifest_sections(self):
+        manifest = """
+[snapshot]
+catalog_url = "https://api.coval.dev/v1/openapi"
+published_operations = 0
+cli_supported_operations = 0
+
+[[known_gap]]
+operation = "GET /agents"
+reason = "Reviewed"
+
+[[allowed_extra]]
+operation = "GET /agents"
+reason = "Pre-deploy"
+"""
+        with self.assertRaisesRegex(ValueError, "only one section"):
+            self._audit(manifest, {}, {})
+
+
 class SnapshotTests(unittest.TestCase):
     def test_reports_stale_snapshot_fields(self):
         mismatches = audit_api_coverage._snapshot_mismatches(

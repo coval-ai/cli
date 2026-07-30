@@ -7,8 +7,11 @@ import argparse
 import re
 from pathlib import Path
 
+if __package__:
+    from .release_version import VERSION_RE
+else:
+    from release_version import VERSION_RE
 
-VERSION_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 

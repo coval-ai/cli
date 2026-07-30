@@ -55,15 +55,29 @@ jobs:
 
       - name: Read and validate the release version
         id: version
-        run: python scripts/release_version.py --github-output "$GITHUB_OUTPUT"
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            python scripts/release_version.py --github-output "$GITHUB_OUTPUT"
+          else
+            python scripts/release_version.py \
+              --allow-non-release \
+              --github-output "$GITHUB_OUTPUT"
+          fi
 
       - name: Tag an unreleased version
         id: tag
         env:
+          RELEASE_CANDIDATE: ${{ steps.version.outputs.release_candidate }}
           RELEASE_SHA: ${{ steps.ref.outputs.sha }}
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
+          if [ "$RELEASE_CANDIDATE" != "true" ]; then
+            echo "Cargo.toml does not contain a stable release candidate; nothing to do."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           git fetch --tags --force
 
           if git rev-parse -q --verify "refs/tags/$RELEASE_TAG" >/dev/null; then

@@ -31,10 +31,13 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.RELEASE_REF }}
+          persist-credentials: false
 
       - uses: actions/setup-python@v6
         with:
@@ -45,6 +48,8 @@ jobs:
 
   build:
     needs: validate
+    permissions:
+      contents: read
     strategy:
       matrix:
         include:
@@ -75,6 +80,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.RELEASE_REF }}
+          persist-credentials: false
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -140,11 +146,14 @@ jobs:
   update-homebrew:
     needs: release
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.RELEASE_REF }}
+          persist-credentials: false
 
       - uses: actions/setup-python@v6
         with:
@@ -184,7 +193,16 @@ jobs:
           fi
 
           tap_dir="${RUNNER_TEMP}/homebrew-tap"
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/coval-ai/homebrew-tap.git" "$tap_dir"
+          auth_header="Authorization: Basic $(printf 'x-access-token:%s' "$HOMEBREW_TAP_TOKEN" | base64 | tr -d '\n')"
+          git_auth() {
+            GIT_CONFIG_COUNT=1 \
+              GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+              GIT_CONFIG_VALUE_0="$auth_header" \
+              git "$@"
+          }
+
+          git_auth clone "https://github.com/coval-ai/homebrew-tap.git" "$tap_dir"
+          mkdir -p "$tap_dir/Formula"
           python scripts/render_homebrew_formula.py \
             --version "${VERSION#v}" \
             --macos-arm64 "$SHA_MACOS_ARM64" \
@@ -193,7 +211,7 @@ jobs:
             --linux-x64 "$SHA_LINUX_X64" \
             --output "$tap_dir/Formula/coval.rb"
 
-          if git -C "$tap_dir" diff --quiet -- Formula/coval.rb; then
+          if [ -z "$(git -C "$tap_dir" status --porcelain -- Formula/coval.rb)" ]; then
             echo "Homebrew formula already matches ${VERSION}; nothing to push."
             exit 0
           fi
@@ -202,7 +220,20 @@ jobs:
           git -C "$tap_dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git -C "$tap_dir" add Formula/coval.rb
           git -C "$tap_dir" commit -m "chore: update coval to ${VERSION#v}"
-          git -C "$tap_dir" push origin main
+          for attempt in 1 2 3; do
+            if git_auth -C "$tap_dir" push origin HEAD:main; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              break
+            fi
+            echo "Push attempt ${attempt} failed; rebasing on origin/main."
+            git_auth -C "$tap_dir" fetch origin main
+            git -C "$tap_dir" rebase origin/main
+            sleep $((attempt * 5))
+          done
+          echo "::error::Could not push the Homebrew formula update after 3 attempts."
+          exit 1
 
   report-failure:
     needs: [validate, build, release, update-homebrew]
