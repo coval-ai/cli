@@ -56,6 +56,7 @@ const AGENT_RESOURCES: &[&str] = &[
     "reports",
     "monitors",
     "tags",
+    "traces",
 ];
 
 const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
@@ -106,6 +107,7 @@ const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
     &["monitors", "update", "--help"],
     &["tags", "create", "--help"],
     &["tags", "update", "--help"],
+    &["traces", "search", "--help"],
 ];
 
 #[test]
@@ -1350,7 +1352,7 @@ async fn test_personas_background_sounds_upload() {
         .await;
 
     Mock::given(method("POST"))
-        .and(path("/v1/personas/background-sounds/sound1:complete"))
+        .and(path("/v1/personas/background-sounds/sound1/complete"))
         .and(header("X-API-Key", "test_key"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "background_sound": {
@@ -3738,5 +3740,254 @@ fn test_reports_create_metadata_key_rejected_without_metadata_compare_by() {
         .failure()
         .stderr(predicate::str::contains(
             "can only be set when --compare-by is metadata",
+        ));
+}
+
+#[tokio::test]
+async fn test_traces_search_sends_structured_filters_and_preserves_cursor() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/traces/search"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "limit": 10,
+            "filters": {
+                "span_name": "llm",
+                "status": "ERROR",
+                "attribute_filters": [
+                    {"key": "tool.error", "operator": "eq", "value": "1"}
+                ],
+                "sort_by": "slowest"
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "items": [{
+                "simulation_output_id": "sim-output-1",
+                "run_id": "run-1",
+                "latest_matched_timestamp_ms": 1785430800000_i64,
+                "first_matched_timestamp_ms": 1785430799000_i64,
+                "matched_span_count": 2,
+                "total_span_count": 8,
+                "error_span_count": 1,
+                "ok_span_count": 1,
+                "unset_span_count": 0,
+                "overall_status": "ERROR",
+                "matched_span_names": ["llm"],
+                "matched_provider_names": ["openai"],
+                "matched_service_names": ["voice-agent"],
+                "matched_scope_names": ["agent"]
+            }],
+            "total_count": 42,
+            "next_cursor": "1785430800000::sim-output-1",
+            "aggregate_stats": {"error_count": 7, "error_rate": 17}
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--agent")
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("traces")
+            .arg("search")
+            .arg("--limit")
+            .arg("10")
+            .arg("--span-name")
+            .arg("llm")
+            .arg("--status")
+            .arg("error")
+            .arg("--attribute-filter")
+            .arg("tool.error:eq:1")
+            .arg("--sort-by")
+            .arg("slowest")
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["resource"], "traces");
+    assert_eq!(value["operation"], "search");
+    assert_eq!(value["data"]["total_count"], 42);
+    assert_eq!(value["data"]["next_cursor"], "1785430800000::sim-output-1");
+    assert_eq!(value["next_actions"][0]["id"], "traces.spans");
+    assert_eq!(
+        value["next_actions"][0]["argv"],
+        json!(["coval", "--agent", "traces", "spans", "sim-output-1"])
+    );
+}
+
+#[tokio::test]
+async fn test_traces_search_merges_stdin_json_with_flag_overrides() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/traces/search"))
+        .and(body_partial_json(json!({
+            "limit": 10,
+            "filters": {
+                "provider": "openai",
+                "status": "ERROR",
+                "duration_ms_min": 250.0
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "items": [],
+            "total_count": 0,
+            "next_cursor": null,
+            "aggregate_stats": {"error_count": 0, "error_rate": 0}
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("--format")
+            .arg("json")
+            .arg("traces")
+            .arg("search")
+            .arg("--input-json")
+            .arg("-")
+            .arg("--limit")
+            .arg("10")
+            .arg("--status")
+            .arg("error")
+            .write_stdin(
+                r#"{"limit":99,"filters":{"provider":"openai","status":"OK","duration_ms_min":250}}"#,
+            )
+            .assert()
+            .success(),
+    );
+
+    assert_eq!(value["items"], json!([]));
+    assert_eq!(value["total_count"], 0);
+    assert!(value["next_cursor"].is_null());
+}
+
+#[tokio::test]
+async fn test_traces_summary_uses_exactly_one_target() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/traces/summary"))
+        .and(query_param("conversation_id", "conversation-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "target": {"type": "conversation", "id": "conversation-1"},
+            "trace_summary": {
+                "simulation_output_id": "sim-output-1",
+                "total_spans": 12,
+                "status_counts": {"ERROR": 1, "OK": 11}
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("--format")
+            .arg("json")
+            .arg("traces")
+            .arg("summary")
+            .arg("--conversation-id")
+            .arg("conversation-1")
+            .assert()
+            .success(),
+    );
+
+    assert_eq!(value["target"]["type"], "conversation");
+    assert_eq!(value["trace_summary"]["total_spans"], 12);
+}
+
+#[test]
+fn test_traces_summary_rejects_missing_or_ambiguous_target() {
+    coval()
+        .arg("traces")
+        .arg("summary")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--simulation-id <SIMULATION_ID>"));
+
+    coval()
+        .arg("traces")
+        .arg("summary")
+        .arg("--simulation-id")
+        .arg("sim-1")
+        .arg("--conversation-id")
+        .arg("conversation-1")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cannot be used with"));
+}
+
+#[tokio::test]
+async fn test_traces_spans_preserves_raw_span_payload() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/traces/spans"))
+        .and(query_param("simulation_output_id", "sim-output-1"))
+        .and(query_param("limit", "100"))
+        .and(query_param("offset", "5"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "traces": [{
+                "trace_id": "trace-1",
+                "span_name": "llm",
+                "span_attributes": {"gen_ai.request.model": "gpt-4.1"}
+            }],
+            "total_spans": 9
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("--format")
+            .arg("json")
+            .arg("traces")
+            .arg("spans")
+            .arg("sim-output-1")
+            .arg("--limit")
+            .arg("100")
+            .arg("--offset")
+            .arg("5")
+            .assert()
+            .success(),
+    );
+
+    assert_eq!(value["total_spans"], 9);
+    assert_eq!(
+        value["traces"][0]["span_attributes"]["gen_ai.request.model"],
+        "gpt-4.1"
+    );
+}
+
+#[test]
+fn test_traces_search_rejects_ambiguous_attribute_filter() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("traces")
+        .arg("search")
+        .arg("--attribute-filter")
+        .arg("tool.error:eq")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "the eq attribute operator requires a value",
         ));
 }

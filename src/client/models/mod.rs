@@ -20,6 +20,7 @@ mod simulation;
 mod tag;
 mod test_case;
 mod test_set;
+mod trace;
 mod widget;
 
 pub use agent::*;
@@ -42,4 +43,5 @@ pub use simulation::*;
 pub use tag::*;
 pub use test_case::*;
 pub use test_set::*;
+pub use trace::*;
 pub use widget::*;

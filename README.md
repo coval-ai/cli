@@ -55,12 +55,18 @@ coval simulations list --run-id <run_id>
 | `coval test-cases` | Manage individual test cases |
 | `coval personas` | Manage simulated personas |
 | `coval metrics` | Manage evaluation metrics |
+| `coval models` | Inspect supported metric models |
 | `coval mutations` | Test agent variations with config overrides |
 | `coval api-keys` | Manage API keys |
 | `coval run-templates` | Save reusable evaluation configurations |
 | `coval scheduled-runs` | Schedule recurring evaluation runs |
 | `coval dashboards` | Manage dashboards and widgets |
+| `coval review-annotations` | Manage human-review annotations |
+| `coval review-projects` | Manage human-review projects |
 | `coval reports` | Save multi-run comparison reports |
+| `coval monitors` | Manage production monitors and events |
+| `coval tags` | Manage resource tags |
+| `coval traces` | Search and inspect OpenTelemetry traces |
 | `coval config` | Manage CLI configuration |
 
 ### Common Flags
@@ -156,6 +162,40 @@ coval runs get abc123 --format json | jq '.status'
 # List agents as JSON
 coval agents list --format json | jq '.[].id'
 ```
+
+### Search Traces
+
+```bash
+# Find recent calls containing error spans
+coval traces search --status error --sort-by newest
+
+# Combine span, duration, and attribute filters
+coval traces search \
+  --span-name llm \
+  --duration-ms-min 500 \
+  --attribute-filter 'gen_ai.request.model:eq:gpt-4.1'
+
+# Inspect one result
+coval traces summary --simulation-id <simulation_output_id>
+coval traces spans <simulation_output_id> --limit 100
+
+# Advanced or reusable filters can be supplied as JSON, a file, or stdin
+coval traces search --input-json @trace-search.json --format json
+```
+
+## API Coverage Audit
+
+The checked-in coverage manifest records every published API operation that the
+CLI does not yet expose. Run the live audit after API or client changes:
+
+```bash
+python3 -m pip install PyYAML
+python3 scripts/audit_api_coverage.py
+```
+
+The audit fails for new or stale gaps and for CLI routes absent from the public
+OpenAPI catalog unless they are explicitly marked as planned or documented extras
+in `api-coverage.toml`.
 
 ## Configuration
 
