@@ -827,6 +827,23 @@ fn test_agents_help() {
         .stdout(predicate::str::contains("create"));
 }
 
+#[test]
+fn test_agents_create_help_lists_all_agent_types() {
+    coval()
+        .arg("agents")
+        .arg("create")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("chat-a2a"))
+        .stdout(predicate::str::contains("chat-websocket"))
+        .stdout(predicate::str::contains("livekit"))
+        .stdout(predicate::str::contains("pipecat"))
+        .stdout(predicate::str::contains("openai-realtime"))
+        .stdout(predicate::str::contains("gemini-realtime"))
+        .stdout(predicate::str::contains("grok-realtime"));
+}
+
 #[tokio::test]
 async fn test_agents_list() {
     let mock_server = MockServer::start().await;
@@ -2668,6 +2685,81 @@ async fn test_agents_create_with_metadata() {
         .assert()
         .success()
         .stdout(predicate::str::contains("new123"));
+}
+
+#[tokio::test]
+async fn test_agents_create_livekit_with_all_common_fields() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/agents"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "customer_agent_id": "speak-language-tutor",
+            "display_name": "Language Tutor",
+            "model_type": "MODEL_TYPE_LIVEKIT",
+            "prompt": "Teach conversational English.",
+            "language": "en",
+            "attributes": {"customer": "Speak"},
+            "metadata": {
+                "generate_token_endpoint": "https://api.example.com/livekit/token",
+                "livekit_url": "wss://example.livekit.cloud",
+                "livekit_agent_name": "language-tutor"
+            },
+            "workflows": {"dispatch": {"enabled": true}},
+            "metric_ids": ["metric-one", "metric-two"],
+            "test_set_ids": ["pilot-suite"],
+            "tags": ["pilot", "livekit"]
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "agent": {
+                "id": "livekit123",
+                "display_name": "Language Tutor",
+                "model_type": "MODEL_TYPE_LIVEKIT",
+                "metadata": {
+                    "generate_token_endpoint": "https://api.example.com/livekit/token",
+                    "livekit_url": "wss://example.livekit.cloud"
+                },
+                "create_time": "2026-07-31T18:00:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("agents")
+        .arg("create")
+        .arg("--customer-agent-id")
+        .arg("speak-language-tutor")
+        .arg("--name")
+        .arg("Language Tutor")
+        .arg("--type")
+        .arg("livekit")
+        .arg("--prompt")
+        .arg("Teach conversational English.")
+        .arg("--language")
+        .arg("en")
+        .arg("--attributes")
+        .arg(r#"{"customer":"Speak"}"#)
+        .arg("--metadata")
+        .arg(
+            r#"{"generate_token_endpoint":"https://api.example.com/livekit/token","livekit_url":"wss://example.livekit.cloud","livekit_agent_name":"language-tutor"}"#,
+        )
+        .arg("--workflows")
+        .arg(r#"{"dispatch":{"enabled":true}}"#)
+        .arg("--metric-ids")
+        .arg("metric-one,metric-two")
+        .arg("--test-set-ids")
+        .arg("pilot-suite")
+        .arg("--tags")
+        .arg("pilot,livekit")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("livekit123"));
 }
 
 #[tokio::test]
