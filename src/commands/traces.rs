@@ -245,6 +245,15 @@ fn build_search_request(args: SearchArgs) -> Result<TraceSearchRequest> {
         input.insert("filters".to_string(), serde_json::Value::Object(filters));
     }
     let request: TraceSearchRequest = input_json::finish(input)?;
+    if let (Some(minimum), Some(maximum)) = (
+        request.filters.duration_ms_min,
+        request.filters.duration_ms_max,
+    ) {
+        anyhow::ensure!(
+            minimum <= maximum,
+            "trace search duration minimum ({minimum}) must not exceed maximum ({maximum})"
+        );
+    }
     if let Some(attribute_filters) = &request.filters.attribute_filters {
         anyhow::ensure!(
             attribute_filters.len() <= 10,

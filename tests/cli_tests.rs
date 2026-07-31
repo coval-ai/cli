@@ -3993,6 +3993,24 @@ fn test_traces_search_rejects_ambiguous_attribute_filter() {
 }
 
 #[test]
+fn test_traces_search_rejects_inverted_duration_range() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("traces")
+        .arg("search")
+        .arg("--duration-ms-min")
+        .arg("10")
+        .arg("--duration-ms-max")
+        .arg("5")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "trace search duration minimum (10) must not exceed maximum (5)",
+        ));
+}
+
+#[test]
 fn test_traces_search_rejects_more_than_ten_attribute_filter_flags() {
     let mut command = coval();
     command

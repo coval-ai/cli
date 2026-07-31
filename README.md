@@ -186,16 +186,67 @@ coval traces search --input-json @trace-search.json --format json
 ## API Coverage Audit
 
 The checked-in coverage manifest records every published API operation that the
-CLI does not yet expose. Run the live audit after API or client changes:
+CLI does not yet expose as a first-class command. The audit traces each literal
+client route back to a resource-client method referenced by `src/commands/`, so
+an unused HTTP helper does not count as command coverage.
+
+Run the deterministic tests and live audit after API, client, or command changes:
 
 ```bash
-python3 -m pip install PyYAML
-python3 scripts/audit_api_coverage.py
+python3 -m pip install --requirement scripts/requirements-audit.txt
+python3 -m unittest scripts/test_audit_api_coverage.py
+python3 scripts/audit_api_coverage.py \
+  --write-markdown api-coverage-report.md
 ```
 
-The audit fails for new or stale gaps and for CLI routes absent from the public
-OpenAPI catalog unless they are explicitly marked as planned or documented extras
-in `api-coverage.toml`.
+The audit fails for new or stale gaps, a stale checked-in snapshot, or command
+routes absent from the public OpenAPI catalog unless they are explicitly marked
+as planned or documented extras in `api-coverage.toml`.
+
+A repository-owned GitHub workflow runs every Monday and refreshes the
+deterministic `api-coverage-report.md`. When coverage changes, it opens or
+updates one rolling PR on `chore/weekly-api-parity`; the PR's CI remains blocked
+until the command implementation or an explicitly reviewed manifest exception
+reconciles the drift. A GitHub issue is used only if the automation itself
+fails before it can create or update that PR.
+
+The SDK regeneration workflow can open deterministic codegen PRs because its
+published clients are generated from OpenAPI. The CLI command surface is still
+hand-written, so this repository does not present an automated audit as command
+generation. Repository-owned generated-model PRs are tracked separately under
+COVAL-2079; they require the CLI's OpenAPI type-codegen migration to be
+completed first.
+
+## Release Automation
+
+CLI implementation PRs retain a human merge gate. When a merged PR changes the
+Cargo version, the exact `main` CI run must pass before
+`Release on version bump` creates the matching `v*` tag and calls the reusable
+release workflow. A merge without a version bump does not release anything.
+
+Use the checked-in helper so `Cargo.toml` and `Cargo.lock` move together:
+
+```bash
+# New first-class commands
+python3 scripts/bump_version.py minor
+
+# Backward-compatible fixes
+python3 scripts/bump_version.py patch
+```
+
+The release workflow validates tag/version consistency, builds all five target
+binaries, creates or updates the GitHub release, and updates
+`coval-ai/homebrew-tap`. A manual `Release on version bump` dispatch safely
+retries the current version without creating another tag.
+
+Repository prerequisite:
+
+- `REGEN_PR_TOKEN`: a fine-grained token with Contents and Pull requests
+  read/write access to `coval-ai/cli`. The organization does not allow
+  `GITHUB_TOKEN` to create pull requests.
+- `HOMEBREW_TAP_TOKEN`: a fine-grained token or GitHub App token with Contents
+  read/write access to `coval-ai/homebrew-tap`. The Homebrew update is
+  idempotent, so retrying an already-current formula succeeds without a commit.
 
 ## Configuration
 
