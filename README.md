@@ -107,6 +107,12 @@ coval agents create \
   --type voice \
   --phone-number "+15551234567"
 
+# Create a LiveKit agent for CI
+coval agents create \
+  --name "Language Tutor" \
+  --type livekit \
+  --metadata '{"generate_token_endpoint":"https://api.example.com/livekit/token","livekit_url":"wss://example.livekit.cloud","livekit_agent_name":"language-tutor"}'
+
 # Create a test set
 coval test-sets create \
   --name "Customer Support Scenarios" \
