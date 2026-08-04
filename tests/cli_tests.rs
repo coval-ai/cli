@@ -3835,6 +3835,46 @@ fn test_reports_create_metadata_key_rejected_without_metadata_compare_by() {
         ));
 }
 
+#[test]
+fn test_reports_create_metadata_rejects_null_metadata_key() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Bad Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("metadata")
+        .arg("--input-json")
+        .arg(r#"{"metadata_key": null}"#)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--metadata-key is required"));
+}
+
+#[test]
+fn test_reports_create_allows_null_metadata_key_without_metadata_compare_by() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("run")
+        .arg("--input-json")
+        .arg(r#"{"metadata_key": null}"#)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--metadata-key can only be set").not());
+}
+
 #[tokio::test]
 async fn test_traces_search_sends_structured_filters_and_preserves_cursor() {
     let mock_server = MockServer::start().await;
