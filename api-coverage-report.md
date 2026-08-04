@@ -12,8 +12,8 @@ opens or updates a PR only when coverage actually changes.
 | --- | ---: |
 | Reconciliation status | PASS |
 | Published operations | 174 |
-| First-class CLI operations | 124 |
-| Reviewed gaps | 50 |
+| First-class CLI operations | 117 |
+| Reviewed gaps | 57 |
 | Client operations | 125 |
 
 Catalog: https://api.coval.dev/v1/openapi
@@ -52,11 +52,15 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## All current published gaps
 
+- `DELETE /alerts/{alert_id}`
 - `DELETE /integrations/slack`
 - `DELETE /metrics/flows/{flow_id}`
 - `DELETE /test-sets/{test_set_id}/agents/{agent_id}`
 - `DELETE /webhooks/{webhook_id}`
 - `GET /agents/{agent_id}/versions`
+- `GET /alerts`
+- `GET /alerts/{alert_id}`
+- `GET /alerts/{alert_id}/events`
 - `GET /integrations/slack`
 - `GET /metrics/flows`
 - `GET /metrics/recently-deleted`
@@ -79,12 +83,15 @@ Catalog: https://api.coval.dev/v1/openapi
 - `GET /test-sets/{test_set_id}/records`
 - `GET /test-sets/{test_set_id}/versions`
 - `GET /webhooks`
+- `PATCH /alerts/{alert_id}`
 - `PATCH /metrics/flows/{flow_id}`
 - `PATCH /organization/conversation-metrics`
 - `PATCH /organization/monitoring-metrics`
 - `PATCH /webhooks/{webhook_id}`
 - `POST /agents/{agent_id}/duplicate`
 - `POST /agents/{agent_id}/versions/{version_id}/revert`
+- `POST /alerts`
+- `POST /alerts/{alert_id}/test-evaluate`
 - `POST /audio:upload`
 - `POST /integrations/slack/connect`
 - `POST /metrics/flows`

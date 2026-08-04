@@ -3,13 +3,50 @@
 
 [snapshot]
 catalog_url = "https://api.coval.dev/v1/openapi"
-reviewed_at = "2026-07-30"
+reviewed_at = "2026-08-04"
 published_operations = 174
-cli_supported_operations = 124
+cli_supported_operations = 117
 
 [[allowed_extra]]
 operation = "POST /test-cases/{test_case_id}/media:upload-url"
 reason = "Implemented by the public API but currently omitted from its published OpenAPI specs."
+
+# The public API renamed its published spec from monitors-v1 to alerts-v1 in
+# coval-ai/backend#6368. The /v1/monitors routes were deliberately retained as a
+# serving legacy alias rather than removed, so `coval monitors` is not broken.
+# Verified against production on 2026-08-04: every /v1/monitors route below still
+# reaches its Lambda and returns a Coval-shaped response, while an unrouted path
+# returns API Gateway's own {"message":"Not Found"}. These entries keep the CLI's
+# existing command surface reviewed until it moves to the canonical /v1/alerts
+# paths; see the matching alerts known_gap entries below.
+
+[[allowed_extra]]
+operation = "GET /monitors"
+reason = "Retained legacy alias for the published GET /alerts operation."
+
+[[allowed_extra]]
+operation = "POST /monitors"
+reason = "Retained legacy alias for the published POST /alerts operation."
+
+[[allowed_extra]]
+operation = "GET /monitors/{id}"
+reason = "Retained legacy alias for the published GET /alerts/{alert_id} operation."
+
+[[allowed_extra]]
+operation = "PATCH /monitors/{id}"
+reason = "Retained legacy alias for the published PATCH /alerts/{alert_id} operation."
+
+[[allowed_extra]]
+operation = "DELETE /monitors/{id}"
+reason = "Retained legacy alias for the published DELETE /alerts/{alert_id} operation."
+
+[[allowed_extra]]
+operation = "GET /monitors/{monitor_id}/events"
+reason = "Retained legacy alias for the published GET /alerts/{alert_id}/events operation."
+
+[[allowed_extra]]
+operation = "POST /monitors/{monitor_id}/test-evaluate"
+reason = "Retained legacy alias for the published POST /alerts/{alert_id}/test-evaluate operation."
 
 [[known_gap]]
 operation = "GET /agents/{agent_id}/versions"
@@ -22,6 +59,42 @@ reason = "Agent version rollback remains to be modeled under COVAL-2079."
 [[known_gap]]
 operation = "POST /agents/{agent_id}/duplicate"
 reason = "Agent duplication remains to be modeled under COVAL-2079."
+
+# Alerts is the canonical published surface after coval-ai/backend#6368. The
+# behaviour is already reachable from the CLI today via `coval monitors`, which
+# calls the retained /v1/monitors legacy alias, so these are naming gaps rather
+# than missing functionality. Closing them means pointing the CLI at the
+# canonical /v1/alerts paths and renaming the command to `coval alerts` with
+# `monitors` kept as an alias, which is a deliberate follow-up rather than part
+# of this reconciliation.
+
+[[known_gap]]
+operation = "GET /alerts"
+reason = "Served today by `coval monitors list` through the retained /v1/monitors alias; a first-class `coval alerts` surface is a follow-up."
+
+[[known_gap]]
+operation = "POST /alerts"
+reason = "Served today by `coval monitors create` through the retained /v1/monitors alias; a first-class `coval alerts` surface is a follow-up."
+
+[[known_gap]]
+operation = "GET /alerts/{alert_id}"
+reason = "Served today by `coval monitors get` through the retained /v1/monitors alias; a first-class `coval alerts` surface is a follow-up."
+
+[[known_gap]]
+operation = "PATCH /alerts/{alert_id}"
+reason = "Served today by `coval monitors update` through the retained /v1/monitors alias; a first-class `coval alerts` surface is a follow-up."
+
+[[known_gap]]
+operation = "DELETE /alerts/{alert_id}"
+reason = "Served today by `coval monitors delete` through the retained /v1/monitors alias; a first-class `coval alerts` surface is a follow-up."
+
+[[known_gap]]
+operation = "GET /alerts/{alert_id}/events"
+reason = "Served today by `coval monitors events` through the retained /v1/monitors alias; a first-class `coval alerts` surface is a follow-up."
+
+[[known_gap]]
+operation = "POST /alerts/{alert_id}/test-evaluate"
+reason = "Served today by `coval monitors test-evaluate` through the retained /v1/monitors alias; a first-class `coval alerts` surface is a follow-up."
 
 [[known_gap]]
 operation = "POST /audio:upload"
