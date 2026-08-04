@@ -63,7 +63,7 @@ coval simulations list --run-id <run_id>
 | `coval dashboards` | Manage dashboards and widgets |
 | `coval review-annotations` | Manage human-review annotations |
 | `coval review-projects` | Manage human-review projects |
-| `coval reports` | Save multi-run comparison reports |
+| `coval reports` | Save, merge, and read multi-run comparison reports |
 | `coval monitors` | Manage production monitors and events |
 | `coval tags` | Manage resource tags |
 | `coval traces` | Search and inspect OpenTelemetry traces |
@@ -144,6 +144,11 @@ coval reports create \
   --name "Adversarial Scorecard" \
   --run-ids run1,run2 \
   --compare-by test_case
+
+# Merge existing reports into one report with a group per source report
+coval reports merge \
+  --name "Q3 Scorecard" \
+  --report-ids 01HAAAAAAAAAAAAAAAAAAAAAAA,01HBBBBBBBBBBBBBBBBBBBBBBB
 
 # Upload a custom background sound
 coval personas background-sounds upload ./lobby-noise.mp3 \

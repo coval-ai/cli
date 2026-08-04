@@ -5,7 +5,7 @@
 catalog_url = "https://api.coval.dev/v1/openapi"
 reviewed_at = "2026-08-04"
 published_operations = 174
-cli_supported_operations = 117
+cli_supported_operations = 118
 
 [[allowed_extra]]
 operation = "POST /test-cases/{test_case_id}/media:upload-url"
@@ -183,10 +183,6 @@ reason = "Persona version rollback remains to be modeled under COVAL-2079."
 [[known_gap]]
 operation = "POST /personas/{persona_id}/duplicate"
 reason = "Persona duplication remains to be modeled under COVAL-2079."
-
-[[known_gap]]
-operation = "GET /reports/{report_id}/rows"
-reason = "Report row expansion remains to be modeled under COVAL-2079."
 
 [[known_gap]]
 operation = "POST /review-annotations:withMetricOutputs"

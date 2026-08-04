@@ -1,22 +1,34 @@
+use std::collections::HashSet;
+
 use anyhow::Result;
 use clap::{Args, Subcommand};
 
 use crate::client::models::{
-    CompareBy, CreateReportRequest, ReportPermission, UpdateReportRequest,
+    CompareBy, CreateReportRequest, ReportCustomDimension, ReportCustomDimensionGroup,
+    ReportPermission, ReportViewMode, UpdateReportRequest,
 };
 use crate::client::CovalClient;
 use crate::input_json::{self, InputJsonArg};
 use crate::next_actions;
 use crate::output::{
-    emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, OutputContext,
+    emit_list_with_actions, emit_one_with_actions, emit_success_with_actions, print_list,
+    OutputContext, OutputFormat,
 };
+
+/// A merged report carries exactly one dimension, so a fixed ID is unambiguous.
+const MERGE_DIMENSION_ID: &str = "merged-reports";
+const MERGE_DIMENSION_NAME: &str = "Report";
+const MERGE_ROWS_PAGE_SIZE: u32 = 500;
+const MERGE_MAX_PAGES_PER_REPORT: usize = 200;
 
 #[derive(Subcommand)]
 pub enum ReportCommands {
     Context,
     List(ListArgs),
     Get(GetArgs),
+    Rows(RowsArgs),
     Create(CreateArgs),
+    Merge(MergeArgs),
     Update(UpdateArgs),
     Delete(DeleteArgs),
 }
@@ -27,7 +39,9 @@ impl ReportCommands {
             Self::Context => "context",
             Self::List(_) => "list",
             Self::Get(_) => "get",
+            Self::Rows(_) => "rows",
             Self::Create(_) => "create",
+            Self::Merge(_) => "merge",
             Self::Update(_) => "update",
             Self::Delete(_) => "delete",
         }
@@ -51,6 +65,24 @@ pub struct GetArgs {
 }
 
 #[derive(Args)]
+pub struct RowsArgs {
+    /// Report ID (26-character ULID)
+    report_id: String,
+    /// Opaque cursor from a previous response's next_page_token
+    #[arg(long)]
+    cursor: Option<String>,
+    /// Rows per page (1-2000, default 2000)
+    #[arg(long)]
+    limit: Option<u32>,
+    /// Comma-separated metric IDs to include
+    #[arg(long, value_delimiter = ',')]
+    metric_ids: Option<Vec<String>>,
+    /// Comma-separated simulation IDs to restrict the page to
+    #[arg(long, value_delimiter = ',')]
+    simulation_ids: Option<Vec<String>>,
+}
+
+#[derive(Args)]
 pub struct CreateArgs {
     #[command(flatten)]
     input_json: InputJsonArg,
@@ -66,7 +98,26 @@ pub struct CreateArgs {
     /// Metadata key to group by (required when --compare-by metadata, rejected otherwise)
     #[arg(long)]
     metadata_key: Option<String>,
+    /// Report layout (default rows)
+    #[arg(long, value_enum)]
+    view_mode: Option<ReportViewMode>,
     /// Report visibility (default PRIVATE)
+    #[arg(long, value_enum)]
+    permissions: Option<ReportPermission>,
+}
+
+#[derive(Args)]
+pub struct MergeArgs {
+    /// Comma-separated IDs of the reports to merge (min 2, must be distinct)
+    #[arg(long, required = true, value_delimiter = ',')]
+    report_ids: Vec<String>,
+    /// Display name for the merged report (1-200 characters)
+    #[arg(long)]
+    name: String,
+    /// Label for the generated grouping dimension (default "Report")
+    #[arg(long, default_value = MERGE_DIMENSION_NAME)]
+    dimension_name: String,
+    /// Merged report visibility (default PRIVATE)
     #[arg(long, value_enum)]
     permissions: Option<ReportPermission>,
 }
@@ -130,19 +181,52 @@ pub async fn execute(cmd: ReportCommands, client: &CovalClient, ctx: &OutputCont
                 next_actions::item_result("reports", &report.id),
             );
         }
+        ReportCommands::Rows(args) => {
+            let response = client
+                .reports()
+                .rows(
+                    &args.report_id,
+                    args.cursor.as_deref(),
+                    args.limit,
+                    args.metric_ids.map(|ids| ids.join(",")).as_deref(),
+                    args.simulation_ids.map(|ids| ids.join(",")).as_deref(),
+                )
+                .await?;
+            let actions = next_actions::item_result("reports", &args.report_id);
+            if ctx.human() {
+                print_list(&response.rows, OutputFormat::Table);
+                if let Some(cursor) = &response.next_page_token {
+                    println!("Next cursor: {cursor}");
+                }
+            } else {
+                emit_one_with_actions(ctx, "reports", operation, &response, actions);
+            }
+        }
         ReportCommands::Create(args) => {
             let mut input = args.input_json.object()?;
             input_json::insert(&mut input, "name", args.name)?;
             input_json::insert(&mut input, "run_ids", args.run_ids)?;
             input_json::insert(&mut input, "compare_by", args.compare_by)?;
             input_json::insert(&mut input, "metadata_key", args.metadata_key)?;
+            input_json::insert(&mut input, "view_mode", args.view_mode)?;
             input_json::insert(&mut input, "permissions", args.permissions)?;
             validate_metadata_key(&input)?;
+            validate_custom_dimensions(&input)?;
             let req: CreateReportRequest = input_json::finish(input)?;
             if req.run_ids.is_empty() {
                 anyhow::bail!("--run-ids requires at least one run ID");
             }
             let report = client.reports().create(req).await?;
+            emit_one_with_actions(
+                ctx,
+                "reports",
+                operation,
+                &report,
+                next_actions::item_result("reports", &report.id),
+            );
+        }
+        ReportCommands::Merge(args) => {
+            let report = merge_reports(args, client).await?;
             emit_one_with_actions(
                 ctx,
                 "reports",
@@ -179,6 +263,129 @@ pub async fn execute(cmd: ReportCommands, client: &CovalClient, ctx: &OutputCont
                 next_actions::delete_result("reports"),
             );
         }
+    }
+    Ok(())
+}
+
+/// Build one report grouping the source reports' simulations, one group per source.
+///
+/// Mirrors the app's "Merge reports" action: a simulation is attributed to the first
+/// selected report that contains it, so overlapping reports do not double-count.
+async fn merge_reports(
+    args: MergeArgs,
+    client: &CovalClient,
+) -> Result<crate::client::models::Report> {
+    let mut requested = HashSet::new();
+    for report_id in &args.report_ids {
+        if !requested.insert(report_id.as_str()) {
+            anyhow::bail!("--report-ids contains {report_id} twice; ids must be distinct");
+        }
+    }
+    if args.report_ids.len() < 2 {
+        anyhow::bail!("--report-ids requires at least two report IDs to merge");
+    }
+
+    let mut seen_simulation_ids = HashSet::new();
+    let mut seen_run_ids = HashSet::new();
+    let mut run_ids: Vec<String> = Vec::new();
+    let mut groups: Vec<ReportCustomDimensionGroup> = Vec::new();
+
+    for report_id in &args.report_ids {
+        let source = client.reports().get(report_id).await?;
+        for run_id in &source.run_ids {
+            if seen_run_ids.insert(run_id.clone()) {
+                run_ids.push(run_id.clone());
+            }
+        }
+
+        let mut simulation_ids: Vec<String> = Vec::new();
+        let mut cursor: Option<String> = None;
+        let mut drained = false;
+        for _ in 0..MERGE_MAX_PAGES_PER_REPORT {
+            let page = client
+                .reports()
+                .rows(
+                    report_id,
+                    cursor.as_deref(),
+                    Some(MERGE_ROWS_PAGE_SIZE),
+                    None,
+                    None,
+                )
+                .await?;
+            for row in page.rows {
+                if seen_simulation_ids.insert(row.simulation_id.clone()) {
+                    simulation_ids.push(row.simulation_id);
+                }
+            }
+            match page.next_page_token {
+                Some(token) => cursor = Some(token),
+                None => {
+                    drained = true;
+                    break;
+                }
+            }
+        }
+        if !drained {
+            anyhow::bail!(
+                "report {report_id} has more than {} rows; merge cannot page past that",
+                MERGE_MAX_PAGES_PER_REPORT as u32 * MERGE_ROWS_PAGE_SIZE
+            );
+        }
+
+        let name = source.name.trim();
+        groups.push(ReportCustomDimensionGroup {
+            id: source.id.clone(),
+            name: if name.is_empty() {
+                "Unnamed report".to_string()
+            } else {
+                name.to_string()
+            },
+            simulation_ids,
+        });
+    }
+
+    if run_ids.is_empty() {
+        anyhow::bail!(
+            "the selected reports have no runs to merge; a merged report needs at least one run"
+        );
+    }
+
+    let request = CreateReportRequest {
+        name: args.name,
+        run_ids,
+        compare_by: Some(CompareBy::Custom),
+        metadata_key: None,
+        custom_dimensions: Some(vec![ReportCustomDimension {
+            id: MERGE_DIMENSION_ID.to_string(),
+            name: args.dimension_name,
+            groups,
+            hide_unassigned: false,
+        }]),
+        custom_dimension_id: Some(MERGE_DIMENSION_ID.to_string()),
+        view_mode: Some(ReportViewMode::Grouped),
+        permissions: args.permissions,
+    };
+
+    Ok(client.reports().create(request).await?)
+}
+
+/// Validate the custom_dimensions / compare_by pairing before sending.
+///
+/// The API requires `custom_dimensions` when `compare_by` is custom and rejects it
+/// otherwise. Only `--input-json` can carry them on `reports create`; `reports merge`
+/// assembles them itself.
+fn validate_custom_dimensions(input: &serde_json::Map<String, serde_json::Value>) -> Result<()> {
+    let is_custom = input.get("compare_by").and_then(serde_json::Value::as_str) == Some("custom");
+    let has_custom_dimensions = input.contains_key("custom_dimensions");
+
+    if is_custom && !has_custom_dimensions {
+        anyhow::bail!(
+            "custom_dimensions is required when --compare-by is custom; use `coval reports merge` \
+             to build them from existing reports"
+        );
+    }
+    if !is_custom && has_custom_dimensions {
+        anyhow::bail!("custom_dimensions can only be set when --compare-by is custom");
     }
     Ok(())
 }
