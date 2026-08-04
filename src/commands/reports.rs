@@ -376,7 +376,10 @@ async fn merge_reports(
 /// assembles them itself.
 fn validate_custom_dimensions(input: &serde_json::Map<String, serde_json::Value>) -> Result<()> {
     let is_custom = input.get("compare_by").and_then(serde_json::Value::as_str) == Some("custom");
-    let has_custom_dimensions = input.contains_key("custom_dimensions");
+    // An explicit null deserializes to None, so it counts as absent rather than as a value.
+    let has_custom_dimensions = input
+        .get("custom_dimensions")
+        .is_some_and(|value| !value.is_null());
 
     if is_custom && !has_custom_dimensions {
         anyhow::bail!(

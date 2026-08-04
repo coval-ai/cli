@@ -4101,6 +4101,46 @@ fn test_reports_create_custom_dimensions_rejected_without_custom_compare_by() {
         ));
 }
 
+#[test]
+fn test_reports_create_custom_rejects_null_custom_dimensions() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Bad Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("custom")
+        .arg("--input-json")
+        .arg(r#"{"custom_dimensions": null}"#)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("custom_dimensions is required"));
+}
+
+#[test]
+fn test_reports_create_allows_null_custom_dimensions_without_custom_compare_by() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("agent")
+        .arg("--input-json")
+        .arg(r#"{"custom_dimensions": null}"#)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("custom_dimensions can only be set").not());
+}
+
 #[tokio::test]
 async fn test_traces_search_sends_structured_filters_and_preserves_cursor() {
     let mock_server = MockServer::start().await;
