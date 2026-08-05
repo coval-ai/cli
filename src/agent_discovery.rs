@@ -605,7 +605,9 @@ const RESOURCE_SPECS: &[ResourceSpec] = &[
         pitfalls: &[
             "metadata_key is required when compare-by is metadata and rejected otherwise.",
             "merge needs at least two distinct report IDs and reads every source report's rows.",
+            "merge takes at most 500 source reports, each contributing at most 10,000 simulations.",
             "A simulation in several merged reports lands in the first one's group only.",
+            "custom_dimensions is required when compare-by is custom and rejected otherwise; custom_dimension_id must name one of them.",
             "PUBLIC reports also mark their runs public.",
         ],
     },
