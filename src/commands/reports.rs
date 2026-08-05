@@ -442,10 +442,15 @@ fn validate_custom_dimension_id_target(
     ) else {
         return Ok(());
     };
-    let names_a_dimension = dimensions.iter().any(|dimension| {
-        dimension.get("id").and_then(serde_json::Value::as_str) == Some(dimension_id)
-    });
-    if !names_a_dimension {
+    let mut dimension_ids = Vec::with_capacity(dimensions.len());
+    for dimension in dimensions {
+        // A dimension with no readable id is serde's error to report, not this one's.
+        let Some(id) = dimension.get("id").and_then(serde_json::Value::as_str) else {
+            return Ok(());
+        };
+        dimension_ids.push(id);
+    }
+    if !dimension_ids.contains(&dimension_id) {
         anyhow::bail!(
             "custom_dimension_id {dimension_id} does not match the id of any supplied custom dimension"
         );

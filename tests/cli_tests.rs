@@ -4429,6 +4429,33 @@ fn test_reports_create_allows_null_custom_dimension_id_without_custom_compare_by
 }
 
 #[test]
+fn test_reports_create_reports_a_malformed_dimension_as_a_type_error() {
+    // The dimension has no id, so the membership check defers and serde names the real fault
+    // rather than blaming custom_dimension_id.
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Bad Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("custom")
+        .arg("--input-json")
+        .arg(
+            r#"{"custom_dimension_id": "d1", "custom_dimensions": [{"name": "Report", "groups": []}]}"#,
+        )
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("missing field `id`")
+                .and(predicate::str::contains("does not match the id").not()),
+        );
+}
+
+#[test]
 fn test_reports_create_custom_dimension_id_must_name_a_supplied_dimension() {
     coval()
         .arg("--api-key")
