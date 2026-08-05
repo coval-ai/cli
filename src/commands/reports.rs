@@ -112,7 +112,7 @@ pub struct CreateArgs {
 
 #[derive(Args)]
 pub struct MergeArgs {
-    /// Comma-separated IDs of the reports to merge (min 2, must be distinct)
+    /// Comma-separated IDs of the reports to merge (2-500, must be distinct)
     #[arg(long, required = true, value_delimiter = ',')]
     report_ids: Vec<String>,
     /// Display name for the merged report (1-200 characters)
