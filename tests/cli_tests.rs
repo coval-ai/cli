@@ -4266,6 +4266,55 @@ async fn test_reports_merge_allows_a_source_at_the_simulation_cap() {
         .stdout(predicate::str::contains("01HMERGEDMERGEDMERGEDMERGE"));
 }
 
+#[tokio::test]
+async fn test_reports_merge_rejects_sources_over_the_run_cap() {
+    let mock_server = MockServer::start().await;
+
+    // 2,001 distinct runs across two sources crosses the create request's run_ids ceiling.
+    for (report_id, name, range) in [
+        ("01HAAAAAAAAAAAAAAAAAAAAAAA", "Baseline", 0..2_000),
+        ("01HBBBBBBBBBBBBBBBBBBBBBBB", "Candidate", 2_000..2_001),
+    ] {
+        let run_ids: Vec<Value> = range.map(|index| json!(format!("run{index}"))).collect();
+        Mock::given(method("GET"))
+            .and(path(format!("/v1/reports/{report_id}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "report": {
+                    "id": report_id,
+                    "name": name,
+                    "run_ids": run_ids,
+                    "compare_by": "none",
+                    "permissions": "PRIVATE"
+                }
+            })))
+            .mount(&mock_server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path(format!("/v1/reports/{report_id}/rows")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "rows": [{"simulation_id": format!("{report_id}-sim"), "run_id": "run0"}],
+                "next_page_token": null
+            })))
+            .mount(&mock_server)
+            .await;
+    }
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("merge")
+        .arg("--name")
+        .arg("Too Many Runs")
+        .arg("--report-ids")
+        .arg("01HAAAAAAAAAAAAAAAAAAAAAAA,01HBBBBBBBBBBBBBBBBBBBBBBB")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("span more than 2000 runs"));
+}
+
 #[test]
 fn test_reports_merge_rejects_more_reports_than_the_group_cap() {
     let report_ids: Vec<String> = (0..501).map(|index| format!("01H{index:023}")).collect();

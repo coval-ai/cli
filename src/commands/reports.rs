@@ -20,10 +20,11 @@ const MERGE_DIMENSION_ID: &str = "merged-reports";
 const MERGE_DIMENSION_NAME: &str = "Report";
 const MERGE_ROWS_PAGE_SIZE: u32 = 500;
 const MERGE_MAX_PAGES_PER_REPORT: usize = 200;
-/// Mirrors the API's per-group `simulation_ids` and per-dimension `groups` ceilings.
-/// Checked client-side so an oversized merge fails before paging the whole source.
+/// Mirror the create request's `simulation_ids`, `groups` and `run_ids` ceilings.
+/// Checked client-side so an oversized merge fails before paging every source.
 const MERGE_MAX_SIMULATIONS_PER_GROUP: usize = 10_000;
 const MERGE_MAX_SOURCE_REPORTS: usize = 500;
+const MERGE_MAX_RUNS: usize = 2_000;
 
 #[derive(Subcommand)]
 pub enum ReportCommands {
@@ -306,6 +307,12 @@ async fn merge_reports(
             if seen_run_ids.insert(run_id.clone()) {
                 run_ids.push(run_id.clone());
             }
+        }
+        if run_ids.len() > MERGE_MAX_RUNS {
+            anyhow::bail!(
+                "the selected reports span more than {MERGE_MAX_RUNS} runs; a merged report \
+                 cannot hold more than that"
+            );
         }
 
         let mut simulation_ids: Vec<String> = Vec::new();
