@@ -12,9 +12,9 @@ opens or updates a PR only when coverage actually changes.
 | --- | ---: |
 | Reconciliation status | PASS |
 | Published operations | 174 |
-| First-class CLI operations | 117 |
-| Reviewed gaps | 57 |
-| Client operations | 125 |
+| First-class CLI operations | 118 |
+| Reviewed gaps | 56 |
+| Client operations | 126 |
 
 Catalog: https://api.coval.dev/v1/openapi
 
@@ -72,7 +72,6 @@ Catalog: https://api.coval.dev/v1/openapi
 - `GET /organization/monitoring-metrics`
 - `GET /personas/tags`
 - `GET /personas/{persona_id}/versions`
-- `GET /reports/{report_id}/rows`
 - `GET /review-annotations/metric-health-stats`
 - `GET /review-projects/{project_id}/insights`
 - `GET /review-projects/{project_id}/metric-agreement`
