@@ -20,6 +20,10 @@ const MERGE_DIMENSION_ID: &str = "merged-reports";
 const MERGE_DIMENSION_NAME: &str = "Report";
 const MERGE_ROWS_PAGE_SIZE: u32 = 500;
 const MERGE_MAX_PAGES_PER_REPORT: usize = 200;
+/// Mirrors the API's per-group `simulation_ids` and per-dimension `groups` ceilings.
+/// Checked client-side so an oversized merge fails before paging the whole source.
+const MERGE_MAX_SIMULATIONS_PER_GROUP: usize = 10_000;
+const MERGE_MAX_SOURCE_REPORTS: usize = 500;
 
 #[derive(Subcommand)]
 pub enum ReportCommands {
@@ -284,6 +288,12 @@ async fn merge_reports(
     if args.report_ids.len() < 2 {
         anyhow::bail!("--report-ids requires at least two report IDs to merge");
     }
+    if args.report_ids.len() > MERGE_MAX_SOURCE_REPORTS {
+        anyhow::bail!(
+            "--report-ids has {} reports; a merged report holds at most {MERGE_MAX_SOURCE_REPORTS} groups",
+            args.report_ids.len()
+        );
+    }
 
     let mut seen_simulation_ids = HashSet::new();
     let mut seen_run_ids = HashSet::new();
@@ -316,6 +326,14 @@ async fn merge_reports(
                 if seen_simulation_ids.insert(row.simulation_id.clone()) {
                     simulation_ids.push(row.simulation_id);
                 }
+            }
+            // Checked per page so an oversized source stops here instead of paging to the
+            // ceiling and then having the create rejected.
+            if simulation_ids.len() > MERGE_MAX_SIMULATIONS_PER_GROUP {
+                anyhow::bail!(
+                    "report {report_id} contributes more than {MERGE_MAX_SIMULATIONS_PER_GROUP} \
+                     simulations; a merged report's group cannot hold more than that"
+                );
             }
             match page.next_page_token {
                 Some(token) => cursor = Some(token),
@@ -369,26 +387,61 @@ async fn merge_reports(
     Ok(client.reports().create(request).await?)
 }
 
-/// Validate the custom_dimensions / compare_by pairing before sending.
+/// Validate the custom_dimensions / custom_dimension_id / compare_by pairing before sending.
 ///
-/// The API requires `custom_dimensions` when `compare_by` is custom and rejects it
-/// otherwise. Only `--input-json` can carry them on `reports create`; `reports merge`
-/// assembles them itself.
+/// The API requires `custom_dimensions` when `compare_by` is custom and rejects both it and
+/// `custom_dimension_id` otherwise. Only `--input-json` can carry them on `reports create`;
+/// `reports merge` assembles them itself.
 fn validate_custom_dimensions(input: &serde_json::Map<String, serde_json::Value>) -> Result<()> {
     let is_custom = input.get("compare_by").and_then(serde_json::Value::as_str) == Some("custom");
     // An explicit null deserializes to None, so it counts as absent rather than as a value.
-    let has_custom_dimensions = input
+    let custom_dimensions = input
         .get("custom_dimensions")
-        .is_some_and(|value| !value.is_null());
+        .filter(|value| !value.is_null());
+    let custom_dimension_id = input
+        .get("custom_dimension_id")
+        .filter(|value| !value.is_null());
 
-    if is_custom && !has_custom_dimensions {
+    if !is_custom {
+        if custom_dimensions.is_some() {
+            anyhow::bail!("custom_dimensions can only be set when --compare-by is custom");
+        }
+        if custom_dimension_id.is_some() {
+            anyhow::bail!("custom_dimension_id can only be set when --compare-by is custom");
+        }
+        return Ok(());
+    }
+
+    let Some(custom_dimensions) = custom_dimensions else {
         anyhow::bail!(
             "custom_dimensions is required when --compare-by is custom; use `coval reports merge` \
              to build them from existing reports"
         );
-    }
-    if !is_custom && has_custom_dimensions {
-        anyhow::bail!("custom_dimensions can only be set when --compare-by is custom");
+    };
+    validate_custom_dimension_id_target(custom_dimensions, custom_dimension_id)
+}
+
+/// Check that a supplied custom_dimension_id names one of the supplied dimensions.
+///
+/// The API defaults the grouping to the first dimension, so an absent ID is valid. Shapes
+/// serde will reject anyway are passed through so the type error survives this check.
+fn validate_custom_dimension_id_target(
+    custom_dimensions: &serde_json::Value,
+    custom_dimension_id: Option<&serde_json::Value>,
+) -> Result<()> {
+    let (Some(dimension_id), Some(dimensions)) = (
+        custom_dimension_id.and_then(serde_json::Value::as_str),
+        custom_dimensions.as_array(),
+    ) else {
+        return Ok(());
+    };
+    let names_a_dimension = dimensions.iter().any(|dimension| {
+        dimension.get("id").and_then(serde_json::Value::as_str) == Some(dimension_id)
+    });
+    if !names_a_dimension {
+        anyhow::bail!(
+            "custom_dimension_id {dimension_id} does not match the id of any supplied custom dimension"
+        );
     }
     Ok(())
 }

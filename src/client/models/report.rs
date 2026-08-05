@@ -70,6 +70,8 @@ pub struct ReportCustomDimension {
     pub id: String,
     pub name: String,
     pub groups: Vec<ReportCustomDimensionGroup>,
+    /// The API defaults this to false, so an input payload may omit it.
+    #[serde(default)]
     pub hide_unassigned: bool,
 }
 
