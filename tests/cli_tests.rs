@@ -23,6 +23,17 @@ impl Match for BodyExcludes {
     }
 }
 
+struct QueryParamAbsent(&'static str);
+
+impl Match for QueryParamAbsent {
+    fn matches(&self, request: &Request) -> bool {
+        !request
+            .url
+            .query_pairs()
+            .any(|(key, _)| key.as_ref() == self.0)
+    }
+}
+
 fn write_skill(root: &std::path::Path, id: &str, description: &str) {
     let skill_dir = root.join("skills").join(id);
     std::fs::create_dir_all(&skill_dir).unwrap();
@@ -3832,6 +3843,639 @@ fn test_reports_create_metadata_key_rejected_without_metadata_compare_by() {
         .failure()
         .stderr(predicate::str::contains(
             "can only be set when --compare-by is metadata",
+        ));
+}
+
+#[tokio::test]
+async fn test_reports_rows_forwards_paging_and_filters() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/reports/01HXXXXXXXXXXXXXXXXXXXXXXX/rows"))
+        .and(header("X-API-Key", "test_key"))
+        .and(query_param("cursor", "500"))
+        .and(query_param("limit", "50"))
+        .and(query_param("metric_ids", "metric1,metric2"))
+        .and(query_param("simulation_output_ids", "sim1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "rows": [
+                {
+                    "simulation_id": "sim1",
+                    "run_id": "run1",
+                    "agent_id": "agent1",
+                    "persona_id": "persona1",
+                    "status": null,
+                    "metrics": []
+                }
+            ],
+            "next_page_token": null
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("rows")
+        .arg("01HXXXXXXXXXXXXXXXXXXXXXXX")
+        .arg("--cursor")
+        .arg("500")
+        .arg("--limit")
+        .arg("50")
+        .arg("--metric-ids")
+        .arg("metric1,metric2")
+        .arg("--simulation-ids")
+        .arg("sim1")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("sim1"));
+}
+
+async fn mount_merge_source(
+    mock_server: &MockServer,
+    report_id: &str,
+    name: &str,
+    run_ids: Value,
+    row_pages: Vec<(Option<&str>, Value, Option<&str>)>,
+) {
+    Mock::given(method("GET"))
+        .and(path(format!("/v1/reports/{report_id}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "report": {
+                "id": report_id,
+                "name": name,
+                "run_ids": run_ids,
+                "compare_by": "none",
+                "permissions": "PRIVATE"
+            }
+        })))
+        .mount(mock_server)
+        .await;
+
+    for (cursor, rows, next_page_token) in row_pages {
+        let mock = Mock::given(method("GET"))
+            .and(path(format!("/v1/reports/{report_id}/rows")))
+            .and(query_param("limit", "500"));
+        let mock = match cursor {
+            Some(cursor) => mock.and(query_param("cursor", cursor)),
+            None => mock.and(QueryParamAbsent("cursor")),
+        };
+        mock.respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "rows": rows,
+            "next_page_token": next_page_token
+        })))
+        .mount(mock_server)
+        .await;
+    }
+}
+
+#[tokio::test]
+async fn test_reports_merge_builds_one_group_per_source_report() {
+    let mock_server = MockServer::start().await;
+
+    mount_merge_source(
+        &mock_server,
+        "01HAAAAAAAAAAAAAAAAAAAAAAA",
+        "Baseline",
+        json!(["run1", "run2"]),
+        vec![
+            (
+                None,
+                json!([{"simulation_id": "sim1", "run_id": "run1"}]),
+                Some("500"),
+            ),
+            (
+                Some("500"),
+                json!([{"simulation_id": "sim2", "run_id": "run2"}]),
+                None,
+            ),
+        ],
+    )
+    .await;
+
+    // sim2 is in both reports; first-seen attribution keeps it in the Baseline group only.
+    mount_merge_source(
+        &mock_server,
+        "01HBBBBBBBBBBBBBBBBBBBBBBB",
+        "Candidate",
+        json!(["run2", "run3"]),
+        vec![(
+            None,
+            json!([
+                {"simulation_id": "sim2", "run_id": "run2"},
+                {"simulation_id": "sim3", "run_id": "run3"}
+            ]),
+            None,
+        )],
+    )
+    .await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/reports"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "name": "Q3 Scorecard",
+            "run_ids": ["run1", "run2", "run3"],
+            "compare_by": "custom",
+            "view_mode": "grouped",
+            "custom_dimension_id": "merged-reports",
+            "custom_dimensions": [{
+                "id": "merged-reports",
+                "name": "Report",
+                "hide_unassigned": false,
+                "groups": [
+                    {
+                        "id": "01HAAAAAAAAAAAAAAAAAAAAAAA",
+                        "name": "Baseline",
+                        "simulation_ids": ["sim1", "sim2"]
+                    },
+                    {
+                        "id": "01HBBBBBBBBBBBBBBBBBBBBBBB",
+                        "name": "Candidate",
+                        "simulation_ids": ["sim3"]
+                    }
+                ]
+            }]
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "report": {
+                "id": "01HMERGEDMERGEDMERGEDMERGE",
+                "name": "Q3 Scorecard",
+                "run_ids": ["run1", "run2", "run3"],
+                "compare_by": "custom",
+                "custom_dimension_id": "merged-reports",
+                "permissions": "PRIVATE"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("merge")
+        .arg("--name")
+        .arg("Q3 Scorecard")
+        .arg("--report-ids")
+        .arg("01HAAAAAAAAAAAAAAAAAAAAAAA,01HBBBBBBBBBBBBBBBBBBBBBBB")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("01HMERGEDMERGEDMERGEDMERGE"));
+}
+
+#[test]
+fn test_reports_merge_requires_two_reports() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("merge")
+        .arg("--name")
+        .arg("Q3 Scorecard")
+        .arg("--report-ids")
+        .arg("01HAAAAAAAAAAAAAAAAAAAAAAA")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("requires at least two report IDs"));
+}
+
+#[test]
+fn test_reports_merge_rejects_duplicate_report_ids() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("merge")
+        .arg("--name")
+        .arg("Q3 Scorecard")
+        .arg("--report-ids")
+        .arg("01HAAAAAAAAAAAAAAAAAAAAAAA,01HAAAAAAAAAAAAAAAAAAAAAAA")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("ids must be distinct"));
+}
+
+#[test]
+fn test_reports_create_custom_requires_custom_dimensions() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Bad Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("custom")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("custom_dimensions is required"));
+}
+
+#[test]
+fn test_reports_create_custom_dimensions_rejected_without_custom_compare_by() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Bad Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("agent")
+        .arg("--input-json")
+        .arg(r#"{"custom_dimensions": [{"id": "d1", "name": "Report", "groups": [], "hide_unassigned": false}]}"#)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "custom_dimensions can only be set when --compare-by is custom",
+        ));
+}
+
+#[test]
+fn test_reports_create_custom_rejects_null_custom_dimensions() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Bad Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("custom")
+        .arg("--input-json")
+        .arg(r#"{"custom_dimensions": null}"#)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("custom_dimensions is required"));
+}
+
+#[test]
+fn test_reports_create_allows_null_custom_dimensions_without_custom_compare_by() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("agent")
+        .arg("--input-json")
+        .arg(r#"{"custom_dimensions": null}"#)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("custom_dimensions can only be set").not());
+}
+
+/// Mount a merge source whose rows page out to `total` distinct simulations, 500 per page.
+async fn mount_merge_source_with_simulations(
+    mock_server: &MockServer,
+    report_id: &str,
+    name: &str,
+    total: usize,
+) {
+    Mock::given(method("GET"))
+        .and(path(format!("/v1/reports/{report_id}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "report": {
+                "id": report_id,
+                "name": name,
+                "run_ids": ["run1"],
+                "compare_by": "none",
+                "permissions": "PRIVATE"
+            }
+        })))
+        .mount(mock_server)
+        .await;
+
+    let mut emitted = 0usize;
+    while emitted < total {
+        let count = (total - emitted).min(500);
+        let rows: Vec<Value> = (emitted..emitted + count)
+            .map(|index| json!({"simulation_id": format!("{report_id}-sim{index}"), "run_id": "run1"}))
+            .collect();
+        let mock = Mock::given(method("GET"))
+            .and(path(format!("/v1/reports/{report_id}/rows")))
+            .and(query_param("limit", "500"));
+        let mock = if emitted == 0 {
+            mock.and(QueryParamAbsent("cursor"))
+        } else {
+            mock.and(query_param("cursor", emitted.to_string()))
+        };
+        emitted += count;
+        let next_page_token = (emitted < total).then(|| emitted.to_string());
+        mock.respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "rows": rows,
+            "next_page_token": next_page_token
+        })))
+        .mount(mock_server)
+        .await;
+    }
+}
+
+#[tokio::test]
+async fn test_reports_merge_rejects_a_source_over_the_simulation_cap() {
+    let mock_server = MockServer::start().await;
+
+    // 10,001 crosses the API's 10,000-per-group ceiling on the final page. No POST is
+    // mounted, so the asserted message is what distinguishes the guard from a stray 404.
+    mount_merge_source_with_simulations(
+        &mock_server,
+        "01HAAAAAAAAAAAAAAAAAAAAAAA",
+        "Baseline",
+        10_001,
+    )
+    .await;
+    mount_merge_source_with_simulations(&mock_server, "01HBBBBBBBBBBBBBBBBBBBBBBB", "Candidate", 1)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("merge")
+        .arg("--name")
+        .arg("Too Big")
+        .arg("--report-ids")
+        .arg("01HAAAAAAAAAAAAAAAAAAAAAAA,01HBBBBBBBBBBBBBBBBBBBBBBB")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "contributes more than 10000 simulations",
+        ));
+}
+
+#[tokio::test]
+async fn test_reports_merge_allows_a_source_at_the_simulation_cap() {
+    let mock_server = MockServer::start().await;
+
+    mount_merge_source_with_simulations(
+        &mock_server,
+        "01HAAAAAAAAAAAAAAAAAAAAAAA",
+        "Baseline",
+        10_000,
+    )
+    .await;
+    mount_merge_source_with_simulations(&mock_server, "01HBBBBBBBBBBBBBBBBBBBBBBB", "Candidate", 1)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/reports"))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "report": {
+                "id": "01HMERGEDMERGEDMERGEDMERGE",
+                "name": "At The Cap",
+                "run_ids": ["run1"],
+                "compare_by": "custom",
+                "custom_dimension_id": "merged-reports",
+                "permissions": "PRIVATE"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("merge")
+        .arg("--name")
+        .arg("At The Cap")
+        .arg("--report-ids")
+        .arg("01HAAAAAAAAAAAAAAAAAAAAAAA,01HBBBBBBBBBBBBBBBBBBBBBBB")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("01HMERGEDMERGEDMERGEDMERGE"));
+}
+
+#[tokio::test]
+async fn test_reports_merge_rejects_sources_over_the_run_cap() {
+    let mock_server = MockServer::start().await;
+
+    // 2,001 distinct runs across two sources crosses the create request's run_ids ceiling.
+    for (report_id, name, range) in [
+        ("01HAAAAAAAAAAAAAAAAAAAAAAA", "Baseline", 0..2_000),
+        ("01HBBBBBBBBBBBBBBBBBBBBBBB", "Candidate", 2_000..2_001),
+    ] {
+        let run_ids: Vec<Value> = range.map(|index| json!(format!("run{index}"))).collect();
+        Mock::given(method("GET"))
+            .and(path(format!("/v1/reports/{report_id}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "report": {
+                    "id": report_id,
+                    "name": name,
+                    "run_ids": run_ids,
+                    "compare_by": "none",
+                    "permissions": "PRIVATE"
+                }
+            })))
+            .mount(&mock_server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path(format!("/v1/reports/{report_id}/rows")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "rows": [{"simulation_id": format!("{report_id}-sim"), "run_id": "run0"}],
+                "next_page_token": null
+            })))
+            .mount(&mock_server)
+            .await;
+    }
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("merge")
+        .arg("--name")
+        .arg("Too Many Runs")
+        .arg("--report-ids")
+        .arg("01HAAAAAAAAAAAAAAAAAAAAAAA,01HBBBBBBBBBBBBBBBBBBBBBBB")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("span more than 2000 runs"));
+}
+
+#[test]
+fn test_reports_merge_rejects_more_reports_than_the_group_cap() {
+    let report_ids: Vec<String> = (0..501).map(|index| format!("01H{index:023}")).collect();
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("merge")
+        .arg("--name")
+        .arg("Too Many")
+        .arg("--report-ids")
+        .arg(report_ids.join(","))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("at most 500 groups"));
+}
+
+#[tokio::test]
+async fn test_reports_create_custom_dimension_defaults_hide_unassigned() {
+    let mock_server = MockServer::start().await;
+
+    // hide_unassigned is omitted from the input and custom_dimension_id names d1, so this
+    // covers both the serde default and the membership check's accepting path.
+    Mock::given(method("POST"))
+        .and(path("/v1/reports"))
+        .and(body_partial_json(json!({
+            "compare_by": "custom",
+            "custom_dimension_id": "d1",
+            "custom_dimensions": [{
+                "id": "d1",
+                "name": "Report",
+                "hide_unassigned": false,
+                "groups": [{"id": "g1", "name": "A", "simulation_ids": ["sim1"]}]
+            }]
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "report": {
+                "id": "01HCUSTOMCUSTOMCUSTOMCUSTO",
+                "name": "Custom Report",
+                "run_ids": ["run1"],
+                "compare_by": "custom",
+                "custom_dimension_id": "d1",
+                "permissions": "PRIVATE"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Custom Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("custom")
+        .arg("--input-json")
+        .arg(
+            r#"{"custom_dimension_id": "d1", "custom_dimensions": [{"id": "d1", "name": "Report", "groups": [{"id": "g1", "name": "A", "simulation_ids": ["sim1"]}]}]}"#,
+        )
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("01HCUSTOMCUSTOMCUSTOMCUSTO"));
+}
+
+#[test]
+fn test_reports_create_custom_dimension_id_rejected_without_custom_compare_by() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Bad Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("agent")
+        .arg("--input-json")
+        .arg(r#"{"custom_dimension_id": "d1"}"#)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "custom_dimension_id can only be set when --compare-by is custom",
+        ));
+}
+
+#[test]
+fn test_reports_create_allows_null_custom_dimension_id_without_custom_compare_by() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("agent")
+        .arg("--input-json")
+        .arg(r#"{"custom_dimension_id": null}"#)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("custom_dimension_id can only be set").not());
+}
+
+#[test]
+fn test_reports_create_reports_a_malformed_dimension_as_a_type_error() {
+    // The dimension has no id, so the membership check defers and serde names the real fault
+    // rather than blaming custom_dimension_id.
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Bad Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("custom")
+        .arg("--input-json")
+        .arg(
+            r#"{"custom_dimension_id": "d1", "custom_dimensions": [{"name": "Report", "groups": []}]}"#,
+        )
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("missing field `id`")
+                .and(predicate::str::contains("does not match the id").not()),
+        );
+}
+
+#[test]
+fn test_reports_create_custom_dimension_id_must_name_a_supplied_dimension() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Bad Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("custom")
+        .arg("--input-json")
+        .arg(
+            r#"{"custom_dimension_id": "missing", "custom_dimensions": [{"id": "d1", "name": "Report", "groups": [], "hide_unassigned": false}]}"#,
+        )
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "custom_dimension_id missing does not match the id of any supplied custom dimension",
         ));
 }
 

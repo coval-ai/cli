@@ -1200,6 +1200,33 @@ impl ReportsClient<'_> {
         let url = self.0.url(&format!("/v1/reports/{id}"));
         self.0.delete(url).await
     }
+
+    pub async fn rows(
+        &self,
+        id: &str,
+        cursor: Option<&str>,
+        limit: Option<u32>,
+        metric_ids: Option<&str>,
+        simulation_output_ids: Option<&str>,
+    ) -> Result<models::ListReportRowsResponse, ApiError> {
+        let mut url = self.0.url(&format!("/v1/reports/{id}/rows"));
+        {
+            let mut pairs = url.query_pairs_mut();
+            if let Some(cursor) = cursor {
+                pairs.append_pair("cursor", cursor);
+            }
+            if let Some(limit) = limit {
+                pairs.append_pair("limit", &limit.to_string());
+            }
+            if let Some(metric_ids) = metric_ids {
+                pairs.append_pair("metric_ids", metric_ids);
+            }
+            if let Some(simulation_output_ids) = simulation_output_ids {
+                pairs.append_pair("simulation_output_ids", simulation_output_ids);
+            }
+        }
+        self.0.get(url).await
+    }
 }
 
 impl WidgetsClient<'_> {
