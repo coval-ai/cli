@@ -466,7 +466,10 @@ fn validate_custom_dimension_id_target(
 fn validate_metadata_key(input: &serde_json::Map<String, serde_json::Value>) -> Result<()> {
     let is_metadata =
         input.get("compare_by").and_then(serde_json::Value::as_str) == Some("metadata");
-    let has_metadata_key = input.contains_key("metadata_key");
+    // An explicit null deserializes to None, so it is absent, not supplied.
+    let has_metadata_key = input
+        .get("metadata_key")
+        .is_some_and(|value| !value.is_null());
 
     if is_metadata && !has_metadata_key {
         anyhow::bail!("--metadata-key is required when --compare-by is metadata");

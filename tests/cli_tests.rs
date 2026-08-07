@@ -3846,6 +3846,71 @@ fn test_reports_create_metadata_key_rejected_without_metadata_compare_by() {
         ));
 }
 
+#[test]
+fn test_reports_create_metadata_rejects_null_metadata_key() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Bad Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("metadata")
+        .arg("--input-json")
+        .arg(r#"{"metadata_key": null}"#)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--metadata-key is required"));
+}
+
+#[tokio::test]
+async fn test_reports_create_allows_null_metadata_key_without_metadata_compare_by() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/reports"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "name": "Report",
+            "run_ids": ["run1"],
+            "compare_by": "run"
+        })))
+        .and(BodyExcludes("metadata_key"))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "report": {
+                "id": "01HXXXXXXXXXXXXXXXXXXXXXXX",
+                "name": "Report",
+                "run_ids": ["run1"],
+                "compare_by": "run",
+                "permissions": "PRIVATE"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Report")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--compare-by")
+        .arg("run")
+        .arg("--input-json")
+        .arg(r#"{"metadata_key": null}"#)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("--metadata-key can only be set").not());
+}
+
 #[tokio::test]
 async fn test_reports_rows_forwards_paging_and_filters() {
     let mock_server = MockServer::start().await;
