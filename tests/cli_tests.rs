@@ -3855,11 +3855,36 @@ fn test_reports_create_metadata_rejects_null_metadata_key() {
         .stderr(predicate::str::contains("--metadata-key is required"));
 }
 
-#[test]
-fn test_reports_create_allows_null_metadata_key_without_metadata_compare_by() {
+#[tokio::test]
+async fn test_reports_create_allows_null_metadata_key_without_metadata_compare_by() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/reports"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "name": "Report",
+            "run_ids": ["run1"],
+            "compare_by": "run"
+        })))
+        .and(BodyExcludes("metadata_key"))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "report": {
+                "id": "01HXXXXXXXXXXXXXXXXXXXXXXX",
+                "name": "Report",
+                "run_ids": ["run1"],
+                "compare_by": "run",
+                "permissions": "PRIVATE"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
     coval()
         .arg("--api-key")
         .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
         .arg("reports")
         .arg("create")
         .arg("--name")
@@ -3871,7 +3896,7 @@ fn test_reports_create_allows_null_metadata_key_without_metadata_compare_by() {
         .arg("--input-json")
         .arg(r#"{"metadata_key": null}"#)
         .assert()
-        .failure()
+        .success()
         .stderr(predicate::str::contains("--metadata-key can only be set").not());
 }
 
