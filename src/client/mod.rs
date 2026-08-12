@@ -704,6 +704,12 @@ impl MetricsClient<'_> {
         Ok(resp.metric)
     }
 
+    pub async fn duplicate(&self, id: &str) -> Result<models::Metric, ApiError> {
+        let url = self.0.url(&format!("/v1/metrics/{id}/duplicate"));
+        let resp: models::GetMetricResponse = self.0.post_empty(url).await?;
+        Ok(resp.metric)
+    }
+
     pub async fn update(
         &self,
         id: &str,

@@ -11,10 +11,10 @@ opens or updates a PR only when coverage actually changes.
 | Metric | Value |
 | --- | ---: |
 | Reconciliation status | PASS |
-| Published operations | 174 |
-| First-class CLI operations | 118 |
+| Published operations | 175 |
+| First-class CLI operations | 119 |
 | Reviewed gaps | 56 |
-| Client operations | 126 |
+| Client operations | 127 |
 
 Catalog: https://api.coval.dev/v1/openapi
 

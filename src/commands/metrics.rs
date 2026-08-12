@@ -17,6 +17,7 @@ pub enum MetricCommands {
     List(ListArgs),
     Get(GetArgs),
     Create(Box<CreateArgs>),
+    Duplicate(DuplicateArgs),
     Update(Box<UpdateArgs>),
     Delete(DeleteArgs),
     Test(TestArgs),
@@ -60,6 +61,7 @@ impl MetricCommands {
             Self::List(_) => "list",
             Self::Get(_) => "get",
             Self::Create(_) => "create",
+            Self::Duplicate(_) => "duplicate",
             Self::Update(_) => "update",
             Self::Delete(_) => "delete",
             Self::Test(_) => "test",
@@ -100,6 +102,12 @@ pub struct ListArgs {
 
 #[derive(Args)]
 pub struct GetArgs {
+    metric_id: String,
+}
+
+#[derive(Args)]
+pub struct DuplicateArgs {
+    /// ID of the metric to duplicate
     metric_id: String,
 }
 
@@ -424,6 +432,16 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
             validate_composite(&input)?;
             let req: CreateMetricRequest = input_json::finish(input)?;
             let metric = client.metrics().create(req).await?;
+            emit_one_with_actions(
+                ctx,
+                "metrics",
+                operation,
+                &metric,
+                next_actions::item_result("metrics", &metric.id),
+            );
+        }
+        MetricCommands::Duplicate(args) => {
+            let metric = client.metrics().duplicate(&args.metric_id).await?;
             emit_one_with_actions(
                 ctx,
                 "metrics",

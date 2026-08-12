@@ -3480,6 +3480,39 @@ async fn test_metrics_create_composite_test_case() {
         .stdout(predicate::str::contains("comp1"));
 }
 
+#[tokio::test]
+async fn test_metrics_duplicate() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/metrics/met_source/duplicate"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "metric": {
+                "name": "metrics/met_copy",
+                "id": "met_copy",
+                "metric_name": "Copied metric",
+                "description": "A duplicated metric",
+                "metric_type": "METRIC_LLM",
+                "create_time": "2026-08-12T12:00:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("metrics")
+        .arg("duplicate")
+        .arg("met_source")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("met_copy"));
+}
+
 #[test]
 fn test_metrics_create_composite_test_case_requires_criteria_path() {
     coval()

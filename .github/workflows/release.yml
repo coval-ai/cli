@@ -43,6 +43,24 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Verify Homebrew publishing credential
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN is missing or empty."
+            exit 1
+          fi
+          if ! can_push="$(gh api repos/coval-ai/homebrew-tap --jq '.permissions.push // false')"; then
+            echo "::error::HOMEBREW_TAP_TOKEN could not access coval-ai/homebrew-tap."
+            exit 1
+          fi
+          if [ "$can_push" != "true" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN cannot push to coval-ai/homebrew-tap. Replace it with a token that has Contents read/write access."
+            exit 1
+          fi
+
       - name: Match Cargo manifests and release tag
         run: python scripts/release_version.py --expected-tag "$RELEASE_TAG"
 

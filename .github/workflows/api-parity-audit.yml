@@ -45,6 +45,15 @@ jobs:
       - name: Test the audit
         run: python -m unittest scripts/test_audit_api_coverage.py
 
+      - name: Verify rolling PR credential
+        env:
+          REGEN_PR_TOKEN: ${{ secrets.REGEN_PR_TOKEN }}
+        run: |
+          if [ -z "$REGEN_PR_TOKEN" ]; then
+            echo "::error::REGEN_PR_TOKEN is missing or empty. Replace it with a token that has Contents and Pull requests read/write access to coval-ai/cli, then rerun this workflow. A secret name in repository settings does not prove that Actions receives a value."
+            exit 1
+          fi
+
       - name: Refresh the deterministic parity report
         run: >-
           python scripts/audit_api_coverage.py

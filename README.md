@@ -10,11 +10,14 @@ Command-line interface for the [Coval](https://coval.dev) AI evaluation platform
 brew install coval-ai/tap/coval
 ```
 
-### Cargo
+### Build from source
 
 ```bash
-cargo install coval
+cargo install --git https://github.com/coval-ai/cli --locked
 ```
+
+The CLI is not currently published to crates.io. Official versioned artifacts
+are the GitHub release binaries and the `coval-ai/tap/coval` Homebrew formula.
 
 ### Binary
 
@@ -221,6 +224,40 @@ until the command implementation or an explicitly reviewed manifest exception
 reconciles the drift. A GitHub issue is used only if the automation itself
 fails before it can create or update that PR.
 
+The schedule is Monday 2:00 AM PST (10:00 UTC; 3:00 AM during daylight saving
+time). GitHub Actions schedules can start later during busy periods. The audit
+compares the live public OpenAPI catalog with the checked-in manifest and
+first-class Rust command surface. It does not synthesize command UX or publish
+a CLI release. A maintainer must implement newly reported commands, regenerate
+the report, include the appropriate version bump, and merge the green PR.
+
+To run or recover the workflow:
+
+```bash
+# Run the same audit locally.
+python3 -m venv .venv
+.venv/bin/python -m pip install --requirement scripts/requirements-audit.txt
+.venv/bin/python -m unittest scripts/test_audit_api_coverage.py
+.venv/bin/python scripts/audit_api_coverage.py \
+  --write-markdown api-coverage-report.md
+
+# Confirm the secret record and recent runs. This cannot verify the secret value.
+gh secret list --repo coval-ai/cli
+gh run list --repo coval-ai/cli --workflow api-parity-audit.yml --limit 5
+
+# Replace a missing, empty, expired, or revoked token without putting it in shell history.
+gh secret set REGEN_PR_TOKEN --repo coval-ai/cli
+
+# Prove the replacement by dispatching the workflow and inspecting the run.
+gh workflow run api-parity-audit.yml --repo coval-ai/cli --ref main
+gh run watch --repo coval-ai/cli --exit-status
+```
+
+`REGEN_PR_TOKEN` must be a fine-grained token limited to `coval-ai/cli` with
+Contents and Pull requests read/write access. A visible secret name is not
+proof that its stored value is non-empty or usable; only a successful workflow
+run proves that. Do not print the token or pass it as a command-line argument.
+
 The SDK regeneration workflow can open deterministic codegen PRs because its
 published clients are generated from OpenAPI. The CLI command surface is still
 hand-written, so this repository does not present an automated audit as command
@@ -244,6 +281,41 @@ python3 scripts/bump_version.py minor
 # Backward-compatible fixes
 python3 scripts/bump_version.py patch
 ```
+
+Publishing a new version:
+
+1. Include the version bump in the implementation PR. Use `minor` for new
+   first-class commands and `patch` for backward-compatible fixes.
+2. Run `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
+   `cargo test`, and the API coverage commands above. Confirm that
+   `Cargo.toml`, `Cargo.lock`, and `api-coverage-report.md` are all updated.
+3. Merge only after current-head CI and review are green. The successful CI run
+   for that exact `main` commit triggers `Release on version bump`.
+4. Verify the `v*` tag, all five binary artifacts, `SHA256SUMS`, and the GitHub
+   release. Then verify that `coval-ai/homebrew-tap` contains the same version
+   and that `brew update && brew upgrade coval-ai/tap/coval` installs it.
+
+If the automatic release needs a retry, dispatch `Release on version bump` from
+the `main` branch. It reuses an existing matching tag safely. Do not hand-create
+a tag unless intentionally using the lower-level `Release` workflow; a tag must
+exactly match the Cargo version, and the lower-level workflow still requires
+all release credentials. A successful GitHub release is not complete publishing
+proof until the Homebrew formula reports the same version.
+
+To recover Homebrew publishing, replace the token interactively, dispatch the
+retry from `main`, and verify both destinations:
+
+```bash
+gh secret set HOMEBREW_TAP_TOKEN --repo coval-ai/cli
+gh workflow run release-on-version-bump.yml --repo coval-ai/cli --ref main
+gh release view --repo coval-ai/cli
+gh api -H 'Accept: application/vnd.github.raw+json' \
+  repos/coval-ai/homebrew-tap/contents/Formula/coval.rb | grep 'version '
+```
+
+The release validation checks that `HOMEBREW_TAP_TOKEN` can push to
+`coval-ai/homebrew-tap` before building artifacts. As with `REGEN_PR_TOKEN`, a
+secret record alone does not prove that the credential is present or authorized.
 
 The release workflow validates tag/version consistency, builds all five target
 binaries, creates or updates the GitHub release, and updates
