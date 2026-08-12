@@ -248,9 +248,16 @@ gh run list --repo coval-ai/cli --workflow api-parity-audit.yml --limit 5
 # Replace a missing, empty, expired, or revoked token without putting it in shell history.
 gh secret set REGEN_PR_TOKEN --repo coval-ai/cli
 
-# Prove the replacement by dispatching the workflow and inspecting the run.
-gh workflow run api-parity-audit.yml --repo coval-ai/cli --ref main
-gh run watch --repo coval-ai/cli --exit-status
+# Prove the replacement by dispatching and watching that exact workflow run.
+run_id="$(
+  gh api repos/coval-ai/cli/actions/workflows/api-parity-audit.yml/dispatches \
+    --method POST \
+    -H 'X-GitHub-Api-Version: 2026-03-10' \
+    -F ref=main \
+    -F return_run_details=true \
+    --jq '.workflow_run_id'
+)"
+gh run watch "$run_id" --repo coval-ai/cli --exit-status
 ```
 
 `REGEN_PR_TOKEN` must be a fine-grained token limited to `coval-ai/cli` with
@@ -307,10 +314,21 @@ retry from `main`, and verify both destinations:
 
 ```bash
 gh secret set HOMEBREW_TAP_TOKEN --repo coval-ai/cli
-gh workflow run release-on-version-bump.yml --repo coval-ai/cli --ref main
-gh release view --repo coval-ai/cli
+expected_tag="$(python3 scripts/release_version.py)"
+expected_version="${expected_tag#v}"
+run_id="$(
+  gh api repos/coval-ai/cli/actions/workflows/release-on-version-bump.yml/dispatches \
+    --method POST \
+    -H 'X-GitHub-Api-Version: 2026-03-10' \
+    -F ref=main \
+    -F return_run_details=true \
+    --jq '.workflow_run_id'
+)"
+gh run watch "$run_id" --repo coval-ai/cli --exit-status
+gh release view "$expected_tag" --repo coval-ai/cli
 gh api -H 'Accept: application/vnd.github.raw+json' \
-  repos/coval-ai/homebrew-tap/contents/Formula/coval.rb | grep 'version '
+  repos/coval-ai/homebrew-tap/contents/Formula/coval.rb | \
+  grep -F "version \"$expected_version\""
 ```
 
 The release validation checks that `HOMEBREW_TAP_TOKEN` can push to
