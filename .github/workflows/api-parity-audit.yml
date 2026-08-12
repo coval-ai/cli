@@ -61,51 +61,144 @@ jobs:
             --header "Accept: application/vnd.github+json"
             --header "X-GitHub-Api-Version: 2022-11-28"
           )
+          curl_options=(
+            --silent
+            --show-error
+            --connect-timeout 10
+            --max-time 30
+          )
+
+          github_api_status() {
+            local label="$1"
+            local response_headers="$2"
+            local response_body="$3"
+            local status
+            shift 3
+
+            if ! status="$(
+              curl "${curl_options[@]}" \
+                --dump-header "$response_headers" \
+                --output "$response_body" \
+                --write-out '%{http_code}' \
+                "${api_headers[@]}" \
+                "$@"
+            )"; then
+              echo "::error::$label could not reach GitHub within 30 seconds. Check GitHub availability and rerun the workflow." >&2
+              return 1
+            fi
+            printf '%s' "$status"
+          }
+
+          response_header() {
+            local response_headers="$1"
+            local header_name="$2"
+            awk -v header_name="$header_name" '
+              index(tolower($0), tolower(header_name) ":") == 1 {
+                sub(/^[^:]*:[[:space:]]*/, "")
+                sub(/\r$/, "")
+                value = $0
+              }
+              END { print value }
+            ' "$response_headers"
+          }
+
+          report_api_failure() {
+            local label="$1"
+            local required_access="$2"
+            local status="$3"
+            local response_headers="$4"
+            local response_body="$5"
+            local message remaining reset retry_after
+
+            message="$(
+              jq -r '(.message // "GitHub API request failed") | tostring | gsub("[\\r\\n]"; " ") | .[0:300]' \
+                "$response_body" 2>/dev/null || true
+            )"
+            message="${message:-GitHub API request failed}"
+            remaining="$(response_header "$response_headers" x-ratelimit-remaining)"
+            reset="$(response_header "$response_headers" x-ratelimit-reset)"
+            retry_after="$(response_header "$response_headers" retry-after)"
+
+            if [ "$status" = "429" ] || { [ "$status" = "403" ] && [ "$remaining" = "0" ]; }; then
+              echo "::error::$label was rate-limited by GitHub (HTTP $status; retry-after=${retry_after:-not supplied}; rate-limit-reset=${reset:-not supplied}). Rerun after the indicated limit resets. GitHub: $message"
+            elif [ "$status" = "401" ]; then
+              echo "::error::$label could not authenticate (HTTP 401). Replace the expired, revoked, or invalid REGEN_PR_TOKEN. GitHub: $message"
+            elif [ "$status" = "403" ]; then
+              echo "::error::$label was denied by repository or organization policy, or REGEN_PR_TOKEN lacks effective $required_access (HTTP 403). GitHub: $message"
+            elif [ "$status" = "404" ]; then
+              echo "::error::$label could not access coval-ai/cli (HTTP 404). Confirm the token is scoped to this repository and its owner can access it. GitHub: $message"
+            else
+              echo "::error::$label received an unexpected GitHub response (HTTP $status). GitHub: $message"
+            fi
+          }
 
           repo_response="$RUNNER_TEMP/regen-pr-repo.json"
-          repo_status="$(
-            curl --silent --show-error \
-              --output "$repo_response" \
-              --write-out '%{http_code}' \
-              "${api_headers[@]}" \
+          repo_headers="$RUNNER_TEMP/regen-pr-repo.headers"
+          if ! repo_status="$(
+            github_api_status \
+              "REGEN_PR_TOKEN repository check" \
+              "$repo_headers" \
+              "$repo_response" \
               https://api.github.com/repos/coval-ai/cli
-          )"
+          )"; then
+            exit 1
+          fi
           if [ "$repo_status" != "200" ]; then
-            echo "::error::REGEN_PR_TOKEN cannot authenticate to coval-ai/cli (HTTP $repo_status). Replace an expired, revoked, or incorrectly scoped token, then rerun this workflow."
+            report_api_failure \
+              "REGEN_PR_TOKEN repository check" \
+              "repository read access" \
+              "$repo_status" \
+              "$repo_headers" \
+              "$repo_response"
             exit 1
           fi
 
           # These deliberately invalid requests cannot create a ref or PR. GitHub
-          # returns 422 only after authorizing each write endpoint; 401/403 means
-          # the token is missing the corresponding repository permission.
+          # returns 422 only after authorizing each write endpoint.
           ref_response="$RUNNER_TEMP/regen-pr-ref-probe.json"
-          ref_status="$(
-            curl --silent --show-error \
+          ref_headers="$RUNNER_TEMP/regen-pr-ref-probe.headers"
+          if ! ref_status="$(
+            github_api_status \
+              "REGEN_PR_TOKEN Contents permission check" \
+              "$ref_headers" \
+              "$ref_response" \
               --request POST \
-              --output "$ref_response" \
-              --write-out '%{http_code}' \
-              "${api_headers[@]}" \
               --data '{"ref":"refs/heads/__coval_cli_permission_probe__","sha":"0000000000000000000000000000000000000000"}' \
               https://api.github.com/repos/coval-ai/cli/git/refs
-          )"
+          )"; then
+            exit 1
+          fi
           if [ "$ref_status" != "422" ]; then
-            echo "::error::REGEN_PR_TOKEN lacks effective Contents read/write access to coval-ai/cli (HTTP $ref_status)."
+            report_api_failure \
+              "REGEN_PR_TOKEN Contents permission check" \
+              "Contents read/write access" \
+              "$ref_status" \
+              "$ref_headers" \
+              "$ref_response"
             exit 1
           fi
 
           probe_suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           pr_response="$RUNNER_TEMP/regen-pr-pull-probe.json"
-          pr_status="$(
-            curl --silent --show-error \
+          pr_headers="$RUNNER_TEMP/regen-pr-pull-probe.headers"
+          if ! pr_status="$(
+            github_api_status \
+              "REGEN_PR_TOKEN Pull requests permission check" \
+              "$pr_headers" \
+              "$pr_response" \
               --request POST \
-              --output "$pr_response" \
-              --write-out '%{http_code}' \
-              "${api_headers[@]}" \
               --data "{\"title\":\"permission probe\",\"head\":\"__permission_probe_head_${probe_suffix}__\",\"base\":\"__permission_probe_base_${probe_suffix}__\"}" \
               https://api.github.com/repos/coval-ai/cli/pulls
-          )"
+          )"; then
+            exit 1
+          fi
           if [ "$pr_status" != "422" ]; then
-            echo "::error::REGEN_PR_TOKEN lacks effective Pull requests read/write access to coval-ai/cli (HTTP $pr_status)."
+            report_api_failure \
+              "REGEN_PR_TOKEN Pull requests permission check" \
+              "Pull requests read/write access" \
+              "$pr_status" \
+              "$pr_headers" \
+              "$pr_response"
             exit 1
           fi
 
