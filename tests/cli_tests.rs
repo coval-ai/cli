@@ -6,7 +6,9 @@ use wiremock::{Match, Mock, MockServer, Request, ResponseTemplate};
 
 fn coval() -> Command {
     #[allow(deprecated)]
-    Command::cargo_bin("coval").unwrap()
+    let mut command = Command::cargo_bin("coval").unwrap();
+    command.env("COVAL_NO_UPDATE_CHECK", "1");
+    command
 }
 
 fn stdout_json(assert: assert_cmd::assert::Assert) -> Value {
@@ -50,6 +52,24 @@ impl Match for BodyCapture {
         if let Ok(parsed) = serde_json::from_slice::<Value>(&request.body) {
             *self.body.lock().unwrap() = Some(parsed);
         }
+        true
+    }
+}
+
+#[derive(Clone, Default)]
+struct RequestCounter {
+    count: std::sync::Arc<std::sync::atomic::AtomicU32>,
+}
+
+impl RequestCounter {
+    fn count(&self) -> u32 {
+        self.count.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+impl Match for RequestCounter {
+    fn matches(&self, _request: &Request) -> bool {
+        self.count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         true
     }
 }
@@ -844,6 +864,156 @@ fn test_whoami_masks_unicode_api_key() {
         .assert()
         .success()
         .stdout(predicate::str::contains("🔑🔑🔑🔑...EFGH"));
+}
+
+fn update_check_env<'a>(
+    command: &'a mut Command,
+    home: &std::path::Path,
+    url: &str,
+) -> &'a mut Command {
+    command
+        .env_remove("COVAL_NO_UPDATE_CHECK")
+        .env("HOME", home)
+        .env("XDG_CONFIG_HOME", home)
+        .env("COVAL_UPDATE_CHECK_URL", url)
+}
+
+async fn mount_latest_release(mock_server: &MockServer, tag: &str) -> RequestCounter {
+    let counter = RequestCounter::default();
+    Mock::given(method("GET"))
+        .and(path("/release-latest"))
+        .and(counter.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "tag_name": tag })))
+        .mount(mock_server)
+        .await;
+    counter
+}
+
+#[tokio::test]
+async fn test_update_check_notifies_when_outdated() {
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    mount_latest_release(&mock_server, "v99.9.9").await;
+
+    update_check_env(
+        coval().arg("--api-key").arg("test_key").arg("whoami"),
+        temp_dir.path(),
+        &format!("{}/release-latest", mock_server.uri()),
+    )
+    .assert()
+    .success()
+    .stderr(predicate::str::contains(
+        "A newer version of coval is available: v99.9.9",
+    ));
+
+    assert!(temp_dir.path().join(".config/coval/update-check").exists());
+}
+
+#[tokio::test]
+async fn test_update_check_silent_when_current() {
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    mount_latest_release(&mock_server, concat!("v", env!("CARGO_PKG_VERSION"))).await;
+
+    update_check_env(
+        coval().arg("--api-key").arg("test_key").arg("whoami"),
+        temp_dir.path(),
+        &format!("{}/release-latest", mock_server.uri()),
+    )
+    .assert()
+    .success()
+    .stderr(predicate::str::is_empty());
+}
+
+#[tokio::test]
+async fn test_update_check_skips_when_recently_checked() {
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let counter = mount_latest_release(&mock_server, "v99.9.9").await;
+
+    let state_dir = temp_dir.path().join(".config").join("coval");
+    std::fs::create_dir_all(&state_dir).unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    std::fs::write(state_dir.join("update-check"), now.to_string()).unwrap();
+
+    update_check_env(
+        coval().arg("--api-key").arg("test_key").arg("whoami"),
+        temp_dir.path(),
+        &format!("{}/release-latest", mock_server.uri()),
+    )
+    .assert()
+    .success()
+    .stderr(predicate::str::is_empty());
+
+    assert_eq!(counter.count(), 0);
+}
+
+#[tokio::test]
+async fn test_update_check_disabled_by_env_is_silent_and_makes_no_request() {
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let counter = RequestCounter::default();
+    Mock::given(method("GET"))
+        .and(path("/release-latest"))
+        .and(counter.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "tag_name": "v99.9.9" })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("whoami")
+        .env("HOME", temp_dir.path())
+        .env("XDG_CONFIG_HOME", temp_dir.path())
+        .env(
+            "COVAL_UPDATE_CHECK_URL",
+            format!("{}/release-latest", mock_server.uri()),
+        )
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    assert_eq!(counter.count(), 0);
+}
+
+#[tokio::test]
+async fn test_update_check_suppressed_in_agent_mode() {
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let counter = mount_latest_release(&mock_server, "v99.9.9").await;
+
+    update_check_env(
+        coval()
+            .arg("--agent")
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("whoami"),
+        temp_dir.path(),
+        &format!("{}/release-latest", mock_server.uri()),
+    )
+    .assert()
+    .success()
+    .stderr(predicate::str::is_empty());
+
+    assert_eq!(counter.count(), 0);
+}
+
+#[tokio::test]
+async fn test_update_check_silent_when_fetch_fails() {
+    let temp_dir = tempfile::tempdir().unwrap();
+
+    update_check_env(
+        coval().arg("--api-key").arg("test_key").arg("whoami"),
+        temp_dir.path(),
+        "http://127.0.0.1:9/release-latest",
+    )
+    .assert()
+    .success()
+    .stderr(predicate::str::is_empty());
 }
 
 #[test]

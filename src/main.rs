@@ -7,6 +7,7 @@ mod input_json;
 mod next_actions;
 mod output;
 mod skills;
+mod update_check;
 
 use std::process::ExitCode;
 
@@ -41,7 +42,13 @@ async fn main() -> ExitCode {
     let operation = args.command.operation();
     let ctx = OutputContext::new(args.format, args.agent);
 
-    match cli::run(args, &ctx).await {
+    let update_check = if ctx.agent {
+        None
+    } else {
+        update_check::start()
+    };
+
+    let code = match cli::run(args, &ctx).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             if ctx.agent {
@@ -57,7 +64,10 @@ async fn main() -> ExitCode {
             }
             exit_code_for_error(&err)
         }
-    }
+    };
+
+    update_check::finish(update_check).await;
+    code
 }
 
 fn exit_code_for_error(err: &anyhow::Error) -> ExitCode {
