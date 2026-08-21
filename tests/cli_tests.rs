@@ -34,6 +34,26 @@ impl Match for QueryParamAbsent {
     }
 }
 
+#[derive(Clone, Default)]
+struct BodyCapture {
+    body: std::sync::Arc<std::sync::Mutex<Option<Value>>>,
+}
+
+impl BodyCapture {
+    fn take(&self) -> Value {
+        self.body.lock().unwrap().take().unwrap()
+    }
+}
+
+impl Match for BodyCapture {
+    fn matches(&self, request: &Request) -> bool {
+        if let Ok(parsed) = serde_json::from_slice::<Value>(&request.body) {
+            *self.body.lock().unwrap() = Some(parsed);
+        }
+        true
+    }
+}
+
 fn write_skill(root: &std::path::Path, id: &str, description: &str) {
     let skill_dir = root.join("skills").join(id);
     std::fs::create_dir_all(&skill_dir).unwrap();
@@ -3661,6 +3681,296 @@ async fn test_test_cases_create_with_expected_behaviors() {
         .assert()
         .success()
         .stdout(predicate::str::contains("tc1"));
+}
+
+fn full_test_case_fields() -> Value {
+    json!({
+        "input_str": "What is the weather today?",
+        "expected_behaviors": ["states the forecast", "mentions temperature units"],
+        "expected_output_str": "Sunny with a high of 75 degrees.",
+        "expected_output_json": {"temperature": 75, "condition": "sunny"},
+        "description": "Weather query with sunny conditions",
+        "input_type": "SCENARIO",
+        "simulation_metadata_input": {
+            "script_turns": ["Hi, what is the weather?", "Thanks, goodbye."]
+        },
+        "metric_input": {"expected_entities": ["weather", "temperature"]},
+        "user_notes": "Added for regression testing weather queries"
+    })
+}
+
+fn test_case_response_body(fields: &Value) -> Value {
+    json!({
+        "test_case": {
+            "name": "test-cases/tc1",
+            "id": "tc1",
+            "test_set_id": "ts123",
+            "input_str": fields["input_str"],
+            "create_time": "2025-01-15T10:30:00Z"
+        }
+    })
+}
+
+#[tokio::test]
+async fn test_test_cases_create_stdin_preserves_all_fields() {
+    let mock_server = MockServer::start().await;
+    let fields = full_test_case_fields();
+
+    let mut expected_body = fields.clone();
+    expected_body["test_set_id"] = json!("ts123");
+
+    Mock::given(method("POST"))
+        .and(path("/v1/test-cases"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(expected_body))
+        .respond_with(ResponseTemplate::new(200).set_body_json(test_case_response_body(&fields)))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("--format")
+            .arg("json")
+            .arg("test-cases")
+            .arg("create")
+            .arg("--test-set-id")
+            .arg("ts123")
+            .arg("--stdin")
+            .write_stdin(format!("{fields}\n"))
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["created"], 1);
+    assert_eq!(value["failed"], 0);
+}
+
+#[tokio::test]
+async fn test_test_cases_create_stdin_body_matches_input_json_body() {
+    let fields = full_test_case_fields();
+    let response_body = test_case_response_body(&fields);
+
+    let input_json_server = MockServer::start().await;
+    let input_json_capture = BodyCapture::default();
+    Mock::given(method("POST"))
+        .and(path("/v1/test-cases"))
+        .and(header("X-API-Key", "test_key"))
+        .and(input_json_capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body.clone()))
+        .mount(&input_json_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(input_json_server.uri())
+        .arg("--format")
+        .arg("json")
+        .arg("test-cases")
+        .arg("create")
+        .arg("--test-set-id")
+        .arg("ts123")
+        .arg("--input-json")
+        .arg(fields.to_string())
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    let stdin_server = MockServer::start().await;
+    let stdin_capture = BodyCapture::default();
+    Mock::given(method("POST"))
+        .and(path("/v1/test-cases"))
+        .and(header("X-API-Key", "test_key"))
+        .and(stdin_capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&stdin_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(stdin_server.uri())
+            .arg("--format")
+            .arg("json")
+            .arg("test-cases")
+            .arg("create")
+            .arg("--test-set-id")
+            .arg("ts123")
+            .arg("--stdin")
+            .write_stdin(format!("{fields}\n"))
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+    assert_eq!(value["created"], 1);
+    assert_eq!(value["failed"], 0);
+
+    let input_json_body = input_json_capture.take();
+    let stdin_body = stdin_capture.take();
+    assert_eq!(stdin_body, input_json_body);
+    for (key, expected) in fields.as_object().unwrap() {
+        assert_eq!(&stdin_body[key], expected, "field {key} must survive stdin");
+    }
+    assert_eq!(stdin_body["test_set_id"], "ts123");
+}
+
+#[tokio::test]
+async fn test_test_cases_get_json_output_preserves_fields() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/test-cases/tc1"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "test_case": {
+                "name": "test-cases/tc1",
+                "id": "tc1",
+                "test_set_id": "ts123",
+                "input_str": "What is the weather today?",
+                "expected_behaviors": ["states the forecast"],
+                "expected_output_str": "Sunny with a high of 75 degrees.",
+                "expected_output_json": {"temperature": 75, "condition": "sunny"},
+                "description": "Weather query with sunny conditions",
+                "input_type": "SCENARIO",
+                "simulation_metadata_input": {"script_turns": ["Hi"]},
+                "metric_input": {"expected_entities": ["weather"]},
+                "user_notes": "Added for regression testing weather queries",
+                "create_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("--format")
+            .arg("json")
+            .arg("test-cases")
+            .arg("get")
+            .arg("tc1")
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["expected_behaviors"], json!(["states the forecast"]));
+    assert_eq!(
+        value["expected_output_json"],
+        json!({"temperature": 75, "condition": "sunny"})
+    );
+    assert_eq!(
+        value["simulation_metadata_input"]["script_turns"],
+        json!(["Hi"])
+    );
+    assert_eq!(
+        value["metric_input"]["expected_entities"],
+        json!(["weather"])
+    );
+    assert_eq!(
+        value["user_notes"],
+        "Added for regression testing weather queries"
+    );
+}
+
+#[tokio::test]
+async fn test_test_sets_create_preserves_parameters() {
+    let mock_server = MockServer::start().await;
+    let parameters = json!({"name": ["Alice", "Bob"], "issue_type": ["billing", "technical"]});
+
+    Mock::given(method("POST"))
+        .and(path("/v1/test-sets"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({
+            "display_name": "Parameterized Set",
+            "parameters": parameters
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "test_set": {
+                "name": "testSets/ts123",
+                "id": "ts123",
+                "slug": "parameterized-set",
+                "display_name": "Parameterized Set",
+                "parameters": parameters,
+                "create_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("--format")
+            .arg("json")
+            .arg("test-sets")
+            .arg("create")
+            .arg("--input-json")
+            .arg(json!({"display_name": "Parameterized Set", "parameters": parameters}).to_string())
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["id"], "ts123");
+    assert_eq!(value["parameters"]["name"], json!(["Alice", "Bob"]));
+}
+
+#[tokio::test]
+async fn test_test_sets_update_preserves_parameters() {
+    let mock_server = MockServer::start().await;
+    let parameters = json!({"name": ["Carol"]});
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/test-sets/ts123"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_partial_json(json!({"parameters": parameters})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "test_set": {
+                "name": "testSets/ts123",
+                "id": "ts123",
+                "slug": "parameterized-set",
+                "display_name": "Parameterized Set",
+                "parameters": parameters,
+                "create_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval()
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("--format")
+            .arg("json")
+            .arg("test-sets")
+            .arg("update")
+            .arg("ts123")
+            .arg("--input-json")
+            .arg(json!({"parameters": parameters}).to_string())
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty()),
+    );
+
+    assert_eq!(value["parameters"]["name"], json!(["Carol"]));
 }
 
 #[tokio::test]
