@@ -2,7 +2,6 @@ use std::io::{self, BufRead};
 
 use anyhow::Result;
 use clap::{Args, Subcommand};
-use serde::Deserialize;
 use serde_json::json;
 
 use crate::client::models::{CreateTestCaseRequest, ListParams, UpdateTestCaseRequest};
@@ -86,19 +85,6 @@ pub struct CreateArgs {
     /// Read JSON lines from stdin for bulk creation
     #[arg(long, conflicts_with_all = ["input", "expected", "expected_behavior", "description", "input_type"])]
     stdin: bool,
-}
-
-#[derive(Deserialize)]
-struct StdinTestCase {
-    input_str: String,
-    #[serde(default)]
-    expected_output_str: Option<String>,
-    #[serde(default)]
-    expected_behaviors: Option<Vec<String>>,
-    #[serde(default)]
-    description: Option<String>,
-    #[serde(default)]
-    input_type: Option<String>,
 }
 
 #[derive(Args)]
@@ -206,19 +192,13 @@ pub async fn execute(
                         continue;
                     }
 
-                    let tc: StdinTestCase = serde_json::from_str(&line)?;
-                    let req = CreateTestCaseRequest {
-                        test_set_id: test_set_id.clone(),
-                        input_str: tc.input_str,
-                        expected_output_str: tc.expected_output_str,
-                        description: tc.description,
-                        expected_behaviors: tc.expected_behaviors,
-                        expected_output_json: None,
-                        input_type: tc.input_type,
-                        simulation_metadata_input: None,
-                        metric_input: None,
-                        user_notes: None,
-                    };
+                    let mut object: serde_json::Map<String, serde_json::Value> =
+                        serde_json::from_str(&line)?;
+                    object.insert(
+                        "test_set_id".to_string(),
+                        serde_json::Value::String(test_set_id.clone()),
+                    );
+                    let req: CreateTestCaseRequest = input_json::finish(object)?;
 
                     match client.test_cases().create(req).await {
                         Ok(_) => created += 1,
