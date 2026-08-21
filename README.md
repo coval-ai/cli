@@ -23,6 +23,13 @@ are the GitHub release binaries and the `coval-ai/tap/coval` Homebrew formula.
 
 Download pre-built binaries from [Releases](https://github.com/coval-ai/cli/releases).
 
+## Updates
+
+The CLI checks for a newer release at most once per day and prints a one-line
+notice on stderr when one is available. The check never changes command output,
+exit codes, or behavior, and it is skipped entirely in `--agent` mode. Set
+`COVAL_NO_UPDATE_CHECK=1` to disable it.
+
 ## Quick Start
 
 ```bash
