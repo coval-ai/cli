@@ -11,9 +11,9 @@ opens or updates a PR only when coverage actually changes.
 | Metric | Value |
 | --- | ---: |
 | Reconciliation status | PASS |
-| Published operations | 175 |
+| Published operations | 181 |
 | First-class CLI operations | 119 |
-| Reviewed gaps | 56 |
+| Reviewed gaps | 62 |
 | Client operations | 127 |
 
 Catalog: https://api.coval.dev/v1/openapi
@@ -57,6 +57,7 @@ Catalog: https://api.coval.dev/v1/openapi
 - `DELETE /metrics/flows/{flow_id}`
 - `DELETE /test-sets/{test_set_id}/agents/{agent_id}`
 - `DELETE /webhooks/{webhook_id}`
+- `DELETE /workspaces/{workspace_id}`
 - `GET /agents/{agent_id}/versions`
 - `GET /alerts`
 - `GET /alerts/{alert_id}`
@@ -82,11 +83,14 @@ Catalog: https://api.coval.dev/v1/openapi
 - `GET /test-sets/{test_set_id}/records`
 - `GET /test-sets/{test_set_id}/versions`
 - `GET /webhooks`
+- `GET /workspaces`
+- `GET /workspaces/{workspace_id}`
 - `PATCH /alerts/{alert_id}`
 - `PATCH /metrics/flows/{flow_id}`
 - `PATCH /organization/conversation-metrics`
 - `PATCH /organization/monitoring-metrics`
 - `PATCH /webhooks/{webhook_id}`
+- `PATCH /workspaces/{workspace_id}`
 - `POST /agents/{agent_id}/duplicate`
 - `POST /agents/{agent_id}/versions/{version_id}/revert`
 - `POST /alerts`
@@ -108,3 +112,5 @@ Catalog: https://api.coval.dev/v1/openapi
 - `POST /test-sets/{test_set_id}/versions/{version_id}/revert`
 - `POST /traces`
 - `POST /webhooks`
+- `POST /workspaces`
+- `POST /workspaces/{workspace_id}/archive`
