@@ -10,22 +10,17 @@ opens or updates a PR only when coverage actually changes.
 
 | Metric | Value |
 | --- | ---: |
-| Reconciliation status | ACTION REQUIRED |
+| Reconciliation status | PASS |
 | Published operations | 181 |
 | First-class CLI operations | 119 |
-| Reviewed gaps | 56 |
+| Reviewed gaps | 62 |
 | Client operations | 127 |
 
 Catalog: https://api.coval.dev/v1/openapi
 
 ## New published operations without CLI commands
 
-- `DELETE /workspaces/{workspace_id}`
-- `GET /workspaces`
-- `GET /workspaces/{workspace_id}`
-- `PATCH /workspaces/{workspace_id}`
-- `POST /workspaces`
-- `POST /workspaces/{workspace_id}/archive`
+- None.
 
 ## Reviewed gaps no longer present
 
@@ -49,7 +44,7 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## Coverage snapshot mismatches
 
-- `published_operations: recorded 175, current 181`
+- None.
 
 ## Client-only operations
 

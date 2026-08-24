@@ -3,8 +3,8 @@
 
 [snapshot]
 catalog_url = "https://api.coval.dev/v1/openapi"
-reviewed_at = "2026-08-12"
-published_operations = 175
+reviewed_at = "2026-08-24"
+published_operations = 181
 cli_supported_operations = 119
 
 [[allowed_extra]]
@@ -279,3 +279,27 @@ reason = "Webhook resources remain to be modeled under COVAL-2079."
 [[known_gap]]
 operation = "DELETE /webhooks/{webhook_id}"
 reason = "Webhook resources remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /workspaces"
+reason = "Workspace management remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /workspaces"
+reason = "Workspace management remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /workspaces/{workspace_id}"
+reason = "Workspace management remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "PATCH /workspaces/{workspace_id}"
+reason = "Workspace management remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "DELETE /workspaces/{workspace_id}"
+reason = "Workspace management remains to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "POST /workspaces/{workspace_id}/archive"
+reason = "Workspace management remains to be modeled under COVAL-2079."
