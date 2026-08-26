@@ -230,6 +230,7 @@ pub async fn execute(
         }
         PersonaCommands::Create(args) => {
             let mut input = args.input_json.object()?;
+            normalize_persona_input(&mut input);
             input_json::insert(&mut input, "name", args.name)?;
             input_json::insert(&mut input, "voice_name", args.voice)?;
             input_json::insert(&mut input, "language_code", args.language)?;
@@ -249,6 +250,7 @@ pub async fn execute(
         }
         PersonaCommands::Update(args) => {
             let mut input = args.input_json.object()?;
+            normalize_persona_input(&mut input);
             input_json::insert(&mut input, "name", args.name)?;
             input_json::insert(&mut input, "voice_name", args.voice)?;
             input_json::insert(&mut input, "language_code", args.language)?;
@@ -301,6 +303,14 @@ pub async fn execute(
         }
     }
     Ok(())
+}
+
+fn normalize_persona_input(input: &mut serde_json::Map<String, serde_json::Value>) {
+    if let Some(value) = input.remove("multiLanguageStt") {
+        input
+            .entry("multi_language_stt".to_string())
+            .or_insert(value);
+    }
 }
 
 async fn execute_background_sound(

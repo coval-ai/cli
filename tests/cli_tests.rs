@@ -1549,6 +1549,8 @@ async fn test_personas_create_multilingual_stt_flag_sends_true() {
         .arg(mock_server.uri())
         .arg("personas")
         .arg("create")
+        .arg("--input-json")
+        .arg(json!({ "multiLanguageStt": false }).to_string())
         .arg("--name")
         .arg("Multilingual caller")
         .arg("--voice")
