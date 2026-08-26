@@ -109,6 +109,9 @@ pub struct CreateArgs {
     /// Seconds to wait before speaking (0.1-2.0)
     #[arg(long)]
     wait_seconds: Option<f32>,
+    /// Enable multilingual speech-to-text
+    #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+    multi_language_stt: Option<bool>,
 }
 
 #[derive(Args)]
@@ -134,6 +137,9 @@ pub struct UpdateArgs {
     /// Seconds to wait before speaking (0.1-2.0)
     #[arg(long)]
     wait_seconds: Option<f32>,
+    /// Enable or disable multilingual speech-to-text
+    #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+    multi_language_stt: Option<bool>,
 }
 
 #[derive(Args)]
@@ -230,6 +236,7 @@ pub async fn execute(
             input_json::insert(&mut input, "persona_prompt", args.prompt)?;
             input_json::insert(&mut input, "background_sound", args.background)?;
             input_json::insert(&mut input, "wait_seconds", args.wait_seconds)?;
+            input_json::insert(&mut input, "multi_language_stt", args.multi_language_stt)?;
             let req: CreatePersonaRequest = input_json::finish(input)?;
             let persona = client.personas().create(req).await?;
             emit_one_with_actions(
@@ -248,6 +255,7 @@ pub async fn execute(
             input_json::insert(&mut input, "persona_prompt", args.prompt)?;
             input_json::insert(&mut input, "background_sound", args.background)?;
             input_json::insert(&mut input, "wait_seconds", args.wait_seconds)?;
+            input_json::insert(&mut input, "multi_language_stt", args.multi_language_stt)?;
             let req: UpdatePersonaRequest = input_json::finish(input)?;
             let persona = client.personas().update(&args.persona_id, req).await?;
             emit_one_with_actions(

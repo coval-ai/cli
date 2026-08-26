@@ -1469,6 +1469,128 @@ async fn test_api_error_handling_agent_mode() {
     assert_eq!(value["error"]["message"], "Agent not found");
 }
 
+fn persona_response(multi_language_stt: bool) -> Value {
+    json!({
+        "persona": {
+            "resource_name": "personas/persona1",
+            "id": "persona1",
+            "name": "Multilingual caller",
+            "voice_name": "marina",
+            "language_code": "en-US",
+            "multi_language_stt": multi_language_stt,
+            "create_time": "2025-01-15T10:30:00Z"
+        }
+    })
+}
+
+#[tokio::test]
+async fn test_personas_create_preserves_multilingual_stt_input_json() {
+    for key in ["multi_language_stt", "multiLanguageStt"] {
+        let mock_server = MockServer::start().await;
+        let body_capture = BodyCapture::default();
+
+        Mock::given(method("POST"))
+            .and(path("/v1/personas"))
+            .and(header("X-API-Key", "test_key"))
+            .and(body_capture.clone())
+            .respond_with(ResponseTemplate::new(200).set_body_json(persona_response(true)))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let value = stdout_json(
+            coval()
+                .arg("--api-key")
+                .arg("test_key")
+                .arg("--api-url")
+                .arg(mock_server.uri())
+                .arg("--format")
+                .arg("json")
+                .arg("personas")
+                .arg("create")
+                .arg("--input-json")
+                .arg(
+                    json!({
+                        "name": "Multilingual caller",
+                        "voice_name": "marina",
+                        "language_code": "en-US",
+                        key: true
+                    })
+                    .to_string(),
+                )
+                .assert()
+                .success()
+                .stderr(predicate::str::is_empty()),
+        );
+
+        assert_eq!(body_capture.take()["multi_language_stt"], true);
+        assert_eq!(value["multi_language_stt"], true);
+    }
+}
+
+#[tokio::test]
+async fn test_personas_create_multilingual_stt_flag_sends_true() {
+    let mock_server = MockServer::start().await;
+    let body_capture = BodyCapture::default();
+
+    Mock::given(method("POST"))
+        .and(path("/v1/personas"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(persona_response(true)))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("personas")
+        .arg("create")
+        .arg("--name")
+        .arg("Multilingual caller")
+        .arg("--voice")
+        .arg("marina")
+        .arg("--language")
+        .arg("en-US")
+        .arg("--multi-language-stt")
+        .assert()
+        .success();
+
+    assert_eq!(body_capture.take()["multi_language_stt"], true);
+}
+
+#[tokio::test]
+async fn test_personas_update_multilingual_stt_flag_sends_false() {
+    let mock_server = MockServer::start().await;
+    let body_capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/personas/persona1"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(persona_response(false)))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("personas")
+        .arg("update")
+        .arg("persona1")
+        .arg("--multi-language-stt=false")
+        .assert()
+        .success();
+
+    assert_eq!(body_capture.take()["multi_language_stt"], false);
+}
+
 #[tokio::test]
 async fn test_personas_background_sounds_list() {
     let mock_server = MockServer::start().await;
