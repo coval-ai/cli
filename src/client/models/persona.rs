@@ -22,6 +22,8 @@ pub struct Persona {
     pub wait_seconds: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conversation_initiation: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub multi_language_stt: Option<bool>,
     pub create_time: DateTime<Utc>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub update_time: Option<DateTime<Utc>>,
@@ -74,6 +76,8 @@ pub struct CreatePersonaRequest {
     pub wait_seconds: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conversation_initiation: Option<String>,
+    #[serde(alias = "multiLanguageStt", skip_serializing_if = "Option::is_none")]
+    pub multi_language_stt: Option<bool>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -92,6 +96,8 @@ pub struct UpdatePersonaRequest {
     pub wait_seconds: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conversation_initiation: Option<String>,
+    #[serde(alias = "multiLanguageStt", skip_serializing_if = "Option::is_none")]
+    pub multi_language_stt: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
