@@ -43,6 +43,19 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::agents::AgentCommands,
     },
+    #[command(
+        name = "uploaded-conversations",
+        about = "Manage uploaded production conversations"
+    )]
+    UploadedConversations {
+        #[command(subcommand)]
+        command: commands::conversations::ConversationCommands,
+    },
+    #[command(
+        name = "conversations",
+        hide = true,
+        about = "Legacy command for uploaded conversations; use `uploaded-conversations`"
+    )]
     Conversations {
         #[command(subcommand)]
         command: commands::conversations::ConversationCommands,
@@ -51,6 +64,19 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::runs::RunCommands,
     },
+    #[command(
+        name = "simulated-conversations",
+        about = "Inspect individual conversations produced by simulation runs"
+    )]
+    SimulatedConversations {
+        #[command(subcommand)]
+        command: commands::simulations::SimulationCommands,
+    },
+    #[command(
+        name = "simulations",
+        hide = true,
+        about = "Legacy command for simulated conversations; use `simulated-conversations`"
+    )]
     Simulations {
         #[command(subcommand)]
         command: commands::simulations::SimulationCommands,
@@ -135,8 +161,10 @@ impl Commands {
             Self::Login(_) | Self::Whoami => "auth",
             Self::Config { .. } => "config",
             Self::Agents { .. } => "agents",
+            Self::UploadedConversations { .. } => "uploaded-conversations",
             Self::Conversations { .. } => "conversations",
             Self::Runs { .. } => "runs",
+            Self::SimulatedConversations { .. } => "simulated-conversations",
             Self::Simulations { .. } => "simulations",
             Self::TestSets { .. } => "test-sets",
             Self::TestCases { .. } => "test-cases",
@@ -170,9 +198,13 @@ impl Commands {
             Self::Whoami => "whoami",
             Self::Config { command } => command.operation(),
             Self::Agents { command } => command.operation(),
-            Self::Conversations { command } => command.operation(),
+            Self::UploadedConversations { command } | Self::Conversations { command } => {
+                command.operation()
+            }
             Self::Runs { command } => command.operation(),
-            Self::Simulations { command } => command.operation(),
+            Self::SimulatedConversations { command } | Self::Simulations { command } => {
+                command.operation()
+            }
             Self::TestSets { command } => command.operation(),
             Self::TestCases { command } => command.operation(),
             Self::Personas { command } => command.operation(),
@@ -233,12 +265,18 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
         Commands::Agents {
             command: commands::agents::AgentCommands::Context,
         } => commands::agent::resource_context("agents", ctx),
+        Commands::UploadedConversations {
+            command: commands::conversations::ConversationCommands::Context,
+        } => commands::agent::resource_context("uploaded-conversations", ctx),
         Commands::Conversations {
             command: commands::conversations::ConversationCommands::Context,
         } => commands::agent::resource_context("conversations", ctx),
         Commands::Runs {
             command: commands::runs::RunCommands::Context,
         } => commands::agent::resource_context("runs", ctx),
+        Commands::SimulatedConversations {
+            command: commands::simulations::SimulationCommands::Context,
+        } => commands::agent::resource_context("simulated-conversations", ctx),
         Commands::Simulations {
             command: commands::simulations::SimulationCommands::Context,
         } => commands::agent::resource_context("simulations", ctx),
@@ -299,12 +337,19 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
                 Commands::Agents { command } => {
                     commands::agents::execute(command, &client, ctx).await
                 }
+                Commands::UploadedConversations { command } => {
+                    commands::conversations::execute_uploaded(command, &client, ctx).await
+                }
                 Commands::Conversations { command } => {
-                    commands::conversations::execute(command, &client, ctx).await
+                    commands::conversations::execute_legacy(command, &client, ctx).await
                 }
                 Commands::Runs { command } => commands::runs::execute(command, &client, ctx).await,
+                Commands::SimulatedConversations { command } => {
+                    commands::simulations::execute_simulated_conversations(command, &client, ctx)
+                        .await
+                }
                 Commands::Simulations { command } => {
-                    commands::simulations::execute(command, &client, ctx).await
+                    commands::simulations::execute_legacy(command, &client, ctx).await
                 }
                 Commands::TestSets { command } => {
                     commands::test_sets::execute(command, &client, ctx).await

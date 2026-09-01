@@ -150,8 +150,16 @@ impl CovalClient {
         SimulationsClient(self)
     }
 
+    pub fn simulated_conversations(&self) -> SimulatedConversationsClient<'_> {
+        SimulatedConversationsClient(self)
+    }
+
     pub fn conversations(&self) -> ConversationsClient<'_> {
         ConversationsClient(self)
+    }
+
+    pub fn uploaded_conversations(&self) -> UploadedConversationsClient<'_> {
+        UploadedConversationsClient(self)
     }
 
     pub fn test_sets(&self) -> TestSetsClient<'_> {
@@ -231,8 +239,10 @@ impl CovalClient {
 
 pub struct AgentsClient<'a>(&'a CovalClient);
 pub struct ConversationsClient<'a>(&'a CovalClient);
+pub struct UploadedConversationsClient<'a>(&'a CovalClient);
 pub struct RunsClient<'a>(&'a CovalClient);
 pub struct SimulationsClient<'a>(&'a CovalClient);
+pub struct SimulatedConversationsClient<'a>(&'a CovalClient);
 pub struct TestSetsClient<'a>(&'a CovalClient);
 pub struct TestCasesClient<'a>(&'a CovalClient);
 pub struct PersonasClient<'a>(&'a CovalClient);
@@ -412,6 +422,88 @@ impl ConversationsClient<'_> {
     }
 }
 
+impl UploadedConversationsClient<'_> {
+    pub async fn list(
+        &self,
+        params: models::ListParams,
+    ) -> Result<models::ListConversationsResponse, ApiError> {
+        let mut url = self.0.url("/v1/conversations/uploaded");
+        params.apply_to(&mut url);
+        self.0.get(url).await
+    }
+
+    pub async fn list_with_metric_outputs(
+        &self,
+        params: models::ListParams,
+        metric_id: &str,
+    ) -> Result<models::ListConversationsResponse, ApiError> {
+        let mut url = self.0.url("/v1/conversations/uploaded");
+        params.apply_to(&mut url);
+        url.query_pairs_mut()
+            .append_pair("include", "metric_outputs")
+            .append_pair("metric_id", metric_id);
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::Conversation, ApiError> {
+        let url = self.0.url(&format!("/v1/conversations/uploaded/{id}"));
+        let resp: models::GetConversationResponse = self.0.get(url).await?;
+        Ok(resp.conversation)
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/conversations/uploaded/{id}"));
+        self.0.delete(url).await
+    }
+
+    pub async fn audio(&self, id: &str) -> Result<models::ConversationAudioUrlResponse, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/conversations/uploaded/{id}/audio"));
+        self.0.get(url).await
+    }
+
+    pub async fn submit(
+        &self,
+        req: models::SubmitConversationRequest,
+    ) -> Result<models::Conversation, ApiError> {
+        let url = self.0.url("/v1/conversations/uploaded:submit");
+        let resp: models::SubmitConversationResponse = self.0.post(url, &req).await?;
+        Ok(resp.conversation)
+    }
+
+    pub async fn list_metrics(
+        &self,
+        id: &str,
+    ) -> Result<models::ListConversationMetricsResponse, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/conversations/uploaded/{id}/metrics"));
+        self.0.get(url).await
+    }
+
+    pub async fn get_metric(
+        &self,
+        id: &str,
+        metric_path_id: &str,
+    ) -> Result<models::MetricDetailResponse, ApiError> {
+        let url = self.0.url(&format!(
+            "/v1/conversations/uploaded/{id}/metrics/{metric_path_id}"
+        ));
+        self.0.get(url).await
+    }
+
+    pub async fn patch(
+        &self,
+        id: &str,
+        req: models::PatchConversationRequest,
+    ) -> Result<models::Conversation, ApiError> {
+        let url = self.0.url(&format!("/v1/conversations/uploaded/{id}"));
+        let resp: models::GetConversationResponse = self.0.patch(url, &req).await?;
+        Ok(resp.conversation)
+    }
+}
+
 impl SimulationsClient<'_> {
     pub async fn list(
         &self,
@@ -477,6 +569,83 @@ impl SimulationsClient<'_> {
         is_public: Option<bool>,
     ) -> Result<models::Simulation, ApiError> {
         let url = self.0.url(&format!("/v1/simulations/{id}"));
+        let req = models::UpdateSimulationRequest { notes, is_public };
+        let resp: models::GetSimulationResponse = self.0.patch(url, &req).await?;
+        Ok(resp.simulation)
+    }
+}
+
+impl SimulatedConversationsClient<'_> {
+    pub async fn list(
+        &self,
+        params: models::ListParams,
+    ) -> Result<models::ListSimulationsResponse, ApiError> {
+        let mut url = self.0.url("/v1/conversations/simulated");
+        params.apply_to(&mut url);
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::Simulation, ApiError> {
+        let url = self.0.url(&format!("/v1/conversations/simulated/{id}"));
+        let resp: models::GetSimulationResponse = self.0.get(url).await?;
+        Ok(resp.simulation)
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
+        let url = self.0.url(&format!("/v1/conversations/simulated/{id}"));
+        self.0.delete(url).await
+    }
+
+    pub async fn audio(&self, id: &str) -> Result<models::AudioUrlResponse, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/conversations/simulated/{id}/audio"));
+        self.0.get(url).await
+    }
+
+    pub async fn list_metrics(
+        &self,
+        id: &str,
+    ) -> Result<models::ListSimulationMetricsResponse, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/conversations/simulated/{id}/metrics"));
+        self.0.get(url).await
+    }
+
+    pub async fn get_metric(
+        &self,
+        id: &str,
+        metric_path_id: &str,
+    ) -> Result<models::MetricDetailResponse, ApiError> {
+        let url = self.0.url(&format!(
+            "/v1/conversations/simulated/{id}/metrics/{metric_path_id}"
+        ));
+        self.0.get(url).await
+    }
+
+    pub async fn resimulate(
+        &self,
+        id: &str,
+        dev_id: Option<&str>,
+    ) -> Result<models::Simulation, ApiError> {
+        let url = self
+            .0
+            .url(&format!("/v1/conversations/simulated/{id}/resimulate"));
+        let req = models::ResimulateRequest {
+            dev_id: dev_id.map(String::from),
+        };
+        let resp: models::GetSimulationResponse = self.0.post(url, &req).await?;
+        Ok(resp.simulation)
+    }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        notes: Option<String>,
+        is_public: Option<bool>,
+    ) -> Result<models::Simulation, ApiError> {
+        let url = self.0.url(&format!("/v1/conversations/simulated/{id}"));
         let req = models::UpdateSimulationRequest { notes, is_public };
         let resp: models::GetSimulationResponse = self.0.patch(url, &req).await?;
         Ok(resp.simulation)

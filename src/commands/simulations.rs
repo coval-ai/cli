@@ -99,15 +99,68 @@ pub struct UpdateArgs {
     is_public: bool,
 }
 
-pub async fn execute(
+#[derive(Clone, Copy)]
+enum SimulationCollection {
+    SimulatedConversations,
+    Legacy,
+}
+
+impl SimulationCollection {
+    fn resource(self) -> &'static str {
+        match self {
+            Self::SimulatedConversations => "simulated-conversations",
+            Self::Legacy => "simulations",
+        }
+    }
+
+    fn alternate_resource(self) -> &'static str {
+        match self {
+            Self::SimulatedConversations => "uploaded-conversations",
+            Self::Legacy => "conversations",
+        }
+    }
+
+    fn description(self) -> &'static str {
+        match self {
+            Self::SimulatedConversations => "Simulated conversation",
+            Self::Legacy => "Simulation",
+        }
+    }
+}
+
+pub async fn execute_simulated_conversations(
     cmd: SimulationCommands,
     client: &CovalClient,
     ctx: &OutputContext,
 ) -> Result<()> {
+    execute_for(
+        cmd,
+        client,
+        ctx,
+        SimulationCollection::SimulatedConversations,
+    )
+    .await
+}
+
+pub async fn execute_legacy(
+    cmd: SimulationCommands,
+    client: &CovalClient,
+    ctx: &OutputContext,
+) -> Result<()> {
+    execute_for(cmd, client, ctx, SimulationCollection::Legacy).await
+}
+
+async fn execute_for(
+    cmd: SimulationCommands,
+    client: &CovalClient,
+    ctx: &OutputContext,
+    collection: SimulationCollection,
+) -> Result<()> {
     let operation = cmd.operation();
+    let resource = collection.resource();
     match cmd {
         SimulationCommands::Context => {
-            return crate::commands::agent::resource_context("simulations", ctx);
+            return crate::commands::agent::resource_context(resource, ctx);
         }
         SimulationCommands::List(args) => {
             let filter = match (args.filter, args.run_id) {
@@ -123,13 +176,19 @@ pub async fn execute(
                 order_by: args.order_by,
                 ..Default::default()
             };
-            let response = client.simulations().list(params).await?;
+            let response = match collection {
+                SimulationCollection::SimulatedConversations => {
+                    client.simulated_conversations().list(params).await?
+                }
+                SimulationCollection::Legacy => client.simulations().list(params).await?,
+            };
             emit_list_with_actions(
                 ctx,
-                "simulations",
+                resource,
                 operation,
                 &response.simulations,
                 list_actions(
+                    resource,
                     response
                         .simulations
                         .first()
@@ -138,21 +197,33 @@ pub async fn execute(
             );
         }
         SimulationCommands::Get(args) => {
-            let result = client.simulations().get(&args.simulation_id).await;
+            let result = match collection {
+                SimulationCollection::SimulatedConversations => {
+                    client
+                        .simulated_conversations()
+                        .get(&args.simulation_id)
+                        .await
+                }
+                SimulationCollection::Legacy => client.simulations().get(&args.simulation_id).await,
+            };
             match result {
                 Ok(simulation) => emit_one_with_actions(
                     ctx,
-                    "simulations",
+                    resource,
                     operation,
                     &simulation,
-                    simulation_actions(&simulation.simulation_id),
+                    simulation_actions(resource, &simulation.simulation_id),
                 ),
                 Err(ApiError::NotFound { .. }) => {
                     if !ctx.agent {
-                        print_not_found_hint(&args.simulation_id, "conversations");
+                        print_not_found_hint(
+                            &args.simulation_id,
+                            collection.description(),
+                            collection.alternate_resource(),
+                        );
                     }
                     return Err(ApiError::NotFound {
-                        resource: format!("Simulation '{}'", args.simulation_id),
+                        resource: format!("{} '{}'", collection.description(), args.simulation_id),
                     }
                     .into());
                 }
@@ -160,24 +231,38 @@ pub async fn execute(
             }
         }
         SimulationCommands::Delete(args) => {
-            let result = client.simulations().delete(&args.simulation_id).await;
+            let result = match collection {
+                SimulationCollection::SimulatedConversations => {
+                    client
+                        .simulated_conversations()
+                        .delete(&args.simulation_id)
+                        .await
+                }
+                SimulationCollection::Legacy => {
+                    client.simulations().delete(&args.simulation_id).await
+                }
+            };
             match result {
                 Ok(()) => emit_success_with_actions(
                     ctx,
-                    "simulations",
+                    resource,
                     operation,
-                    "Simulation deleted.",
+                    &format!("{} deleted.", collection.description()),
                     vec![
-                        next_actions::list("simulations").primary(),
-                        next_actions::context("simulations"),
+                        next_actions::list(resource).primary(),
+                        next_actions::context(resource),
                     ],
                 ),
                 Err(ApiError::NotFound { .. }) => {
                     if !ctx.agent {
-                        print_not_found_hint(&args.simulation_id, "conversations");
+                        print_not_found_hint(
+                            &args.simulation_id,
+                            collection.description(),
+                            collection.alternate_resource(),
+                        );
                     }
                     return Err(ApiError::NotFound {
-                        resource: format!("Simulation '{}'", args.simulation_id),
+                        resource: format!("{} '{}'", collection.description(), args.simulation_id),
                     }
                     .into());
                 }
@@ -185,57 +270,87 @@ pub async fn execute(
             }
         }
         SimulationCommands::Metrics(args) => {
-            let response = client
-                .simulations()
-                .list_metrics(&args.simulation_id)
-                .await?;
+            let response = match collection {
+                SimulationCollection::SimulatedConversations => {
+                    client
+                        .simulated_conversations()
+                        .list_metrics(&args.simulation_id)
+                        .await?
+                }
+                SimulationCollection::Legacy => {
+                    client
+                        .simulations()
+                        .list_metrics(&args.simulation_id)
+                        .await?
+                }
+            };
             emit_list_with_actions(
                 ctx,
-                "simulations",
+                resource,
                 operation,
                 &response.metrics,
                 vec![
-                    next_actions::get("simulations", &args.simulation_id).primary(),
-                    next_actions::context("simulations"),
+                    next_actions::get(resource, &args.simulation_id).primary(),
+                    next_actions::context(resource),
                 ],
             );
         }
         SimulationCommands::MetricDetail(args) => {
-            let response = client
-                .simulations()
-                .get_metric(&args.simulation_id, &args.metric_id)
-                .await?;
+            let response = match collection {
+                SimulationCollection::SimulatedConversations => {
+                    client
+                        .simulated_conversations()
+                        .get_metric(&args.simulation_id, &args.metric_id)
+                        .await?
+                }
+                SimulationCollection::Legacy => {
+                    client
+                        .simulations()
+                        .get_metric(&args.simulation_id, &args.metric_id)
+                        .await?
+                }
+            };
             match response {
                 MetricDetailResponse::Single { metric } => emit_one_with_actions(
                     ctx,
-                    "simulations",
+                    resource,
                     operation,
                     &metric,
-                    vec![next_actions::get("simulations", &args.simulation_id).primary()],
+                    vec![next_actions::get(resource, &args.simulation_id).primary()],
                 ),
                 MetricDetailResponse::Collection { metric_outputs } => emit_list_with_actions(
                     ctx,
-                    "simulations",
+                    resource,
                     operation,
                     &metric_outputs,
-                    vec![next_actions::get("simulations", &args.simulation_id).primary()],
+                    vec![next_actions::get(resource, &args.simulation_id).primary()],
                 ),
             }
         }
         SimulationCommands::Audio(args) => {
-            let audio = client.simulations().audio(&args.simulation_id).await?;
+            let audio = match collection {
+                SimulationCollection::SimulatedConversations => {
+                    client
+                        .simulated_conversations()
+                        .audio(&args.simulation_id)
+                        .await?
+                }
+                SimulationCollection::Legacy => {
+                    client.simulations().audio(&args.simulation_id).await?
+                }
+            };
 
             match args.output {
                 Some(path) => {
                     download_audio(&audio.audio_url, &path, !ctx.agent).await?;
                     emit_success_with_actions(
                         ctx,
-                        "simulations",
+                        resource,
                         operation,
                         &format!("Audio saved to {}", path.display()),
                         vec![
-                            next_actions::get("simulations", &args.simulation_id).primary(),
-                            next_actions::simulation_metrics(&args.simulation_id),
+                            next_actions::get(resource, &args.simulation_id).primary(),
+                            next_actions::metrics(resource, &args.simulation_id),
                         ],
                     );
                 }
@@ -243,12 +358,12 @@ pub async fn execute(
                     if ctx.agent {
                         emit_one_with_actions(
                             ctx,
-                            "simulations",
+                            resource,
                             operation,
                             &audio,
                             vec![
-                                next_actions::get("simulations", &args.simulation_id).primary(),
-                                next_actions::simulation_metrics(&args.simulation_id),
+                                next_actions::get(resource, &args.simulation_id).primary(),
+                                next_actions::metrics(resource, &args.simulation_id),
                             ],
                         );
                     } else {
@@ -258,57 +373,84 @@ pub async fn execute(
             }
         }
         SimulationCommands::Resimulate(args) => {
-            let simulation = client
-                .simulations()
-                .resimulate(&args.simulation_id, args.dev_id.as_deref())
-                .await?;
+            let simulation = match collection {
+                SimulationCollection::SimulatedConversations => {
+                    client
+                        .simulated_conversations()
+                        .resimulate(&args.simulation_id, args.dev_id.as_deref())
+                        .await?
+                }
+                SimulationCollection::Legacy => {
+                    client
+                        .simulations()
+                        .resimulate(&args.simulation_id, args.dev_id.as_deref())
+                        .await?
+                }
+            };
             emit_one_with_actions(
                 ctx,
-                "simulations",
+                resource,
                 operation,
                 &simulation,
-                vec![next_actions::get("simulations", &args.simulation_id).primary()],
+                vec![next_actions::get(resource, &args.simulation_id).primary()],
             );
         }
         SimulationCommands::Update(args) => {
-            let simulation = client
-                .simulations()
-                .update(
-                    &args.simulation_id,
-                    args.notes,
-                    args.is_public.then_some(true),
-                )
-                .await?;
+            let simulation = match collection {
+                SimulationCollection::SimulatedConversations => {
+                    client
+                        .simulated_conversations()
+                        .update(
+                            &args.simulation_id,
+                            args.notes,
+                            args.is_public.then_some(true),
+                        )
+                        .await?
+                }
+                SimulationCollection::Legacy => {
+                    client
+                        .simulations()
+                        .update(
+                            &args.simulation_id,
+                            args.notes,
+                            args.is_public.then_some(true),
+                        )
+                        .await?
+                }
+            };
             emit_one_with_actions(
                 ctx,
-                "simulations",
+                resource,
                 operation,
                 &simulation,
-                vec![next_actions::get("simulations", &args.simulation_id).primary()],
+                vec![next_actions::get(resource, &args.simulation_id).primary()],
             );
         }
     }
     Ok(())
 }
 
-fn list_actions(id: Option<&str>) -> Vec<NextAction> {
-    let mut actions = vec![next_actions::context("simulations")];
+fn list_actions(resource: &str, id: Option<&str>) -> Vec<NextAction> {
+    let mut actions = vec![next_actions::context(resource)];
     if let Some(id) = id {
-        actions.insert(0, next_actions::get("simulations", id).primary());
+        actions.insert(0, next_actions::get(resource, id).primary());
     }
     actions
 }
 
-fn simulation_actions(simulation_id: &str) -> Vec<NextAction> {
+fn simulation_actions(resource: &str, simulation_id: &str) -> Vec<NextAction> {
     vec![
-        next_actions::simulation_metrics(simulation_id).primary(),
-        next_actions::simulation_audio(simulation_id),
-        next_actions::context("simulations"),
+        next_actions::metrics(resource, simulation_id).primary(),
+        next_actions::audio(resource, simulation_id),
+        next_actions::context(resource),
     ]
 }
 
-fn print_not_found_hint(id: &str, try_command: &str) {
-    eprintln!("hint: not found as a simulation. Try `coval {try_command} get {id}` instead.");
+fn print_not_found_hint(id: &str, description: &str, alternate_resource: &str) {
+    eprintln!(
+        "hint: not found as a {}. Try `coval {alternate_resource} get {id}` instead.",
+        description.to_lowercase()
+    );
 }
 
 async fn download_audio(url: &str, path: &Path, show_progress: bool) -> Result<()> {

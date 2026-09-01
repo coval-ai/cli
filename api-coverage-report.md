@@ -14,7 +14,7 @@ opens or updates a PR only when coverage actually changes.
 | Published operations | 181 |
 | First-class CLI operations | 119 |
 | Reviewed gaps | 62 |
-| Client operations | 127 |
+| Client operations | 143 |
 
 Catalog: https://api.coval.dev/v1/openapi
 
@@ -96,6 +96,7 @@ Catalog: https://api.coval.dev/v1/openapi
 - `POST /alerts`
 - `POST /alerts/{alert_id}/test-evaluate`
 - `POST /audio:upload`
+- `POST /conversations/simulated:rerunMetrics`
 - `POST /integrations/slack/connect`
 - `POST /metrics/flows`
 - `POST /metrics/outputs:batchGet`
@@ -106,7 +107,6 @@ Catalog: https://api.coval.dev/v1/openapi
 - `POST /personas/{persona_id}/versions/{version_id}/revert`
 - `POST /review-annotations:withMetricOutputs`
 - `POST /review-projects/disagreement-state`
-- `POST /simulations:rerunMetrics`
 - `POST /test-sets/{test_set_id}/agents:add`
 - `POST /test-sets/{test_set_id}/duplicate`
 - `POST /test-sets/{test_set_id}/versions/{version_id}/revert`
