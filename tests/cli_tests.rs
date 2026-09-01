@@ -721,7 +721,16 @@ fn test_input_json_help_coverage() {
 
 #[test]
 fn test_resource_contexts_agent_mode_no_auth() {
-    for resource in AGENT_RESOURCES {
+    for resource in AGENT_RESOURCES
+        .iter()
+        .copied()
+        .chain(["conversations", "simulations"])
+    {
+        let canonical_resource = match resource {
+            "conversations" => "uploaded-conversations",
+            "simulations" => "simulated-conversations",
+            _ => resource,
+        };
         let temp_dir = tempfile::tempdir().unwrap();
         let value = stdout_json(
             coval()
@@ -737,20 +746,20 @@ fn test_resource_contexts_agent_mode_no_auth() {
         );
 
         assert_eq!(value["ok"], true);
-        assert_eq!(value["resource"], *resource);
+        assert_eq!(value["resource"], resource);
         assert_eq!(value["operation"], "context");
-        assert_eq!(value["data"]["name"], *resource);
+        assert_eq!(value["data"]["name"], canonical_resource);
         assert_eq!(
             value["data"]["help_argv"],
-            json!(["coval", resource, "--help"])
+            json!(["coval", canonical_resource, "--help"])
         );
         assert_eq!(value["data"]["commands"][0]["name"], "context");
         assert_eq!(value["data"]["commands"][0]["requires_auth"], false);
         assert_eq!(
             value["data"]["commands"][0]["help_argv"],
-            json!(["coval", resource, "context", "--help"])
+            json!(["coval", canonical_resource, "context", "--help"])
         );
-        if *resource == "runs" {
+        if resource == "runs" {
             assert_eq!(
                 value["data"]["workflows"][0]["argv"],
                 json!([

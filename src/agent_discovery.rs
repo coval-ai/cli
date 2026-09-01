@@ -171,7 +171,14 @@ pub fn manifest() -> Manifest {
 }
 
 pub fn resource_context(name: &str) -> Option<ResourceContext> {
-    let spec = RESOURCE_SPECS.iter().find(|spec| spec.name == name)?;
+    let canonical_name = match name {
+        "conversations" => "uploaded-conversations",
+        "simulations" => "simulated-conversations",
+        _ => name,
+    };
+    let spec = RESOURCE_SPECS
+        .iter()
+        .find(|spec| spec.name == canonical_name)?;
     let discovery_command = if spec.commands.contains(&"list") {
         "list"
     } else if spec.commands.contains(&"search") {
