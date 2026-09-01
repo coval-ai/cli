@@ -92,6 +92,9 @@ The canonical conversation commands use the current API routes and vocabulary:
 The legacy commands remain supported and continue to call their original API
 routes. New scripts should use the canonical commands.
 
+Run responses use `simulated-conversations.list_for_run` for the follow-up
+action previously identified as `simulations.list_for_run`.
+
 ### Common Flags
 
 | Flag | Description |
