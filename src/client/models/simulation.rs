@@ -76,12 +76,14 @@ pub struct TranscriptMessage {
 
 #[derive(Debug, Deserialize)]
 pub struct ListSimulationsResponse {
+    #[serde(alias = "simulated_conversations")]
     pub simulations: Vec<Simulation>,
     pub next_page_token: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct GetSimulationResponse {
+    #[serde(alias = "simulated_conversation")]
     pub simulation: Simulation,
 }
 

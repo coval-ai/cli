@@ -3,13 +3,81 @@
 
 [snapshot]
 catalog_url = "https://api.coval.dev/v1/openapi"
-reviewed_at = "2026-08-24"
+reviewed_at = "2026-09-01"
 published_operations = 181
 cli_supported_operations = 119
 
 [[allowed_extra]]
 operation = "POST /test-cases/{test_case_id}/media:upload-url"
 reason = "Implemented by the public API but currently omitted from its published OpenAPI specs."
+
+# The original conversation commands remain available for scripts that use the
+# earlier public route names. The primary CLI help and generated next actions use
+# the canonical conversation commands and routes.
+
+[[allowed_extra]]
+operation = "GET /conversations"
+reason = "Retained route for the legacy `coval conversations list` command."
+
+[[allowed_extra]]
+operation = "POST /conversations:submit"
+reason = "Retained route for the legacy `coval conversations submit` command."
+
+[[allowed_extra]]
+operation = "GET /conversations/{id}"
+reason = "Retained route for the legacy `coval conversations get` command."
+
+[[allowed_extra]]
+operation = "PATCH /conversations/{id}"
+reason = "Retained route for the legacy `coval conversations patch` command."
+
+[[allowed_extra]]
+operation = "DELETE /conversations/{id}"
+reason = "Retained route for the legacy `coval conversations delete` command."
+
+[[allowed_extra]]
+operation = "GET /conversations/{id}/audio"
+reason = "Retained route for the legacy `coval conversations audio` command."
+
+[[allowed_extra]]
+operation = "GET /conversations/{id}/metrics"
+reason = "Retained route for the legacy `coval conversations metrics` command."
+
+[[allowed_extra]]
+operation = "GET /conversations/{id}/metrics/{metric_path_id}"
+reason = "Retained route for the legacy `coval conversations metric-detail` command."
+
+[[allowed_extra]]
+operation = "GET /simulations"
+reason = "Retained route for the legacy `coval simulations list` command."
+
+[[allowed_extra]]
+operation = "GET /simulations/{id}"
+reason = "Retained route for the legacy `coval simulations get` command."
+
+[[allowed_extra]]
+operation = "PATCH /simulations/{id}"
+reason = "Retained route for the legacy `coval simulations update` command."
+
+[[allowed_extra]]
+operation = "DELETE /simulations/{id}"
+reason = "Retained route for the legacy `coval simulations delete` command."
+
+[[allowed_extra]]
+operation = "GET /simulations/{id}/audio"
+reason = "Retained route for the legacy `coval simulations audio` command."
+
+[[allowed_extra]]
+operation = "GET /simulations/{id}/metrics"
+reason = "Retained route for the legacy `coval simulations metrics` command."
+
+[[allowed_extra]]
+operation = "GET /simulations/{id}/metrics/{metric_path_id}"
+reason = "Retained route for the legacy `coval simulations metric-detail` command."
+
+[[allowed_extra]]
+operation = "POST /simulations/{id}/resimulate"
+reason = "Retained route for the legacy `coval simulations resimulate` command."
 
 # The public API renamed its published spec from monitors-v1 to alerts-v1 in
 # coval-ai/backend#6368. The /v1/monitors routes were deliberately retained as a
@@ -217,7 +285,7 @@ operation = "GET /scheduled-runs/{scheduled_run_id}/runs"
 reason = "Scheduled-run execution history remains to be modeled under COVAL-2079."
 
 [[known_gap]]
-operation = "POST /simulations:rerunMetrics"
+operation = "POST /conversations/simulated:rerunMetrics"
 reason = "Batch metric reruns need a dedicated confirmation-aware CLI workflow."
 
 [[known_gap]]

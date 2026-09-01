@@ -48,8 +48,8 @@ coval runs launch \
 # Check run status
 coval runs get <run_id>
 
-# List simulations for a run
-coval simulations list --run-id <run_id>
+# List simulated conversations for a run
+coval simulated-conversations list --run-id <run_id>
 ```
 
 ## Commands
@@ -60,7 +60,8 @@ coval simulations list --run-id <run_id>
 | `coval whoami` | Show current authentication |
 | `coval agents` | Manage AI agent configurations |
 | `coval runs` | Launch and manage evaluation runs |
-| `coval simulations` | View individual simulation results |
+| `coval simulated-conversations` | View individual conversations produced by simulation runs |
+| `coval uploaded-conversations` | Submit and manage uploaded production conversations |
 | `coval test-sets` | Manage test set collections |
 | `coval test-cases` | Manage individual test cases |
 | `coval personas` | Manage simulated personas |
@@ -78,6 +79,18 @@ coval simulations list --run-id <run_id>
 | `coval tags` | Manage resource tags |
 | `coval traces` | Search and inspect OpenTelemetry traces |
 | `coval config` | Manage CLI configuration |
+
+### Command Migration
+
+The canonical conversation commands use the current API routes and vocabulary:
+
+| Legacy command | Canonical command |
+|----------------|-------------------|
+| `coval simulations` | `coval simulated-conversations` |
+| `coval conversations` | `coval uploaded-conversations` |
+
+The legacy commands remain supported and continue to call their original API
+routes. New scripts should use the canonical commands.
 
 ### Common Flags
 

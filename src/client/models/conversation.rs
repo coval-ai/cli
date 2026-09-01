@@ -105,17 +105,20 @@ pub struct SubmitConversationRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct SubmitConversationResponse {
+    #[serde(alias = "uploaded_conversation")]
     pub conversation: Conversation,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ListConversationsResponse {
+    #[serde(alias = "uploaded_conversations")]
     pub conversations: Vec<Conversation>,
     pub next_page_token: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct GetConversationResponse {
+    #[serde(alias = "uploaded_conversation")]
     pub conversation: Conversation,
 }
 

@@ -11,6 +11,16 @@ fn coval() -> Command {
     command
 }
 
+fn coval_with_api(mock_server: &MockServer) -> Command {
+    let mut command = coval();
+    command
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri());
+    command
+}
+
 fn stdout_json(assert: assert_cmd::assert::Assert) -> Value {
     serde_json::from_slice(&assert.get_output().stdout).unwrap()
 }
@@ -90,9 +100,9 @@ fn write_skill(root: &std::path::Path, id: &str, description: &str) {
 
 const AGENT_RESOURCES: &[&str] = &[
     "agents",
-    "conversations",
+    "uploaded-conversations",
     "runs",
-    "simulations",
+    "simulated-conversations",
     "test-sets",
     "test-cases",
     "personas",
@@ -113,7 +123,7 @@ const AGENT_RESOURCES: &[&str] = &[
 const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
     &["agents", "create", "--help"],
     &["agents", "update", "--help"],
-    &["conversations", "submit", "--help"],
+    &["uploaded-conversations", "submit", "--help"],
     &["runs", "launch", "--help"],
     &["runs", "update", "--help"],
     &["test-sets", "create", "--help"],
@@ -168,6 +178,33 @@ fn test_help() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Coval AI evaluation CLI"));
+}
+
+#[test]
+fn test_help_prefers_canonical_conversation_commands() {
+    coval()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("uploaded-conversations"))
+        .stdout(predicate::str::contains("simulated-conversations"))
+        .stdout(predicate::str::contains("\n  conversations ").not())
+        .stdout(predicate::str::contains("\n  simulations ").not());
+
+    coval()
+        .args(["conversations", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Legacy command for uploaded conversations",
+        ));
+    coval()
+        .args(["simulations", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Legacy command for simulated conversations",
+        ));
 }
 
 #[test]
@@ -2110,7 +2147,7 @@ async fn test_runs_watch_agent_mode() {
         json!([
             "coval",
             "--agent",
-            "simulations",
+            "simulated-conversations",
             "list",
             "--run-id",
             "run123"
@@ -5483,4 +5520,287 @@ fn test_traces_search_rejects_more_than_ten_json_attribute_filters() {
         .stderr(predicate::str::contains(
             "trace search accepts at most 10 attribute filters, got 11",
         ));
+}
+
+#[tokio::test]
+async fn test_uploaded_conversation_commands_use_canonical_routes() {
+    let mock_server = MockServer::start().await;
+    let conversation = json!({
+        "name": "conversations/uploaded123",
+        "conversation_id": "uploaded123",
+        "status": "COMPLETED",
+        "create_time": "2026-09-01T12:00:00Z",
+        "has_audio": true,
+        "external_conversation_id": "customer-call-123"
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/v1/conversations/uploaded"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "uploaded_conversations": [conversation.clone()],
+            "next_page_token": null
+        })))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1/conversations/uploaded/uploaded123"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "uploaded_conversation": conversation.clone()
+        })))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1/conversations/uploaded:submit"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "uploaded_conversation": conversation.clone()
+        })))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("PATCH"))
+        .and(path("/v1/conversations/uploaded/uploaded123"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "uploaded_conversation": conversation.clone()
+        })))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path("/v1/conversations/uploaded/uploaded123"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1/conversations/uploaded/uploaded123/audio"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "audio_url": "https://storage.example.com/uploaded.wav",
+            "conversation_id": "uploaded123",
+            "url_expires_in_seconds": 3600
+        })))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1/conversations/uploaded/uploaded123/metrics"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "metrics": [{"metric_output_id": "output123", "metric_id": "metric123"}],
+            "next_page_token": null
+        })))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/v1/conversations/uploaded/uploaded123/metrics/output123",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "metric": {"metric_output_id": "output123", "metric_id": "metric123"}
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let listed = stdout_json(
+        coval_with_api(&mock_server)
+            .args(["--format", "json", "uploaded-conversations", "list"])
+            .assert()
+            .success(),
+    );
+    assert_eq!(listed[0]["conversation_id"], "uploaded123");
+    assert!(listed.get("uploaded_conversations").is_none());
+
+    let fetched = stdout_json(
+        coval_with_api(&mock_server)
+            .args([
+                "--format",
+                "json",
+                "uploaded-conversations",
+                "get",
+                "uploaded123",
+            ])
+            .assert()
+            .success(),
+    );
+    assert_eq!(fetched["external_conversation_id"], "customer-call-123");
+
+    coval_with_api(&mock_server)
+        .args([
+            "uploaded-conversations",
+            "submit",
+            "--input-json",
+            r#"{"transcript": []}"#,
+        ])
+        .assert()
+        .success();
+    coval_with_api(&mock_server)
+        .args([
+            "uploaded-conversations",
+            "patch",
+            "uploaded123",
+            "--audio-url",
+            "https://storage.example.com/new.wav",
+        ])
+        .assert()
+        .success();
+    coval_with_api(&mock_server)
+        .args(["uploaded-conversations", "audio", "uploaded123"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("uploaded.wav"));
+    coval_with_api(&mock_server)
+        .args(["uploaded-conversations", "metrics", "uploaded123"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("output123"));
+    coval_with_api(&mock_server)
+        .args([
+            "uploaded-conversations",
+            "metric-detail",
+            "uploaded123",
+            "output123",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("metric123"));
+    coval_with_api(&mock_server)
+        .args(["uploaded-conversations", "delete", "uploaded123"])
+        .assert()
+        .success();
+}
+
+#[tokio::test]
+async fn test_simulated_conversation_commands_use_canonical_routes() {
+    let mock_server = MockServer::start().await;
+    let simulation = json!({
+        "name": "simulated-conversations/simulated123",
+        "simulation_id": "simulated123",
+        "run_id": "run123",
+        "status": "COMPLETED",
+        "create_time": "2026-09-01T12:00:00Z",
+        "has_audio": true
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/v1/conversations/simulated"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "simulated_conversations": [simulation.clone()],
+            "next_page_token": null
+        })))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1/conversations/simulated/simulated123"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "simulated_conversation": simulation.clone()
+        })))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("PATCH"))
+        .and(path("/v1/conversations/simulated/simulated123"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "simulated_conversation": simulation.clone()
+        })))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1/conversations/simulated/simulated123/resimulate"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "simulated_conversation": simulation.clone()
+        })))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path("/v1/conversations/simulated/simulated123"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1/conversations/simulated/simulated123/audio"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "audio_url": "https://storage.example.com/simulated.wav",
+            "simulation_id": "simulated123",
+            "url_expires_in_seconds": 3600
+        })))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1/conversations/simulated/simulated123/metrics"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "metrics": [{"metric_output_id": "output123", "metric_id": "metric123"}]
+        })))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/v1/conversations/simulated/simulated123/metrics/output123",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "metric": {"metric_output_id": "output123", "metric_id": "metric123"}
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let listed = stdout_json(
+        coval_with_api(&mock_server)
+            .args([
+                "--format",
+                "json",
+                "simulated-conversations",
+                "list",
+                "--run-id",
+                "run123",
+            ])
+            .assert()
+            .success(),
+    );
+    assert_eq!(listed[0]["simulation_id"], "simulated123");
+    assert!(listed.get("simulated_conversations").is_none());
+
+    let fetched = stdout_json(
+        coval_with_api(&mock_server)
+            .args([
+                "--format",
+                "json",
+                "simulated-conversations",
+                "get",
+                "simulated123",
+            ])
+            .assert()
+            .success(),
+    );
+    assert_eq!(fetched["run_id"], "run123");
+
+    coval_with_api(&mock_server)
+        .args([
+            "simulated-conversations",
+            "update",
+            "simulated123",
+            "--notes",
+            "reviewed",
+        ])
+        .assert()
+        .success();
+    coval_with_api(&mock_server)
+        .args(["simulated-conversations", "resimulate", "simulated123"])
+        .assert()
+        .success();
+    coval_with_api(&mock_server)
+        .args(["simulated-conversations", "audio", "simulated123"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("simulated.wav"));
+    coval_with_api(&mock_server)
+        .args(["simulated-conversations", "metrics", "simulated123"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("output123"));
+    coval_with_api(&mock_server)
+        .args([
+            "simulated-conversations",
+            "metric-detail",
+            "simulated123",
+            "output123",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("metric123"));
+    coval_with_api(&mock_server)
+        .args(["simulated-conversations", "delete", "simulated123"])
+        .assert()
+        .success();
 }

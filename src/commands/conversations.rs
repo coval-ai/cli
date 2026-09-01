@@ -141,15 +141,62 @@ pub struct PatchArgs {
     audio_file: Option<PathBuf>,
 }
 
-pub async fn execute(
+#[derive(Clone, Copy)]
+enum ConversationCollection {
+    Uploaded,
+    Legacy,
+}
+
+impl ConversationCollection {
+    fn resource(self) -> &'static str {
+        match self {
+            Self::Uploaded => "uploaded-conversations",
+            Self::Legacy => "conversations",
+        }
+    }
+
+    fn alternate_resource(self) -> &'static str {
+        match self {
+            Self::Uploaded => "simulated-conversations",
+            Self::Legacy => "simulations",
+        }
+    }
+
+    fn description(self) -> &'static str {
+        match self {
+            Self::Uploaded => "Uploaded conversation",
+            Self::Legacy => "Conversation",
+        }
+    }
+}
+
+pub async fn execute_uploaded(
     cmd: ConversationCommands,
     client: &CovalClient,
     ctx: &OutputContext,
 ) -> Result<()> {
+    execute_for(cmd, client, ctx, ConversationCollection::Uploaded).await
+}
+
+pub async fn execute_legacy(
+    cmd: ConversationCommands,
+    client: &CovalClient,
+    ctx: &OutputContext,
+) -> Result<()> {
+    execute_for(cmd, client, ctx, ConversationCollection::Legacy).await
+}
+
+async fn execute_for(
+    cmd: ConversationCommands,
+    client: &CovalClient,
+    ctx: &OutputContext,
+    collection: ConversationCollection,
+) -> Result<()> {
     let operation = cmd.operation();
+    let resource = collection.resource();
     match cmd {
         ConversationCommands::Context => {
-            return crate::commands::agent::resource_context("conversations", ctx);
+            return crate::commands::agent::resource_context(resource, ctx);
         }
         ConversationCommands::List(args) => {
             let params = ListParams {
@@ -158,21 +205,33 @@ pub async fn execute(
                 order_by: args.order_by,
                 ..Default::default()
             };
-            let response = match args.include_metric_outputs {
-                Some(metric_id) => {
+            let response = match (collection, args.include_metric_outputs) {
+                (ConversationCollection::Uploaded, Some(metric_id)) => {
+                    client
+                        .uploaded_conversations()
+                        .list_with_metric_outputs(params, &metric_id)
+                        .await?
+                }
+                (ConversationCollection::Uploaded, None) => {
+                    client.uploaded_conversations().list(params).await?
+                }
+                (ConversationCollection::Legacy, Some(metric_id)) => {
                     client
                         .conversations()
                         .list_with_metric_outputs(params, &metric_id)
                         .await?
                 }
-                None => client.conversations().list(params).await?,
+                (ConversationCollection::Legacy, None) => {
+                    client.conversations().list(params).await?
+                }
             };
             emit_list_with_actions(
                 ctx,
-                "conversations",
+                resource,
                 operation,
                 &response.conversations,
                 list_actions(
+                    resource,
                     response
                         .conversations
                         .first()
@@ -181,21 +240,39 @@ pub async fn execute(
             );
         }
         ConversationCommands::Get(args) => {
-            let result = client.conversations().get(&args.conversation_id).await;
+            let result = match collection {
+                ConversationCollection::Uploaded => {
+                    client
+                        .uploaded_conversations()
+                        .get(&args.conversation_id)
+                        .await
+                }
+                ConversationCollection::Legacy => {
+                    client.conversations().get(&args.conversation_id).await
+                }
+            };
             match result {
                 Ok(conversation) => emit_one_with_actions(
                     ctx,
-                    "conversations",
+                    resource,
                     operation,
                     &conversation,
-                    conversation_actions(&conversation.conversation_id),
+                    conversation_actions(resource, &conversation.conversation_id),
                 ),
                 Err(ApiError::NotFound { .. }) => {
                     if !ctx.agent {
-                        print_not_found_hint(&args.conversation_id, "simulations");
+                        print_not_found_hint(
+                            &args.conversation_id,
+                            collection.description(),
+                            collection.alternate_resource(),
+                        );
                     }
                     return Err(ApiError::NotFound {
-                        resource: format!("Conversation '{}'", args.conversation_id),
+                        resource: format!(
+                            "{} '{}'",
+                            collection.description(),
+                            args.conversation_id
+                        ),
                     }
                     .into());
                 }
@@ -203,24 +280,42 @@ pub async fn execute(
             }
         }
         ConversationCommands::Delete(args) => {
-            let result = client.conversations().delete(&args.conversation_id).await;
+            let result = match collection {
+                ConversationCollection::Uploaded => {
+                    client
+                        .uploaded_conversations()
+                        .delete(&args.conversation_id)
+                        .await
+                }
+                ConversationCollection::Legacy => {
+                    client.conversations().delete(&args.conversation_id).await
+                }
+            };
             match result {
                 Ok(()) => emit_success_with_actions(
                     ctx,
-                    "conversations",
+                    resource,
                     operation,
-                    "Conversation deleted.",
+                    &format!("{} deleted.", collection.description()),
                     vec![
-                        next_actions::list("conversations").primary(),
-                        next_actions::context("conversations"),
+                        next_actions::list(resource).primary(),
+                        next_actions::context(resource),
                     ],
                 ),
                 Err(ApiError::NotFound { .. }) => {
                     if !ctx.agent {
-                        print_not_found_hint(&args.conversation_id, "simulations");
+                        print_not_found_hint(
+                            &args.conversation_id,
+                            collection.description(),
+                            collection.alternate_resource(),
+                        );
                     }
                     return Err(ApiError::NotFound {
-                        resource: format!("Conversation '{}'", args.conversation_id),
+                        resource: format!(
+                            "{} '{}'",
+                            collection.description(),
+                            args.conversation_id
+                        ),
                     }
                     .into());
                 }
@@ -228,52 +323,77 @@ pub async fn execute(
             }
         }
         ConversationCommands::Metrics(args) => {
-            let response = client
-                .conversations()
-                .list_metrics(&args.conversation_id)
-                .await?;
+            let response = match collection {
+                ConversationCollection::Uploaded => {
+                    client
+                        .uploaded_conversations()
+                        .list_metrics(&args.conversation_id)
+                        .await?
+                }
+                ConversationCollection::Legacy => {
+                    client
+                        .conversations()
+                        .list_metrics(&args.conversation_id)
+                        .await?
+                }
+            };
             emit_list_with_actions(
                 ctx,
-                "conversations",
+                resource,
                 operation,
                 &response.metrics,
                 vec![
-                    next_actions::get("conversations", &args.conversation_id).primary(),
-                    next_actions::context("conversations"),
+                    next_actions::get(resource, &args.conversation_id).primary(),
+                    next_actions::context(resource),
                 ],
             );
         }
         ConversationCommands::MetricDetail(args) => {
-            let response = client
-                .conversations()
-                .get_metric(&args.conversation_id, &args.metric_id)
-                .await?;
+            let response = match collection {
+                ConversationCollection::Uploaded => {
+                    client
+                        .uploaded_conversations()
+                        .get_metric(&args.conversation_id, &args.metric_id)
+                        .await?
+                }
+                ConversationCollection::Legacy => {
+                    client
+                        .conversations()
+                        .get_metric(&args.conversation_id, &args.metric_id)
+                        .await?
+                }
+            };
             match response {
                 MetricDetailResponse::Single { metric } => emit_one_with_actions(
                     ctx,
-                    "conversations",
+                    resource,
                     operation,
                     &metric,
-                    vec![next_actions::get("conversations", &args.conversation_id).primary()],
+                    vec![next_actions::get(resource, &args.conversation_id).primary()],
                 ),
                 MetricDetailResponse::Collection { metric_outputs } => emit_list_with_actions(
                     ctx,
-                    "conversations",
+                    resource,
                     operation,
                     &metric_outputs,
-                    vec![next_actions::get("conversations", &args.conversation_id).primary()],
+                    vec![next_actions::get(resource, &args.conversation_id).primary()],
                 ),
             }
         }
         ConversationCommands::Submit(args) => {
             let req = build_submit_request(args)?;
-            let conversation = client.conversations().submit(req).await?;
+            let conversation = match collection {
+                ConversationCollection::Uploaded => {
+                    client.uploaded_conversations().submit(req).await?
+                }
+                ConversationCollection::Legacy => client.conversations().submit(req).await?,
+            };
             emit_one_with_actions(
                 ctx,
-                "conversations",
+                resource,
                 operation,
                 &conversation,
-                conversation_actions(&conversation.conversation_id),
+                conversation_actions(resource, &conversation.conversation_id),
             );
         }
         ConversationCommands::Patch(args) => {
@@ -298,24 +418,42 @@ pub async fn execute(
                 audio_url: args.audio_url,
                 audio_reference: None,
             };
-            match client
-                .conversations()
-                .patch(&args.conversation_id, req)
-                .await
-            {
+            let result = match collection {
+                ConversationCollection::Uploaded => {
+                    client
+                        .uploaded_conversations()
+                        .patch(&args.conversation_id, req)
+                        .await
+                }
+                ConversationCollection::Legacy => {
+                    client
+                        .conversations()
+                        .patch(&args.conversation_id, req)
+                        .await
+                }
+            };
+            match result {
                 Ok(conversation) => emit_one_with_actions(
                     ctx,
-                    "conversations",
+                    resource,
                     operation,
                     &conversation,
-                    conversation_actions(&conversation.conversation_id),
+                    conversation_actions(resource, &conversation.conversation_id),
                 ),
                 Err(ApiError::NotFound { .. }) => {
                     if !ctx.agent {
-                        print_not_found_hint(&args.conversation_id, "simulations");
+                        print_not_found_hint(
+                            &args.conversation_id,
+                            collection.description(),
+                            collection.alternate_resource(),
+                        );
                     }
                     return Err(ApiError::NotFound {
-                        resource: format!("Conversation '{}'", args.conversation_id),
+                        resource: format!(
+                            "{} '{}'",
+                            collection.description(),
+                            args.conversation_id
+                        ),
                     }
                     .into());
                 }
@@ -323,19 +461,29 @@ pub async fn execute(
             }
         }
         ConversationCommands::Audio(args) => {
-            let audio = client.conversations().audio(&args.conversation_id).await?;
+            let audio = match collection {
+                ConversationCollection::Uploaded => {
+                    client
+                        .uploaded_conversations()
+                        .audio(&args.conversation_id)
+                        .await?
+                }
+                ConversationCollection::Legacy => {
+                    client.conversations().audio(&args.conversation_id).await?
+                }
+            };
 
             match args.output {
                 Some(path) => {
                     download_audio(&audio.audio_url, &path, !ctx.agent).await?;
                     emit_success_with_actions(
                         ctx,
-                        "conversations",
+                        resource,
                         operation,
                         &format!("Audio saved to {}", path.display()),
                         vec![
-                            next_actions::get("conversations", &args.conversation_id).primary(),
-                            next_actions::conversation_metrics(&args.conversation_id),
+                            next_actions::get(resource, &args.conversation_id).primary(),
+                            next_actions::metrics(resource, &args.conversation_id),
                         ],
                     );
                 }
@@ -345,12 +493,12 @@ pub async fn execute(
                     } else {
                         emit_one_with_actions(
                             ctx,
-                            "conversations",
+                            resource,
                             operation,
                             &audio,
                             vec![
-                                next_actions::get("conversations", &args.conversation_id).primary(),
-                                next_actions::conversation_metrics(&args.conversation_id),
+                                next_actions::get(resource, &args.conversation_id).primary(),
+                                next_actions::metrics(resource, &args.conversation_id),
                             ],
                         );
                     }
@@ -361,23 +509,26 @@ pub async fn execute(
     Ok(())
 }
 
-fn list_actions(id: Option<&str>) -> Vec<NextAction> {
-    let mut actions = vec![next_actions::context("conversations")];
+fn list_actions(resource: &str, id: Option<&str>) -> Vec<NextAction> {
+    let mut actions = vec![next_actions::context(resource)];
     if let Some(id) = id {
-        actions.insert(0, next_actions::get("conversations", id).primary());
+        actions.insert(0, next_actions::get(resource, id).primary());
     }
     actions
 }
 
-fn conversation_actions(conversation_id: &str) -> Vec<NextAction> {
+fn conversation_actions(resource: &str, conversation_id: &str) -> Vec<NextAction> {
     vec![
-        next_actions::conversation_metrics(conversation_id).primary(),
-        next_actions::context("conversations"),
+        next_actions::metrics(resource, conversation_id).primary(),
+        next_actions::context(resource),
     ]
 }
 
-fn print_not_found_hint(id: &str, try_command: &str) {
-    eprintln!("hint: not found as a conversation. Try `coval {try_command} get {id}` instead.");
+fn print_not_found_hint(id: &str, description: &str, alternate_resource: &str) {
+    eprintln!(
+        "hint: not found as a {}. Try `coval {alternate_resource} get {id}` instead.",
+        description.to_lowercase()
+    );
 }
 
 fn build_submit_request(args: SubmitArgs) -> Result<SubmitConversationRequest> {

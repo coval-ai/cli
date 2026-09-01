@@ -56,9 +56,9 @@ pub fn runs_watch(run_id: &str) -> NextAction {
 
 pub fn simulations_for_run(run_id: &str) -> NextAction {
     NextAction::new(
-        "simulations.list_for_run",
-        "List run simulations",
-        argv(["simulations", "list", "--run-id", run_id]),
+        "simulated-conversations.list_for_run",
+        "List run simulated conversations",
+        argv(["simulated-conversations", "list", "--run-id", run_id]),
         true,
     )
 }
@@ -104,29 +104,20 @@ pub fn test_cases_for_set(test_set_id: &str) -> NextAction {
     )
 }
 
-pub fn simulation_metrics(simulation_id: &str) -> NextAction {
+pub fn metrics(resource: &str, id: &str) -> NextAction {
     NextAction::new(
-        "simulations.metrics",
-        "List simulation metrics",
-        argv(["simulations", "metrics", simulation_id]),
+        format!("{resource}.metrics"),
+        format!("List {resource} metrics"),
+        argv([resource, "metrics", id]),
         true,
     )
 }
 
-pub fn simulation_audio(simulation_id: &str) -> NextAction {
+pub fn audio(resource: &str, id: &str) -> NextAction {
     NextAction::new(
-        "simulations.audio",
-        "Get simulation audio URL",
-        argv(["simulations", "audio", simulation_id]),
-        true,
-    )
-}
-
-pub fn conversation_metrics(conversation_id: &str) -> NextAction {
-    NextAction::new(
-        "conversations.metrics",
-        "List conversation metrics",
-        argv(["conversations", "metrics", conversation_id]),
+        format!("{resource}.audio"),
+        format!("Get {resource} audio URL"),
+        argv([resource, "audio", id]),
         true,
     )
 }
