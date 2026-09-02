@@ -399,7 +399,10 @@ const RESOURCE_SPECS: &[ResourceSpec] = &[
             name: "List cases in a set",
             argv: &["test-cases", "list", "--test-set-id", "<test_set_id>"],
         }],
-        pitfalls: &["Bulk stdin create accepts JSON lines, not one JSON array."],
+        pitfalls: &[
+            "Bulk stdin create accepts JSON lines, not one JSON array.",
+            "SCRIPT test cases need top-level script_turns; simulation_metadata_input.script_turns is the legacy form.",
+        ],
     },
     ResourceSpec {
         name: "personas",
