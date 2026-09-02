@@ -18,6 +18,9 @@ pub struct TestCase {
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_type: Option<String>,
+    /// Ordered persona turns; required when `input_type` is SCRIPT.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub script_turns: Option<Vec<serde_json::Value>>,
     #[serde(default)]
     pub simulation_metadata_input: serde_json::Value,
     #[serde(default)]
@@ -45,6 +48,9 @@ pub struct CreateTestCaseRequest {
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_type: Option<String>,
+    /// Ordered persona turns; required when `input_type` is SCRIPT.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub script_turns: Option<Vec<serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub simulation_metadata_input: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -69,12 +75,30 @@ pub struct UpdateTestCaseRequest {
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_type: Option<String>,
+    /// Ordered persona turns; required when `input_type` is SCRIPT. An explicit
+    /// JSON null clears the stored turns, so absent and null must stay distinct.
+    #[serde(
+        default,
+        deserialize_with = "explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub script_turns: Option<Option<Vec<serde_json::Value>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub simulation_metadata_input: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metric_input: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_notes: Option<String>,
+}
+
+/// Deserializes a present field into `Some(..)` even when its value is null, so
+/// callers can tell "field omitted" from "field explicitly cleared".
+fn explicit_option<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
 }
 
 #[derive(Debug, Deserialize)]

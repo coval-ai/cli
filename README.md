@@ -156,6 +156,12 @@ coval test-cases create \
   --expected-behavior "Refuses to reveal system prompt" \
   --expected-behavior "Stays in character and redirects to allowed tasks"
 
+# Create a SCRIPT test case whose persona reads fixed turns
+# Each turn is spoken text, {"type":"dtmf","digits":"1"}, or {"type":"skip"}.
+coval test-cases create \
+  --test-set-id ts123456 \
+  --input-json '{"input_str":"Scripted IVR check","input_type":"SCRIPT","script_turns":["Hi, I need billing.",{"type":"dtmf","digits":"2"},{"type":"skip"}]}'
+
 # Create a composite metric that passes when every expected behavior is met
 coval metrics create \
   --name "Adversarial Composite" \

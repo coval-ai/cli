@@ -4163,6 +4163,204 @@ async fn test_test_cases_create_stdin_body_matches_input_json_body() {
 }
 
 #[tokio::test]
+async fn test_test_cases_create_forwards_top_level_script_turns() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+    let script_turns = json!(["Hi.", {"type": "dtmf", "digits": "1"}, {"type": "skip"}]);
+
+    Mock::given(method("POST"))
+        .and(path("/v1/test-cases"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(test_case_response_body(&full_test_case_fields())),
+        )
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("--format")
+        .arg("json")
+        .arg("test-cases")
+        .arg("create")
+        .arg("--test-set-id")
+        .arg("ts123")
+        .arg("--input-json")
+        .arg(
+            json!({
+                "input_str": "scripted call",
+                "input_type": "SCRIPT",
+                "script_turns": script_turns,
+            })
+            .to_string(),
+        )
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    let body = capture.take();
+    assert_eq!(body["script_turns"], script_turns);
+    assert_eq!(body["input_type"], "SCRIPT");
+}
+
+#[tokio::test]
+async fn test_test_cases_create_stdin_forwards_top_level_script_turns() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+    let script_turns = json!(["Hi.", {"type": "skip"}]);
+
+    Mock::given(method("POST"))
+        .and(path("/v1/test-cases"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(test_case_response_body(&full_test_case_fields())),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let line = json!({
+        "input_str": "scripted call",
+        "input_type": "SCRIPT",
+        "script_turns": script_turns,
+    });
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("--format")
+        .arg("json")
+        .arg("test-cases")
+        .arg("create")
+        .arg("--test-set-id")
+        .arg("ts123")
+        .arg("--stdin")
+        .write_stdin(format!("{line}\n"))
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    assert_eq!(capture.take()["script_turns"], script_turns);
+}
+
+#[tokio::test]
+async fn test_test_cases_create_omits_absent_script_turns() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("POST"))
+        .and(path("/v1/test-cases"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(test_case_response_body(&full_test_case_fields())),
+        )
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("--format")
+        .arg("json")
+        .arg("test-cases")
+        .arg("create")
+        .arg("--test-set-id")
+        .arg("ts123")
+        .arg("--input")
+        .arg("plain scenario")
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    let body = capture.take();
+    assert!(
+        body.get("script_turns").is_none(),
+        "absent script_turns must not be sent: {body}"
+    );
+}
+
+#[tokio::test]
+async fn test_test_cases_update_distinguishes_absent_and_null_script_turns() {
+    let response_body = test_case_response_body(&full_test_case_fields());
+
+    let null_server = MockServer::start().await;
+    let null_capture = BodyCapture::default();
+    Mock::given(method("PATCH"))
+        .and(path("/v1/test-cases/tc1"))
+        .and(header("X-API-Key", "test_key"))
+        .and(null_capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body.clone()))
+        .mount(&null_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(null_server.uri())
+        .arg("--format")
+        .arg("json")
+        .arg("test-cases")
+        .arg("update")
+        .arg("tc1")
+        .arg("--input-json")
+        .arg(json!({"script_turns": Value::Null}).to_string())
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    let null_body = null_capture.take();
+    assert!(
+        null_body.get("script_turns").is_some_and(Value::is_null),
+        "explicit null must clear the turns: {null_body}"
+    );
+
+    let absent_server = MockServer::start().await;
+    let absent_capture = BodyCapture::default();
+    Mock::given(method("PATCH"))
+        .and(path("/v1/test-cases/tc1"))
+        .and(header("X-API-Key", "test_key"))
+        .and(absent_capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&absent_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(absent_server.uri())
+        .arg("--format")
+        .arg("json")
+        .arg("test-cases")
+        .arg("update")
+        .arg("tc1")
+        .arg("--description")
+        .arg("updated")
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    let absent_body = absent_capture.take();
+    assert!(
+        absent_body.get("script_turns").is_none(),
+        "an unrelated update must not clear the turns: {absent_body}"
+    );
+}
+
+#[tokio::test]
 async fn test_test_cases_get_json_output_preserves_fields() {
     let mock_server = MockServer::start().await;
 
@@ -4179,7 +4377,8 @@ async fn test_test_cases_get_json_output_preserves_fields() {
                 "expected_output_str": "Sunny with a high of 75 degrees.",
                 "expected_output_json": {"temperature": 75, "condition": "sunny"},
                 "description": "Weather query with sunny conditions",
-                "input_type": "SCENARIO",
+                "input_type": "SCRIPT",
+                "script_turns": ["Hi", {"type": "dtmf", "digits": "1"}],
                 "simulation_metadata_input": {"script_turns": ["Hi"]},
                 "metric_input": {"expected_entities": ["weather"]},
                 "user_notes": "Added for regression testing weather queries",
@@ -4209,6 +4408,10 @@ async fn test_test_cases_get_json_output_preserves_fields() {
     assert_eq!(
         value["expected_output_json"],
         json!({"temperature": 75, "condition": "sunny"})
+    );
+    assert_eq!(
+        value["script_turns"],
+        json!(["Hi", {"type": "dtmf", "digits": "1"}])
     );
     assert_eq!(
         value["simulation_metadata_input"]["script_turns"],
