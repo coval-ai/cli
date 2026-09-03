@@ -18,8 +18,8 @@ only when coverage actually changes.
 | Reviewed gaps | 62 |
 | Client operations | 143 |
 | Published request fields on covered operations | 363 |
-| Request fields modeled by the CLI | 343 |
-| Reviewed request-field gaps | 17 |
+| Request fields modeled by the CLI | 354 |
+| Reviewed request-field gaps | 6 |
 
 Catalog: https://api.coval.dev/v1/openapi
 
@@ -50,7 +50,7 @@ Catalog: https://api.coval.dev/v1/openapi
 ## Coverage snapshot mismatches
 
 - `published_request_fields: recorded 360, current 363`
-- `cli_modeled_request_fields: recorded 313, current 343`
+- `cli_modeled_request_fields: recorded 313, current 354`
 
 ## Client-only operations
 
@@ -141,23 +141,12 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## All current request-field gaps
 
-- `PATCH /agents/{id} attributes`
-- `PATCH /agents/{id} customer_agent_id`
-- `PATCH /agents/{id} language`
-- `PATCH /agents/{id} tags`
-- `PATCH /agents/{id} workflows`
-- `PATCH /conversations/uploaded/{id} metadata`
 - `PATCH /metrics/{id} ivr_flow`
 - `PATCH /run-templates/{id} agent_id`
 - `PATCH /run-templates/{id} persona_id`
-- `PATCH /run-templates/{id} tags`
 - `PATCH /run-templates/{id} test_set_id`
-- `PATCH /test-sets/{id} tags`
-- `POST /conversations/uploaded:submit tags`
 - `POST /metrics ivr_flow`
 - `POST /run-templates agent_id`
 - `POST /run-templates persona_id`
-- `POST /run-templates tags`
 - `POST /run-templates test_set_id`
 - `POST /runs config_overrides`
-- `POST /test-sets tags`
