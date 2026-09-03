@@ -182,6 +182,54 @@ pub struct CreateArgs {
     /// Composite: include traces in the evaluation
     #[arg(long)]
     include_traces: Option<bool>,
+    /// Pause: maximum silence duration in seconds
+    #[arg(long)]
+    max_silence_duration_seconds: Option<f64>,
+    /// Pause: minimum silence gap in seconds
+    #[arg(long)]
+    min_silence_gap_seconds: Option<f64>,
+    /// Frequency threshold
+    #[arg(long)]
+    frequency_threshold: Option<f64>,
+    /// Threshold direction (above or below)
+    #[arg(long)]
+    direction: Option<String>,
+    /// Comma-separated passing sentiments (Neutral, Happy, Angry, Sad)
+    #[arg(long, value_delimiter = ',')]
+    success_sentiments: Option<Vec<String>>,
+    /// Percentage of the conversation that must be above the threshold (0-100)
+    #[arg(long)]
+    percent_above: Option<f64>,
+    /// Comma-separated simulation end reasons that count as success
+    #[arg(long, value_delimiter = ',')]
+    success_end_reasons: Option<Vec<String>>,
+    /// Observation name
+    #[arg(long)]
+    observation_name: Option<String>,
+    /// Toolcall: expected request body, as a JSON value or a plain string
+    #[arg(long)]
+    expected_body: Option<String>,
+    /// Toolcall: dot path into the payload to match on
+    #[arg(long)]
+    match_path: Option<String>,
+    /// Minimum volume change for pitch misalignment
+    #[arg(long)]
+    min_volume_change_for_pitch_misalignment: Option<f64>,
+    /// Numeric threshold to compare against
+    #[arg(long)]
+    threshold: Option<i64>,
+    /// Comparison operator (<, <=, >, >=, ==, !=)
+    #[arg(long)]
+    operator: Option<String>,
+    /// SQL query defining a SQL metric
+    #[arg(long)]
+    sql_query: Option<String>,
+    /// JSON string overriding the LLM model used to evaluate the metric
+    #[arg(long)]
+    runtime_config: Option<String>,
+    /// Comma-separated tag names; pass an empty value to clear all tags
+    #[arg(long, value_delimiter = ',')]
+    tags: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -253,6 +301,54 @@ pub struct UpdateArgs {
     /// Composite: include traces in the evaluation
     #[arg(long)]
     include_traces: Option<bool>,
+    /// Pause: maximum silence duration in seconds
+    #[arg(long)]
+    max_silence_duration_seconds: Option<f64>,
+    /// Pause: minimum silence gap in seconds
+    #[arg(long)]
+    min_silence_gap_seconds: Option<f64>,
+    /// Frequency threshold
+    #[arg(long)]
+    frequency_threshold: Option<f64>,
+    /// Threshold direction (above or below)
+    #[arg(long)]
+    direction: Option<String>,
+    /// Comma-separated passing sentiments (Neutral, Happy, Angry, Sad)
+    #[arg(long, value_delimiter = ',')]
+    success_sentiments: Option<Vec<String>>,
+    /// Percentage of the conversation that must be above the threshold (0-100)
+    #[arg(long)]
+    percent_above: Option<f64>,
+    /// Comma-separated simulation end reasons that count as success
+    #[arg(long, value_delimiter = ',')]
+    success_end_reasons: Option<Vec<String>>,
+    /// Observation name
+    #[arg(long)]
+    observation_name: Option<String>,
+    /// Toolcall: expected request body, as a JSON value or a plain string
+    #[arg(long)]
+    expected_body: Option<String>,
+    /// Toolcall: dot path into the payload to match on
+    #[arg(long)]
+    match_path: Option<String>,
+    /// Minimum volume change for pitch misalignment
+    #[arg(long)]
+    min_volume_change_for_pitch_misalignment: Option<f64>,
+    /// Numeric threshold to compare against
+    #[arg(long)]
+    threshold: Option<i64>,
+    /// Comparison operator (<, <=, >, >=, ==, !=)
+    #[arg(long)]
+    operator: Option<String>,
+    /// SQL query defining a SQL metric
+    #[arg(long)]
+    sql_query: Option<String>,
+    /// JSON string overriding the LLM model used to evaluate the metric
+    #[arg(long)]
+    runtime_config: Option<String>,
+    /// Comma-separated tag names; pass an empty value to clear all tags
+    #[arg(long, value_delimiter = ',')]
+    tags: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -264,9 +360,12 @@ pub struct DeleteArgs {
 pub struct TestArgs {
     /// The metric ID to test
     metric_id: String,
-    /// The simulation output ID to run the metric against
-    #[arg(long)]
-    simulation_output_id: String,
+    /// Deprecated by the API: a single simulation output ID
+    #[arg(long, conflicts_with = "simulation_output_ids")]
+    simulation_output_id: Option<String>,
+    /// Comma-separated simulation output IDs to run the metric against (1-100)
+    #[arg(long, value_delimiter = ',')]
+    simulation_output_ids: Option<Vec<String>>,
     /// Optional developer identifier for debugging
     #[arg(long)]
     dev_id: Option<String>,
@@ -398,6 +497,16 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 .map(|s| serde_json::from_str(&s))
                 .transpose()
                 .map_err(|e| anyhow::anyhow!("Invalid JSON for --target-condition: {e}"))?;
+            let runtime_config: Option<serde_json::Value> = args
+                .runtime_config
+                .map(|s| serde_json::from_str(&s))
+                .transpose()
+                .map_err(|e| anyhow::anyhow!("Invalid JSON for --runtime-config: {e}"))?;
+            // The API accepts either a JSON value or a plain string here, so fall
+            // back to the literal text rather than rejecting unparseable input.
+            let expected_body: Option<serde_json::Value> = args
+                .expected_body
+                .map(|s| serde_json::from_str(&s).unwrap_or(serde_json::Value::String(s)));
 
             input_json::insert(&mut input, "metric_name", args.name)?;
             input_json::insert(&mut input, "description", args.description)?;
@@ -429,6 +538,34 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 args.base_prompt_template,
             )?;
             input_json::insert(&mut input, "include_traces", args.include_traces)?;
+            input_json::insert(
+                &mut input,
+                "max_silence_duration_seconds",
+                args.max_silence_duration_seconds,
+            )?;
+            input_json::insert(
+                &mut input,
+                "min_silence_gap_seconds",
+                args.min_silence_gap_seconds,
+            )?;
+            input_json::insert(&mut input, "frequency_threshold", args.frequency_threshold)?;
+            input_json::insert(&mut input, "direction", args.direction)?;
+            input_json::insert(&mut input, "success_sentiments", args.success_sentiments)?;
+            input_json::insert(&mut input, "percent_above", args.percent_above)?;
+            input_json::insert(&mut input, "success_end_reasons", args.success_end_reasons)?;
+            input_json::insert(&mut input, "observation_name", args.observation_name)?;
+            input_json::insert(&mut input, "expected_body", expected_body)?;
+            input_json::insert(&mut input, "match_path", args.match_path)?;
+            input_json::insert(
+                &mut input,
+                "min_volume_change_for_pitch_misalignment",
+                args.min_volume_change_for_pitch_misalignment,
+            )?;
+            input_json::insert(&mut input, "threshold", args.threshold)?;
+            input_json::insert(&mut input, "operator", args.operator)?;
+            input_json::insert(&mut input, "sql_query", args.sql_query)?;
+            input_json::insert(&mut input, "runtime_config", runtime_config)?;
+            input_json::insert(&mut input, "tags", args.tags)?;
             validate_composite(&input)?;
             let req: CreateMetricRequest = input_json::finish(input)?;
             let metric = client.metrics().create(req).await?;
@@ -458,6 +595,16 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 .map(|s| serde_json::from_str(&s))
                 .transpose()
                 .map_err(|e| anyhow::anyhow!("Invalid JSON for --target-condition: {e}"))?;
+            let runtime_config: Option<serde_json::Value> = args
+                .runtime_config
+                .map(|s| serde_json::from_str(&s))
+                .transpose()
+                .map_err(|e| anyhow::anyhow!("Invalid JSON for --runtime-config: {e}"))?;
+            // The API accepts either a JSON value or a plain string here, so fall
+            // back to the literal text rather than rejecting unparseable input.
+            let expected_body: Option<serde_json::Value> = args
+                .expected_body
+                .map(|s| serde_json::from_str(&s).unwrap_or(serde_json::Value::String(s)));
 
             input_json::insert(&mut input, "metric_name", args.name)?;
             input_json::insert(&mut input, "description", args.description)?;
@@ -489,6 +636,34 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 args.base_prompt_template,
             )?;
             input_json::insert(&mut input, "include_traces", args.include_traces)?;
+            input_json::insert(
+                &mut input,
+                "max_silence_duration_seconds",
+                args.max_silence_duration_seconds,
+            )?;
+            input_json::insert(
+                &mut input,
+                "min_silence_gap_seconds",
+                args.min_silence_gap_seconds,
+            )?;
+            input_json::insert(&mut input, "frequency_threshold", args.frequency_threshold)?;
+            input_json::insert(&mut input, "direction", args.direction)?;
+            input_json::insert(&mut input, "success_sentiments", args.success_sentiments)?;
+            input_json::insert(&mut input, "percent_above", args.percent_above)?;
+            input_json::insert(&mut input, "success_end_reasons", args.success_end_reasons)?;
+            input_json::insert(&mut input, "observation_name", args.observation_name)?;
+            input_json::insert(&mut input, "expected_body", expected_body)?;
+            input_json::insert(&mut input, "match_path", args.match_path)?;
+            input_json::insert(
+                &mut input,
+                "min_volume_change_for_pitch_misalignment",
+                args.min_volume_change_for_pitch_misalignment,
+            )?;
+            input_json::insert(&mut input, "threshold", args.threshold)?;
+            input_json::insert(&mut input, "operator", args.operator)?;
+            input_json::insert(&mut input, "sql_query", args.sql_query)?;
+            input_json::insert(&mut input, "runtime_config", runtime_config)?;
+            input_json::insert(&mut input, "tags", args.tags)?;
             let req: UpdateMetricRequest = input_json::finish(input)?;
             let metric = client.metrics().update(&args.metric_id, req).await?;
             emit_one_with_actions(
@@ -510,8 +685,14 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
             );
         }
         MetricCommands::Test(args) => {
+            // The API rejects a request that sets both targets or neither, so fail
+            // here with a message that names the flags instead of relaying a 400.
+            if args.simulation_output_id.is_none() && args.simulation_output_ids.is_none() {
+                anyhow::bail!("Provide --simulation-output-id or --simulation-output-ids");
+            }
             let req = TestMetricRequest {
                 simulation_output_id: args.simulation_output_id,
+                simulation_output_ids: args.simulation_output_ids,
                 dev_id: args.dev_id,
             };
             let response = client.metrics().test(&args.metric_id, req).await?;
