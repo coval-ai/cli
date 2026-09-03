@@ -422,46 +422,6 @@ field = "metadata"
 reason = "The additive customer-metadata patch path is served but unmodeled; tracked under COVAL-5823."
 
 [[known_field_gap]]
-operation = "PATCH /personas/background-sounds/{background_sound_id}"
-field = "acoustic_source_type"
-reason = "Background-sound acoustic source is served but unmodeled; tracked under COVAL-5821."
-
-[[known_field_gap]]
-operation = "PATCH /personas/{persona_id}"
-field = "audio_degradation"
-reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
-
-[[known_field_gap]]
-operation = "PATCH /personas/{persona_id}"
-field = "background_sound_volume"
-reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
-
-[[known_field_gap]]
-operation = "PATCH /personas/{persona_id}"
-field = "hold_music_timeout_seconds"
-reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
-
-[[known_field_gap]]
-operation = "PATCH /personas/{persona_id}"
-field = "situate_speaker"
-reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
-
-[[known_field_gap]]
-operation = "PATCH /personas/{persona_id}"
-field = "tags"
-reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
-
-[[known_field_gap]]
-operation = "PATCH /personas/{persona_id}"
-field = "voice_speed"
-reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
-
-[[known_field_gap]]
-operation = "PATCH /personas/{persona_id}"
-field = "voice_volume"
-reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
-
-[[known_field_gap]]
 operation = "PATCH /reports/{report_id}"
 field = "simulation_output_ids"
 reason = "Report fields are served but unmodeled; tracked under COVAL-5822."
@@ -535,46 +495,6 @@ reason = "Resource tagging on write is served but unmodeled; tracked under COVAL
 operation = "POST /conversations/uploaded:submit"
 field = "tags"
 reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
-
-[[known_field_gap]]
-operation = "POST /personas"
-field = "audio_degradation"
-reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
-
-[[known_field_gap]]
-operation = "POST /personas"
-field = "background_sound_volume"
-reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
-
-[[known_field_gap]]
-operation = "POST /personas"
-field = "hold_music_timeout_seconds"
-reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
-
-[[known_field_gap]]
-operation = "POST /personas"
-field = "situate_speaker"
-reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
-
-[[known_field_gap]]
-operation = "POST /personas"
-field = "tags"
-reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
-
-[[known_field_gap]]
-operation = "POST /personas"
-field = "voice_speed"
-reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
-
-[[known_field_gap]]
-operation = "POST /personas"
-field = "voice_volume"
-reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
-
-[[known_field_gap]]
-operation = "POST /personas/background-sounds"
-field = "acoustic_source_type"
-reason = "Background-sound acoustic source is served but unmodeled; tracked under COVAL-5821."
 
 [[known_field_gap]]
 operation = "POST /reports"
