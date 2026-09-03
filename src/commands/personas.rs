@@ -112,6 +112,27 @@ pub struct CreateArgs {
     /// Enable multilingual speech-to-text
     #[arg(long, num_args = 0..=1, default_missing_value = "true")]
     multi_language_stt: Option<bool>,
+    /// Background sound volume multiplier (>= 0.0)
+    #[arg(long)]
+    background_sound_volume: Option<f64>,
+    /// Voice gain multiplier (0.0 silent, 1.0 unchanged, 2.0 double)
+    #[arg(long)]
+    voice_volume: Option<f64>,
+    /// Voice speed multiplier (0.25-2.0, 1.0 unchanged)
+    #[arg(long)]
+    voice_speed: Option<f64>,
+    /// Disconnect after this many seconds of no speech (5-300)
+    #[arg(long)]
+    hold_music_timeout_seconds: Option<f64>,
+    /// Placement preset (speakerphone-easy or speakerphone-hard); conflicts with --audio-degradation
+    #[arg(long)]
+    situate_speaker: Option<String>,
+    /// Channel degradation preset id (landline, cell-poor, cell-handoff) or a JSON object; conflicts with --situate-speaker
+    #[arg(long)]
+    audio_degradation: Option<String>,
+    /// Comma-separated tag names; pass an empty value to clear all tags
+    #[arg(long, value_delimiter = ',')]
+    tags: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -140,6 +161,27 @@ pub struct UpdateArgs {
     /// Enable or disable multilingual speech-to-text
     #[arg(long, num_args = 0..=1, default_missing_value = "true")]
     multi_language_stt: Option<bool>,
+    /// Background sound volume multiplier (>= 0.0)
+    #[arg(long)]
+    background_sound_volume: Option<f64>,
+    /// Voice gain multiplier (0.0 silent, 1.0 unchanged, 2.0 double)
+    #[arg(long)]
+    voice_volume: Option<f64>,
+    /// Voice speed multiplier (0.25-2.0, 1.0 unchanged)
+    #[arg(long)]
+    voice_speed: Option<f64>,
+    /// Disconnect after this many seconds of no speech (5-300)
+    #[arg(long)]
+    hold_music_timeout_seconds: Option<f64>,
+    /// Placement preset (speakerphone-easy or speakerphone-hard); conflicts with --audio-degradation
+    #[arg(long)]
+    situate_speaker: Option<String>,
+    /// Channel degradation preset id (landline, cell-poor, cell-handoff) or a JSON object; conflicts with --situate-speaker
+    #[arg(long)]
+    audio_degradation: Option<String>,
+    /// Comma-separated tag names; pass an empty value to clear all tags
+    #[arg(long, value_delimiter = ',')]
+    tags: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -167,6 +209,9 @@ pub struct BackgroundSoundUploadArgs {
     /// Default volume multiplier for simulations (0.0-1.0)
     #[arg(long)]
     default_volume: Option<f64>,
+    /// Acoustic rendering behavior (ambient or point_source)
+    #[arg(long)]
+    acoustic_source_type: Option<String>,
     /// Metadata as key=value (repeat for multiple)
     #[arg(long = "metadata", value_parser = parse_metadata_kv)]
     metadata: Vec<(String, String)>,
@@ -184,6 +229,9 @@ pub struct BackgroundSoundUpdateArgs {
     /// New default volume multiplier (0.0-1.0)
     #[arg(long)]
     default_volume: Option<f64>,
+    /// New acoustic rendering behavior (ambient or point_source)
+    #[arg(long)]
+    acoustic_source_type: Option<String>,
     /// Archive or restore the custom background sound
     #[arg(long, value_enum)]
     status: Option<BackgroundSoundUpdateStatus>,
@@ -238,6 +286,25 @@ pub async fn execute(
             input_json::insert(&mut input, "background_sound", args.background)?;
             input_json::insert(&mut input, "wait_seconds", args.wait_seconds)?;
             input_json::insert(&mut input, "multi_language_stt", args.multi_language_stt)?;
+            input_json::insert(
+                &mut input,
+                "background_sound_volume",
+                args.background_sound_volume,
+            )?;
+            input_json::insert(&mut input, "voice_volume", args.voice_volume)?;
+            input_json::insert(&mut input, "voice_speed", args.voice_speed)?;
+            input_json::insert(
+                &mut input,
+                "hold_music_timeout_seconds",
+                args.hold_music_timeout_seconds,
+            )?;
+            input_json::insert(&mut input, "situate_speaker", args.situate_speaker)?;
+            input_json::insert(
+                &mut input,
+                "audio_degradation",
+                parse_audio_degradation(args.audio_degradation),
+            )?;
+            input_json::insert(&mut input, "tags", args.tags)?;
             let req: CreatePersonaRequest = input_json::finish(input)?;
             let persona = client.personas().create(req).await?;
             emit_one_with_actions(
@@ -258,6 +325,25 @@ pub async fn execute(
             input_json::insert(&mut input, "background_sound", args.background)?;
             input_json::insert(&mut input, "wait_seconds", args.wait_seconds)?;
             input_json::insert(&mut input, "multi_language_stt", args.multi_language_stt)?;
+            input_json::insert(
+                &mut input,
+                "background_sound_volume",
+                args.background_sound_volume,
+            )?;
+            input_json::insert(&mut input, "voice_volume", args.voice_volume)?;
+            input_json::insert(&mut input, "voice_speed", args.voice_speed)?;
+            input_json::insert(
+                &mut input,
+                "hold_music_timeout_seconds",
+                args.hold_music_timeout_seconds,
+            )?;
+            input_json::insert(&mut input, "situate_speaker", args.situate_speaker)?;
+            input_json::insert(
+                &mut input,
+                "audio_degradation",
+                parse_audio_degradation(args.audio_degradation),
+            )?;
+            input_json::insert(&mut input, "tags", args.tags)?;
             let req: UpdatePersonaRequest = input_json::finish(input)?;
             let persona = client.personas().update(&args.persona_id, req).await?;
             emit_one_with_actions(
@@ -359,6 +445,7 @@ async fn execute_background_sound(
                     original_filename: original_filename.clone(),
                     content_type: content_type.clone(),
                     default_volume: args.default_volume,
+                    acoustic_source_type: args.acoustic_source_type,
                     metadata,
                 })
                 .await?;
@@ -408,6 +495,11 @@ async fn execute_background_sound(
             let mut input = args.input_json.object()?;
             input_json::insert(&mut input, "display_name", args.display_name)?;
             input_json::insert(&mut input, "default_volume", args.default_volume)?;
+            input_json::insert(
+                &mut input,
+                "acoustic_source_type",
+                args.acoustic_source_type,
+            )?;
             input_json::insert(&mut input, "status", args.status)?;
             let req: UpdateBackgroundSoundRequest = input_json::finish(input)?;
             let id = normalize_background_sound_id(&args.background_sound_id);
@@ -422,6 +514,16 @@ async fn execute_background_sound(
         }
     }
     Ok(())
+}
+
+/// Accepts either a bare preset id or the full `{"preset": ...}` object the API
+/// documents, so the common case does not need JSON on the command line.
+fn parse_audio_degradation(raw: Option<String>) -> Option<serde_json::Value> {
+    let raw = raw?;
+    match serde_json::from_str::<serde_json::Value>(&raw) {
+        Ok(value @ serde_json::Value::Object(_)) => Some(value),
+        _ => Some(serde_json::json!({ "preset": raw })),
+    }
 }
 
 fn parse_metadata_kv(raw: &str) -> Result<(String, String), String> {

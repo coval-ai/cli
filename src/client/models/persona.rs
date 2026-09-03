@@ -78,6 +78,24 @@ pub struct CreatePersonaRequest {
     pub conversation_initiation: Option<String>,
     #[serde(alias = "multiLanguageStt", skip_serializing_if = "Option::is_none")]
     pub multi_language_stt: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub background_sound_volume: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub voice_volume: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub voice_speed: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hold_music_timeout_seconds: Option<f64>,
+    /// Mutually exclusive with `audio_degradation`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub situate_speaker: Option<String>,
+    /// `{"preset": "...", "preset_version": "..."}`; mutually exclusive with
+    /// `situate_speaker`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio_degradation: Option<serde_json::Value>,
+    /// Tag names. Omitted leaves tags unchanged; an empty list clears them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -98,6 +116,45 @@ pub struct UpdatePersonaRequest {
     pub conversation_initiation: Option<String>,
     #[serde(alias = "multiLanguageStt", skip_serializing_if = "Option::is_none")]
     pub multi_language_stt: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub background_sound_volume: Option<f64>,
+    // The API deletes the stored value when these arrive as an explicit null, so
+    // absent and null have to stay distinguishable.
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub voice_volume: Option<Option<f64>>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub voice_speed: Option<Option<f64>>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub hold_music_timeout_seconds: Option<Option<f64>>,
+    /// Mutually exclusive with `audio_degradation`; an explicit null clears it.
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub situate_speaker: Option<Option<String>>,
+    /// Mutually exclusive with `situate_speaker`; an explicit null clears it.
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub audio_degradation: Option<Option<serde_json::Value>>,
+    /// Tag names. Omitted leaves tags unchanged; an empty list clears them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -220,6 +277,10 @@ pub struct CreateBackgroundSoundRequest {
     pub content_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_volume: Option<f64>,
+    /// `ambient` mixes the sound as room ambience; `point_source` renders it as a
+    /// located source.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acoustic_source_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<BTreeMap<String, String>>,
 }
@@ -251,6 +312,13 @@ pub struct UpdateBackgroundSoundRequest {
     pub display_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_volume: Option<f64>,
+    /// An explicit null clears the stored rendering behavior.
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub acoustic_source_type: Option<Option<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<BackgroundSoundUpdateStatus>,
 }

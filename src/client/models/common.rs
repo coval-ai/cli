@@ -49,3 +49,15 @@ impl ListParams {
         }
     }
 }
+
+/// Deserializes a present field into `Some(..)` even when its value is null, so
+/// callers can tell "field omitted" from "field explicitly cleared". Pair it with
+/// `Option<Option<T>>` on a PATCH request wherever the API treats null as a clear;
+/// `skip_serializing_if` alone would turn a deliberate clear into a no-op.
+pub(crate) fn explicit_option<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
+}

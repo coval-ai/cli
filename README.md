@@ -189,6 +189,20 @@ coval personas background-sounds upload ./lobby-noise.mp3 \
 # Use the returned value, e.g. custom:bg123, on a persona
 coval personas update <persona_id> --background custom:bg123
 
+# Shape a persona's audio: placement, levels, and a hold-music cutoff
+coval personas update <persona_id> \
+  --situate-speaker speakerphone-hard \
+  --voice-volume 1.4 \
+  --voice-speed 0.9 \
+  --background-sound-volume 0.3 \
+  --hold-music-timeout-seconds 45
+
+# Channel degradation instead of placement (the two are mutually exclusive)
+coval personas update <persona_id> --audio-degradation cell-handoff
+
+# Clear a preset. A flag can only set a value, so clearing needs an explicit null.
+coval personas update <persona_id> --input-json '{"situate_speaker":null}'
+
 # Create a dashboard and make it the organization default
 coval dashboards create \
   --name "Production Metrics" \
