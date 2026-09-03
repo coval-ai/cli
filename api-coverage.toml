@@ -1,11 +1,15 @@
 # Reviewed against the live public OpenAPI catalog by scripts/audit_api_coverage.py.
-# Every published operation must either reach a first-class CLI command or have a reason here.
+# Every published operation must either reach a first-class CLI command or have a reason here,
+# and every published request-body property on a covered operation must either be declared on
+# the Rust request struct the CLI sends or have a reason in the request-field sections below.
 
 [snapshot]
 catalog_url = "https://api.coval.dev/v1/openapi"
-reviewed_at = "2026-09-01"
+reviewed_at = "2026-09-03"
 published_operations = 181
 cli_supported_operations = 119
+published_request_fields = 360
+cli_modeled_request_fields = 313
 
 [[allowed_extra]]
 operation = "POST /test-cases/{test_case_id}/media:upload-url"
@@ -371,3 +375,346 @@ reason = "Workspace management remains to be modeled under COVAL-2079."
 [[known_gap]]
 operation = "POST /workspaces/{workspace_id}/archive"
 reason = "Workspace management remains to be modeled under COVAL-2079."
+
+# =============================================================================
+# REQUEST FIELDS
+# =============================================================================
+#
+# serde drops any JSON field a request struct does not declare, so a published
+# request-body property missing from src/client/models/*.rs is discarded in
+# silence. These sections review that layer for operations the CLI already
+# implements; a published operation with no CLI command at all is a route gap
+# above, not a field gap here.
+#
+# The published YAML is hand-written rather than generated, so it can be wrong in
+# either direction. Before modeling a field, cross-check it against the served
+# Pydantic model; coval-ai/backend records the known divergence in
+# src/services/api/tests/v1/openapi_parity_baseline.txt.
+
+[[known_field_gap]]
+operation = "PATCH /agents/{agent_id}"
+field = "attributes"
+reason = "Served by the agent merge-patch and already modeled on create, so update is asymmetric; tracked under COVAL-5823."
+
+[[known_field_gap]]
+operation = "PATCH /agents/{agent_id}"
+field = "customer_agent_id"
+reason = "Served by the agent merge-patch and already modeled on create, so update is asymmetric; tracked under COVAL-5823."
+
+[[known_field_gap]]
+operation = "PATCH /agents/{agent_id}"
+field = "language"
+reason = "Served by the agent merge-patch and already modeled on create, so update is asymmetric; tracked under COVAL-5823."
+
+[[known_field_gap]]
+operation = "PATCH /agents/{agent_id}"
+field = "tags"
+reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
+
+[[known_field_gap]]
+operation = "PATCH /agents/{agent_id}"
+field = "workflows"
+reason = "Served by the agent merge-patch and already modeled on create, so update is asymmetric; tracked under COVAL-5823."
+
+[[known_field_gap]]
+operation = "PATCH /conversations/uploaded/{conversation_id}"
+field = "metadata"
+reason = "The additive customer-metadata patch path is served but unmodeled; tracked under COVAL-5823."
+
+[[known_field_gap]]
+operation = "PATCH /personas/background-sounds/{background_sound_id}"
+field = "acoustic_source_type"
+reason = "Background-sound acoustic source is served but unmodeled; tracked under COVAL-5821."
+
+[[known_field_gap]]
+operation = "PATCH /personas/{persona_id}"
+field = "audio_degradation"
+reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
+
+[[known_field_gap]]
+operation = "PATCH /personas/{persona_id}"
+field = "background_sound_volume"
+reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
+
+[[known_field_gap]]
+operation = "PATCH /personas/{persona_id}"
+field = "hold_music_timeout_seconds"
+reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
+
+[[known_field_gap]]
+operation = "PATCH /personas/{persona_id}"
+field = "situate_speaker"
+reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
+
+[[known_field_gap]]
+operation = "PATCH /personas/{persona_id}"
+field = "tags"
+reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
+
+[[known_field_gap]]
+operation = "PATCH /personas/{persona_id}"
+field = "voice_speed"
+reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
+
+[[known_field_gap]]
+operation = "PATCH /personas/{persona_id}"
+field = "voice_volume"
+reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
+
+[[known_field_gap]]
+operation = "PATCH /reports/{report_id}"
+field = "simulation_output_ids"
+reason = "Report fields are served but unmodeled; tracked under COVAL-5822."
+
+[[known_field_gap]]
+operation = "PATCH /reports/{report_id}"
+field = "source_human_review_project_id"
+reason = "Report fields are served but unmodeled; tracked under COVAL-5822."
+
+[[known_field_gap]]
+operation = "PATCH /reports/{report_id}"
+field = "view_config"
+reason = "Report fields are served but unmodeled; tracked under COVAL-5822."
+
+[[known_field_gap]]
+operation = "PATCH /review-projects/{project_id}"
+field = "add_linked_simulation_ids"
+reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
+
+[[known_field_gap]]
+operation = "PATCH /review-projects/{project_id}"
+field = "blind_labeling_shown_metric_ids"
+reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
+
+[[known_field_gap]]
+operation = "PATCH /review-projects/{project_id}"
+field = "enforced_collaboration"
+reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
+
+[[known_field_gap]]
+operation = "PATCH /review-projects/{project_id}"
+field = "metric_addition_completion_action"
+reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
+
+[[known_field_gap]]
+operation = "PATCH /review-projects/{project_id}"
+field = "project_rules"
+reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
+
+[[known_field_gap]]
+operation = "PATCH /review-projects/{project_id}"
+field = "remove_linked_simulation_ids"
+reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
+
+[[known_field_gap]]
+operation = "PATCH /run-templates/{run_template_id}"
+field = "agent_id"
+reason = "Documented but not served: the transport forbids extra fields and takes the plural `agent_ids` array the CLI already sends, so modeling this name would break the call. Spec drift tracked under COVAL-5825."
+
+[[known_field_gap]]
+operation = "PATCH /run-templates/{run_template_id}"
+field = "persona_id"
+reason = "Documented but not served: the transport forbids extra fields and takes the plural `persona_ids` array the CLI already sends, so modeling this name would break the call. Spec drift tracked under COVAL-5825."
+
+[[known_field_gap]]
+operation = "PATCH /run-templates/{run_template_id}"
+field = "tags"
+reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
+
+[[known_field_gap]]
+operation = "PATCH /run-templates/{run_template_id}"
+field = "test_set_id"
+reason = "Documented but not served: the transport forbids extra fields and takes the plural `test_set_ids` array the CLI already sends, so modeling this name would break the call. Spec drift tracked under COVAL-5825."
+
+[[known_field_gap]]
+operation = "PATCH /test-sets/{test_set_id}"
+field = "tags"
+reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
+
+[[known_field_gap]]
+operation = "POST /conversations/uploaded:submit"
+field = "tags"
+reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
+
+[[known_field_gap]]
+operation = "POST /personas"
+field = "audio_degradation"
+reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
+
+[[known_field_gap]]
+operation = "POST /personas"
+field = "background_sound_volume"
+reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
+
+[[known_field_gap]]
+operation = "POST /personas"
+field = "hold_music_timeout_seconds"
+reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
+
+[[known_field_gap]]
+operation = "POST /personas"
+field = "situate_speaker"
+reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
+
+[[known_field_gap]]
+operation = "POST /personas"
+field = "tags"
+reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
+
+[[known_field_gap]]
+operation = "POST /personas"
+field = "voice_speed"
+reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
+
+[[known_field_gap]]
+operation = "POST /personas"
+field = "voice_volume"
+reason = "Persona audio and placement fields are served but unmodeled; tracked under COVAL-5821."
+
+[[known_field_gap]]
+operation = "POST /personas/background-sounds"
+field = "acoustic_source_type"
+reason = "Background-sound acoustic source is served but unmodeled; tracked under COVAL-5821."
+
+[[known_field_gap]]
+operation = "POST /reports"
+field = "simulation_output_ids"
+reason = "Report fields are served but unmodeled; tracked under COVAL-5822."
+
+[[known_field_gap]]
+operation = "POST /reports"
+field = "source_human_review_project_id"
+reason = "Report fields are served but unmodeled; tracked under COVAL-5822."
+
+[[known_field_gap]]
+operation = "POST /review-projects"
+field = "blind_labeling_shown_metric_ids"
+reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
+
+[[known_field_gap]]
+operation = "POST /review-projects"
+field = "enforced_collaboration"
+reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
+
+[[known_field_gap]]
+operation = "POST /review-projects"
+field = "project_rules"
+reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
+
+[[known_field_gap]]
+operation = "POST /run-templates"
+field = "agent_id"
+reason = "Documented but not served: the transport forbids extra fields and takes the plural `agent_ids` array the CLI already sends, so modeling this name would break the call. Spec drift tracked under COVAL-5825."
+
+[[known_field_gap]]
+operation = "POST /run-templates"
+field = "persona_id"
+reason = "Documented but not served: the transport forbids extra fields and takes the plural `persona_ids` array the CLI already sends, so modeling this name would break the call. Spec drift tracked under COVAL-5825."
+
+[[known_field_gap]]
+operation = "POST /run-templates"
+field = "tags"
+reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
+
+[[known_field_gap]]
+operation = "POST /run-templates"
+field = "test_set_id"
+reason = "Documented but not served: the transport forbids extra fields and takes the plural `test_set_ids` array the CLI already sends, so modeling this name would break the call. Spec drift tracked under COVAL-5825."
+
+[[known_field_gap]]
+operation = "POST /test-sets"
+field = "tags"
+reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
+
+# Fields the CLI sends that the published schema does not declare. Most are served
+# but undocumented, so removing them from the CLI would lose working behavior.
+
+[[allowed_extra_field]]
+operation = "PATCH /conversations/uploaded/{conversation_id}"
+field = "audio_reference"
+reason = "Served but deliberately hidden from the published schema as an internal field; the API still accepts it."
+
+[[allowed_extra_field]]
+operation = "PATCH /metrics/{metric_id}"
+field = "case_insensitive"
+reason = "Served but undocumented regex-matching field; recorded as spec drift in the backend's own openapi_parity_baseline.txt."
+
+[[allowed_extra_field]]
+operation = "PATCH /metrics/{metric_id}"
+field = "match_mode"
+reason = "Served but undocumented regex-matching field; recorded as spec drift in the backend's own openapi_parity_baseline.txt."
+
+[[allowed_extra_field]]
+operation = "PATCH /metrics/{metric_id}"
+field = "position"
+reason = "Served but undocumented regex-matching field; recorded as spec drift in the backend's own openapi_parity_baseline.txt."
+
+[[allowed_extra_field]]
+operation = "PATCH /review-annotations/{annotation_id}"
+field = "completion_status"
+reason = "Advertised by the CLI but absent from the served contract, which ignores unknown fields, so the flag silently does nothing. Tracked under COVAL-5824."
+
+[[allowed_extra_field]]
+operation = "PATCH /review-annotations/{annotation_id}"
+field = "status"
+reason = "Advertised by the CLI but absent from the served contract, which ignores unknown fields, so the flag silently does nothing. Tracked under COVAL-5824."
+
+[[allowed_extra_field]]
+operation = "PATCH /run-templates/{run_template_id}"
+field = "agent_ids"
+reason = "Served but undocumented: the run-template models take these plural arrays. The published singular form is stale spec, tracked under COVAL-5825."
+
+[[allowed_extra_field]]
+operation = "PATCH /run-templates/{run_template_id}"
+field = "persona_ids"
+reason = "Served but undocumented: the run-template models take these plural arrays. The published singular form is stale spec, tracked under COVAL-5825."
+
+[[allowed_extra_field]]
+operation = "PATCH /run-templates/{run_template_id}"
+field = "test_set_ids"
+reason = "Served but undocumented: the run-template models take these plural arrays. The published singular form is stale spec, tracked under COVAL-5825."
+
+[[allowed_extra_field]]
+operation = "POST /api-keys"
+field = "environment"
+reason = "Served but undocumented; recorded as spec drift in the backend's own openapi_parity_baseline.txt."
+
+[[allowed_extra_field]]
+operation = "POST /conversations/simulated/{simulation_id}/resimulate"
+field = "dev_id"
+reason = "Served but deliberately hidden from the published schema as an internal field; the API still accepts it."
+
+[[allowed_extra_field]]
+operation = "POST /conversations/uploaded:submit"
+field = "audio"
+reason = "Served but deliberately hidden from the published schema as an internal field; the API still accepts it."
+
+[[allowed_extra_field]]
+operation = "POST /metrics"
+field = "case_insensitive"
+reason = "Served but undocumented regex-matching field; recorded as spec drift in the backend's own openapi_parity_baseline.txt."
+
+[[allowed_extra_field]]
+operation = "POST /metrics"
+field = "match_mode"
+reason = "Served but undocumented regex-matching field; recorded as spec drift in the backend's own openapi_parity_baseline.txt."
+
+[[allowed_extra_field]]
+operation = "POST /metrics"
+field = "position"
+reason = "Served but undocumented regex-matching field; recorded as spec drift in the backend's own openapi_parity_baseline.txt."
+
+[[allowed_extra_field]]
+operation = "POST /run-templates"
+field = "agent_ids"
+reason = "Served but undocumented: the run-template models take these plural arrays. The published singular form is stale spec, tracked under COVAL-5825."
+
+[[allowed_extra_field]]
+operation = "POST /run-templates"
+field = "persona_ids"
+reason = "Served but undocumented: the run-template models take these plural arrays. The published singular form is stale spec, tracked under COVAL-5825."
+
+[[allowed_extra_field]]
+operation = "POST /run-templates"
+field = "test_set_ids"
+reason = "Served but undocumented: the run-template models take these plural arrays. The published singular form is stale spec, tracked under COVAL-5825."
