@@ -74,6 +74,15 @@ pub struct CreateArgs {
     /// Enable notifications for assignees
     #[arg(long)]
     notifications: Option<bool>,
+    /// Comma-separated project rules
+    #[arg(long, value_delimiter = ',')]
+    project_rules: Option<Vec<String>>,
+    /// Comma-separated metric IDs whose machine score stays visible during blind labeling
+    #[arg(long, value_delimiter = ',')]
+    blind_labeling_shown_metric_ids: Option<Vec<String>>,
+    /// Require claims and explicit single-author completion (collaborative projects only)
+    #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+    enforced_collaboration: Option<bool>,
 }
 
 #[derive(Args)]
@@ -102,6 +111,24 @@ pub struct UpdateArgs {
     /// Comma-separated emails of assignees to opt out
     #[arg(long, value_delimiter = ',')]
     opted_out_assignees: Option<Vec<String>>,
+    /// Comma-separated simulation output IDs to add, instead of replacing the linked set
+    #[arg(long, value_delimiter = ',', conflicts_with = "simulation_ids")]
+    add_simulation_ids: Option<Vec<String>>,
+    /// Comma-separated simulation output IDs to remove, instead of replacing the linked set
+    #[arg(long, value_delimiter = ',', conflicts_with = "simulation_ids")]
+    remove_simulation_ids: Option<Vec<String>>,
+    /// What to do with completed assignments when linking a new metric (e.g. REOPEN_COMPLETED)
+    #[arg(long)]
+    metric_addition_completion_action: Option<String>,
+    /// Comma-separated project rules
+    #[arg(long, value_delimiter = ',')]
+    project_rules: Option<Vec<String>>,
+    /// Comma-separated metric IDs whose machine score stays visible during blind labeling
+    #[arg(long, value_delimiter = ',')]
+    blind_labeling_shown_metric_ids: Option<Vec<String>>,
+    /// Require claims and explicit single-author completion (collaborative projects only)
+    #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+    enforced_collaboration: Option<bool>,
 }
 
 #[derive(Args)]
@@ -160,6 +187,17 @@ pub async fn execute(
             input_json::insert(&mut input, "description", args.description)?;
             input_json::insert(&mut input, "project_type", args.project_type)?;
             input_json::insert(&mut input, "notifications", args.notifications)?;
+            input_json::insert(&mut input, "project_rules", args.project_rules)?;
+            input_json::insert(
+                &mut input,
+                "blind_labeling_shown_metric_ids",
+                args.blind_labeling_shown_metric_ids,
+            )?;
+            input_json::insert(
+                &mut input,
+                "enforced_collaboration",
+                args.enforced_collaboration,
+            )?;
             let req: CreateReviewProjectRequest = input_json::finish(input)?;
             let project = client.review_projects().create(req).await?;
             emit_one_with_actions(
@@ -179,6 +217,32 @@ pub async fn execute(
             input_json::insert(&mut input, "linked_metric_ids", args.metric_ids)?;
             input_json::insert(&mut input, "notifications", args.notifications)?;
             input_json::insert(&mut input, "opted_out_assignees", args.opted_out_assignees)?;
+            input_json::insert(
+                &mut input,
+                "add_linked_simulation_ids",
+                args.add_simulation_ids,
+            )?;
+            input_json::insert(
+                &mut input,
+                "remove_linked_simulation_ids",
+                args.remove_simulation_ids,
+            )?;
+            input_json::insert(
+                &mut input,
+                "metric_addition_completion_action",
+                args.metric_addition_completion_action,
+            )?;
+            input_json::insert(&mut input, "project_rules", args.project_rules)?;
+            input_json::insert(
+                &mut input,
+                "blind_labeling_shown_metric_ids",
+                args.blind_labeling_shown_metric_ids,
+            )?;
+            input_json::insert(
+                &mut input,
+                "enforced_collaboration",
+                args.enforced_collaboration,
+            )?;
             let req: UpdateReviewProjectRequest = input_json::finish(input)?;
             let project = client
                 .review_projects()

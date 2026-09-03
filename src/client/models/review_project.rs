@@ -57,6 +57,14 @@ pub struct CreateReviewProjectRequest {
     pub project_type: Option<ProjectType>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notifications: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_rules: Option<Vec<String>>,
+    /// Must be a subset of `linked_metric_ids`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blind_labeling_shown_metric_ids: Option<Vec<String>>,
+    /// Only takes effect on a collaborative project.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enforced_collaboration: Option<bool>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -75,6 +83,25 @@ pub struct UpdateReviewProjectRequest {
     pub notifications: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub opted_out_assignees: Option<Vec<String>>,
+    /// Adds to the linked simulations instead of replacing them; cannot be combined
+    /// with `linked_simulation_ids`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub add_linked_simulation_ids: Option<Vec<String>>,
+    /// Removes from the linked simulations instead of replacing them; cannot be
+    /// combined with `linked_simulation_ids`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remove_linked_simulation_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_rules: Option<Vec<String>>,
+    /// Must be a subset of `linked_metric_ids`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blind_labeling_shown_metric_ids: Option<Vec<String>>,
+    /// What to do with already-completed assignments when linking a new metric.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metric_addition_completion_action: Option<String>,
+    /// Only takes effect on a collaborative project.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enforced_collaboration: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
