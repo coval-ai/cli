@@ -141,6 +141,36 @@ pub struct UpdateAgentRequest {
     pub metric_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub test_set_ids: Option<Vec<String>>,
+    /// Not nullable: the API treats an omitted value as "leave it alone" and
+    /// rejects null outright.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub customer_agent_id: Option<String>,
+    // The merge patch writes only supplied columns and normalizes an explicit null
+    // to an empty value, so null is how a caller clears these.
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub language: Option<Option<String>>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub attributes: Option<Option<serde_json::Value>>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub workflows: Option<Option<serde_json::Value>>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub tags: Option<Option<Vec<String>>>,
 }
 
 #[derive(Debug, Deserialize)]

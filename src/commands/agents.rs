@@ -118,6 +118,21 @@ pub struct UpdateArgs {
     /// JSON string for metadata
     #[arg(long)]
     metadata: Option<String>,
+    /// Your own stable identifier for the agent
+    #[arg(long)]
+    customer_agent_id: Option<String>,
+    /// Primary agent language
+    #[arg(long)]
+    language: Option<String>,
+    /// JSON object of free-form agent attributes
+    #[arg(long)]
+    attributes: Option<String>,
+    /// JSON object containing workflow configuration
+    #[arg(long)]
+    workflows: Option<String>,
+    /// Comma-separated tag names
+    #[arg(long, value_delimiter = ',')]
+    tags: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -174,11 +189,9 @@ pub async fn execute(cmd: AgentCommands, client: &CovalClient, ctx: &OutputConte
         }
         AgentCommands::Update(args) => {
             let mut input = args.input_json.object()?;
-            let metadata: Option<serde_json::Value> = args
-                .metadata
-                .map(|s| serde_json::from_str(&s))
-                .transpose()
-                .map_err(|e| anyhow::anyhow!("Invalid JSON for --metadata: {e}"))?;
+            let metadata = parse_json_argument(args.metadata, "metadata")?;
+            let attributes = parse_json_argument(args.attributes, "attributes")?;
+            let workflows = parse_json_argument(args.workflows, "workflows")?;
 
             input_json::insert(&mut input, "display_name", args.name)?;
             input_json::insert(&mut input, "model_type", args.r#type)?;
@@ -188,6 +201,11 @@ pub async fn execute(cmd: AgentCommands, client: &CovalClient, ctx: &OutputConte
             input_json::insert(&mut input, "metadata", metadata)?;
             input_json::insert(&mut input, "metric_ids", args.metric_ids)?;
             input_json::insert(&mut input, "test_set_ids", args.test_set_ids)?;
+            input_json::insert(&mut input, "customer_agent_id", args.customer_agent_id)?;
+            input_json::insert(&mut input, "language", args.language)?;
+            input_json::insert(&mut input, "attributes", attributes)?;
+            input_json::insert(&mut input, "workflows", workflows)?;
+            input_json::insert(&mut input, "tags", args.tags)?;
             let req: UpdateAgentRequest = input_json::finish(input)?;
             let agent = client.agents().update(&args.agent_id, req).await?;
             emit_one_with_actions(ctx, "agents", operation, &agent, agent_actions(&agent.id));

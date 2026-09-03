@@ -73,6 +73,9 @@ pub struct CreateArgs {
     sub_sample_size: Option<u32>,
     #[arg(long)]
     sub_sample_seed: Option<u64>,
+    /// Comma-separated tag names; pass an empty value to clear all tags
+    #[arg(long, value_delimiter = ',')]
+    tags: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -102,6 +105,9 @@ pub struct UpdateArgs {
     sub_sample_size: Option<u32>,
     #[arg(long)]
     sub_sample_seed: Option<u64>,
+    /// Comma-separated tag names; pass an empty value to clear all tags
+    #[arg(long, value_delimiter = ',')]
+    tags: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -164,6 +170,7 @@ pub async fn execute(
             input_json::insert(&mut input, "concurrency", args.concurrency)?;
             input_json::insert(&mut input, "sub_sample_size", args.sub_sample_size)?;
             input_json::insert(&mut input, "sub_sample_seed", args.sub_sample_seed)?;
+            input_json::insert(&mut input, "tags", args.tags)?;
             let req: CreateRunTemplateRequest = input_json::finish(input)?;
             let template = client.run_templates().create(req).await?;
             emit_one_with_actions(
@@ -187,6 +194,7 @@ pub async fn execute(
             input_json::insert(&mut input, "concurrency", args.concurrency)?;
             input_json::insert(&mut input, "sub_sample_size", args.sub_sample_size)?;
             input_json::insert(&mut input, "sub_sample_seed", args.sub_sample_seed)?;
+            input_json::insert(&mut input, "tags", args.tags)?;
             let req: UpdateRunTemplateRequest = input_json::finish(input)?;
             let template = client
                 .run_templates()
