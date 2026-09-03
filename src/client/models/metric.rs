@@ -148,6 +148,41 @@ pub struct CreateMetricRequest {
     pub base_prompt_template: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub include_traces: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_silence_duration_seconds: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_silence_gap_seconds: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frequency_threshold: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub direction: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub success_sentiments: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub percent_above: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub success_end_reasons: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observation_name: Option<String>,
+    /// Either a string or a JSON object, so it stays untyped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_body: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub match_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_volume_change_for_pitch_misalignment: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub threshold: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operator: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sql_query: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_config: Option<serde_json::Value>,
+    /// Tag names. Omitted leaves tags unchanged; an empty list clears them. The API
+    /// treats null the same as omitted here, so `Option` carries the whole contract.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -196,6 +231,41 @@ pub struct UpdateMetricRequest {
     pub base_prompt_template: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub include_traces: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_silence_duration_seconds: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_silence_gap_seconds: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frequency_threshold: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub direction: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub success_sentiments: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub percent_above: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub success_end_reasons: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observation_name: Option<String>,
+    /// Either a string or a JSON object, so it stays untyped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_body: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub match_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_volume_change_for_pitch_misalignment: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub threshold: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operator: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sql_query: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_config: Option<serde_json::Value>,
+    /// Tag names. Omitted leaves tags unchanged; an empty list clears them. The API
+    /// treats null the same as omitted here, so `Option` carries the whole contract.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -219,16 +289,37 @@ pub struct UpdateMetricResponse {
     pub metric: Metric,
 }
 
-#[derive(Debug, Serialize)]
+/// Exactly one of `simulation_output_id` or `simulation_output_ids` must be set;
+/// the API rejects a request that sets both or neither.
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TestMetricRequest {
-    pub simulation_output_id: String,
+    /// Deprecated by the API in favor of `simulation_output_ids`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub simulation_output_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub simulation_output_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dev_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TestMetricResponse {
-    pub metric_output_ulid: String,
+    #[serde(default)]
+    pub results: Vec<TestMetricItemResult>,
+    /// Deprecated by the API and null for a batch request, which reports per
+    /// simulation output in `results` instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metric_output_ulid: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TestMetricItemResult {
+    pub simulation_output_id: String,
+    pub status: String,
+    #[serde(default)]
+    pub metric_output_ulid: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
 }
 
 impl Tabular for Metric {
