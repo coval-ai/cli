@@ -252,9 +252,31 @@ coval traces search --input-json @trace-search.json --format json
 ## API Coverage Audit
 
 The checked-in coverage manifest records every published API operation that the
-CLI does not yet expose as a first-class command. The audit traces each literal
-client route back to a resource-client method referenced by `src/commands/`, so
-an unused HTTP helper does not count as command coverage.
+CLI does not yet expose as a first-class command, and every published
+request-body property the CLI's request structs do not declare. The audit traces
+each literal client route back to a resource-client method referenced by
+`src/commands/`, so an unused HTTP helper does not count as command coverage.
+
+Request-field coverage exists because serde silently discards any JSON field a
+struct does not declare: a `--flag` the CLI never grew, or a property the API
+added later, produces a successful call that quietly drops the value. For every
+covered `POST`/`PATCH`/`PUT` operation the audit compares the published
+`application/json` request-body properties with the serde field names on the
+struct the client serializes. A `serde_json::Value` body counts as full
+coverage, since it forwards caller JSON verbatim.
+
+Two caveats govern how a reported field gap is resolved:
+
+- The published specs are hand-written, not generated, so they can be wrong in
+  either direction. Cross-check a field against the served model before
+  modeling it; `coval-ai/backend` records its known spec/model divergence in
+  `src/services/api/tests/v1/openapi_parity_baseline.txt`. A field documented
+  there as `spec_extra_field` is not served, and sending it can be rejected.
+- On a `PATCH` request struct, `skip_serializing_if = "Option::is_none"` alone
+  makes an explicit JSON null indistinguishable from an omitted field, so an
+  intentional "clear this field" becomes a silent no-op. Where the API treats
+  null as a clear, use the `explicit_option` (`Option<Option<T>>`) deserializer
+  in `src/client/models/test_case.rs`.
 
 Run the deterministic tests and live audit after API, client, or command changes:
 
@@ -267,7 +289,11 @@ python3 scripts/audit_api_coverage.py \
 
 The audit fails for new or stale gaps, a stale checked-in snapshot, or command
 routes absent from the public OpenAPI catalog unless they are explicitly marked
-as planned or documented extras in `api-coverage.toml`.
+as planned or documented extras in `api-coverage.toml`. It fails the same way
+for request fields: a published property missing from the matching request
+struct needs a `[[known_field_gap]]` entry, and a struct field absent from the
+published schema needs an `[[allowed_extra_field]]` entry. Both require a
+reason, and an entry that no longer describes real drift fails as stale.
 
 A repository-owned GitHub workflow runs every Monday and refreshes the
 deterministic `api-coverage-report.md`. When coverage changes, it opens or

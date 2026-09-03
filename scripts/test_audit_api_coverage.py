@@ -135,38 +135,171 @@ class FetchSafetyTests(unittest.TestCase):
 
 
 class PublishedOperationsTests(unittest.TestCase):
-    @patch("scripts.audit_api_coverage._fetch")
-    def test_rejects_distinct_operations_with_same_canonical_key(self, fetch):
-        fetch.side_effect = [
-            b'{"specs":[{"url":"https://api.coval.dev/a"},'
-            b'{"url":"https://api.coval.dev/b"}]}',
-            b"paths:\n  /v1/agents/{agent_id}:\n    get: {}\n",
-            b"paths:\n  /v1/agents/{id}:\n    get: {}\n",
-        ]
-
-        with self.assertRaisesRegex(RuntimeError, "share canonical key"):
-            audit_api_coverage._published_operations(
+    @staticmethod
+    def _specs(*documents: bytes) -> list[dict]:
+        with patch("scripts.audit_api_coverage._fetch") as fetch:
+            fetch.side_effect = [
+                (
+                    b'{"specs":['
+                    + b",".join(
+                        b'{"url":"https://api.coval.dev/%d"}' % index
+                        for index in range(len(documents))
+                    )
+                    + b"]}"
+                ),
+                *documents,
+            ]
+            return audit_api_coverage._published_specs(
                 audit_api_coverage.CATALOG_URL,
                 audit_api_coverage.DEFAULT_ALLOWED_ORIGINS,
             )
 
-    @patch("scripts.audit_api_coverage._fetch")
-    def test_deduplicates_identical_operation_across_specs(self, fetch):
-        fetch.side_effect = [
-            b'{"specs":[{"url":"https://api.coval.dev/a"},'
-            b'{"url":"https://api.coval.dev/b"}]}',
+    def test_rejects_distinct_operations_with_same_canonical_key(self):
+        specs = self._specs(
             b"paths:\n  /v1/agents/{agent_id}:\n    get: {}\n",
-            b"paths:\n  /v1/agents/{agent_id}:\n    get: {}\n",
-        ]
+            b"paths:\n  /v1/agents/{id}:\n    get: {}\n",
+        )
 
-        operations = audit_api_coverage._published_operations(
-            audit_api_coverage.CATALOG_URL,
-            audit_api_coverage.DEFAULT_ALLOWED_ORIGINS,
+        with self.assertRaisesRegex(RuntimeError, "share canonical key"):
+            audit_api_coverage._published_operations(specs)
+
+    def test_deduplicates_identical_operation_across_specs(self):
+        specs = self._specs(
+            b"paths:\n  /v1/agents/{agent_id}:\n    get: {}\n",
+            b"paths:\n  /v1/agents/{agent_id}:\n    get: {}\n",
         )
 
         self.assertEqual(
             {"GET /agents/{id}": "GET /v1/agents/{agent_id}"},
-            operations,
+            audit_api_coverage._published_operations(specs),
+        )
+
+    def test_fetches_the_catalog_and_each_spec_once(self):
+        with patch("scripts.audit_api_coverage._fetch") as fetch:
+            fetch.side_effect = [
+                b'{"specs":[{"url":"https://api.coval.dev/a"}]}',
+                b"paths: {}\n",
+            ]
+            audit_api_coverage._published_specs(
+                audit_api_coverage.CATALOG_URL,
+                audit_api_coverage.DEFAULT_ALLOWED_ORIGINS,
+            )
+
+        self.assertEqual(2, fetch.call_count)
+
+
+class PublishedRequestFieldTests(unittest.TestCase):
+    SCHEMAS = {
+        "CreateThing": {
+            "type": "object",
+            "properties": {"display_name": {}, "tags": {}},
+        },
+        "Composed": {
+            "allOf": [
+                {"$ref": "#/components/schemas/CreateThing"},
+                {"type": "object", "properties": {"extra": {}}},
+            ]
+        },
+        "SelfReferential": {
+            "type": "object",
+            "properties": {"child": {}},
+            "anyOf": [{"$ref": "#/components/schemas/SelfReferential"}],
+        },
+    }
+
+    def test_resolves_a_reference_to_its_properties(self):
+        self.assertEqual(
+            {"display_name", "tags"},
+            audit_api_coverage._schema_properties(
+                {"$ref": "#/components/schemas/CreateThing"}, self.SCHEMAS
+            ),
+        )
+
+    def test_unions_every_branch_of_a_composed_schema(self):
+        self.assertEqual(
+            {"display_name", "tags", "extra"},
+            audit_api_coverage._schema_properties(
+                {"$ref": "#/components/schemas/Composed"}, self.SCHEMAS
+            ),
+        )
+
+    def test_tolerates_a_self_referential_schema(self):
+        self.assertEqual(
+            {"child"},
+            audit_api_coverage._schema_properties(
+                {"$ref": "#/components/schemas/SelfReferential"}, self.SCHEMAS
+            ),
+        )
+
+    def test_rejects_an_unresolvable_reference(self):
+        with self.assertRaisesRegex(RuntimeError, "unknown schema"):
+            audit_api_coverage._schema_properties(
+                {"$ref": "#/components/schemas/Missing"}, self.SCHEMAS
+            )
+
+    def test_collects_only_json_request_bodies_on_body_methods(self):
+        spec = {
+            "components": {"schemas": self.SCHEMAS},
+            "paths": {
+                "/things": {
+                    "get": {"responses": {}},
+                    "post": {
+                        "requestBody": {
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/CreateThing"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                },
+                "/things/{thing_id}/archive": {
+                    "post": {"responses": {}},
+                },
+                "/traces": {
+                    "post": {
+                        "requestBody": {
+                            "content": {"application/x-protobuf": {"schema": {}}}
+                        }
+                    }
+                },
+            },
+        }
+
+        self.assertEqual(
+            {"POST /things": {"display_name", "tags"}},
+            audit_api_coverage._published_request_fields([spec]),
+        )
+
+    def test_merges_the_same_operation_across_specs(self):
+        def spec(field):
+            return {
+                "components": {"schemas": {}},
+                "paths": {
+                    "/things": {
+                        "post": {
+                            "requestBody": {
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {field: {}},
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+            }
+
+        self.assertEqual(
+            {"POST /things": {"first", "second"}},
+            audit_api_coverage._published_request_fields(
+                [spec("first"), spec("second")]
+            ),
         )
 
 
@@ -241,6 +374,247 @@ let response = client.get(url).send().await?;
         self.assertEqual([], unmapped)
 
 
+class RequestBodyTypeTests(unittest.TestCase):
+    def test_reads_the_type_from_the_function_signature(self):
+        block = """
+    pub async fn create(&self, req: models::CreateAgentRequest) -> Result<T, E> {
+        let url = self.0.url("/v1/agents");
+        self.0.post(url, &req).await
+    }
+"""
+        self.assertEqual(
+            {"CreateAgentRequest"},
+            audit_api_coverage._request_body_types("agents.create", block),
+        )
+
+    def test_reads_the_type_from_a_local_binding(self):
+        block = """
+    pub async fn test_evaluate(&self, run_id: &str) -> Result<T, E> {
+        let url = self.0.url("/v1/monitors/x/test-evaluate");
+        let req = models::TestEvaluateRequest {
+            run_id: run_id.to_string(),
+        };
+        self.0.post(url, &req).await
+    }
+"""
+        self.assertEqual(
+            {"TestEvaluateRequest"},
+            audit_api_coverage._request_body_types("monitors.test_evaluate", block),
+        )
+
+    def test_treats_a_json_value_body_as_passthrough(self):
+        block = """
+    pub async fn create_baseline(&self, req: serde_json::Value) -> Result<T, E> {
+        let url = self.0.url("/v1/metrics/x/baselines");
+        self.0.post(url, &req).await
+    }
+"""
+        self.assertEqual(
+            {audit_api_coverage.PASSTHROUGH_BODY},
+            audit_api_coverage._request_body_types("metrics.create_baseline", block),
+        )
+
+    def test_ignores_a_call_that_sends_no_body(self):
+        block = """
+    pub async fn duplicate(&self, id: &str) -> Result<T, E> {
+        let url = self.0.url("/v1/metrics/x/duplicate");
+        self.0.post_empty(url).await
+    }
+"""
+        self.assertEqual(
+            set(), audit_api_coverage._request_body_types("metrics.duplicate", block)
+        )
+
+    def test_rejects_an_unresolvable_body_binding(self):
+        block = """
+    pub async fn create(&self, req: SomeLocalType) -> Result<T, E> {
+        let url = self.0.url("/v1/agents");
+        self.0.post(url, &req).await
+    }
+"""
+        with self.assertRaisesRegex(RuntimeError, "could not resolve"):
+            audit_api_coverage._request_body_types("agents.create", block)
+
+
+class ModelRequestFieldTests(unittest.TestCase):
+    def _fields(self, source: str) -> dict[str, set[str]]:
+        with tempfile.TemporaryDirectory() as directory:
+            models = Path(directory)
+            (models / "agent.rs").write_text(source)
+            with patch.object(audit_api_coverage, "MODELS_PATH", models):
+                return audit_api_coverage._model_request_fields()
+
+    def test_reads_plain_and_renamed_fields(self):
+        fields = self._fields(
+            """
+#[derive(Debug, Serialize)]
+pub struct CreateWidgetRequest {
+    pub title: String,
+    #[serde(rename = "grid_x", skip_serializing_if = "Option::is_none")]
+    pub x: Option<u32>,
+}
+"""
+        )
+
+        self.assertEqual({"CreateWidgetRequest": {"title", "grid_x"}}, fields)
+
+    def test_ignores_flattened_and_skipped_fields(self):
+        fields = self._fields(
+            """
+pub struct Agent {
+    pub id: String,
+    #[serde(skip)]
+    pub cached: bool,
+    #[serde(skip_serializing)]
+    pub read_only: bool,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+"""
+        )
+
+        self.assertEqual({"Agent": {"id"}}, fields)
+
+    def test_reads_a_field_behind_a_multi_line_attribute(self):
+        fields = self._fields(
+            """
+pub struct UpdateTestCaseRequest {
+    #[serde(
+        default,
+        deserialize_with = "explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub script_turns: Option<Option<Vec<serde_json::Value>>>,
+}
+"""
+        )
+
+        self.assertEqual({"UpdateTestCaseRequest": {"script_turns"}}, fields)
+
+
+class CliRequestFieldTests(unittest.TestCase):
+    MODELS = {
+        "CreateThingRequest": {"display_name"},
+        "SubmitThingRequest": {"display_name", "audio"},
+    }
+
+    def test_unions_every_struct_bound_to_one_operation(self):
+        operations = {
+            "POST /things": {
+                "request_bodies": {"CreateThingRequest", "SubmitThingRequest"}
+            }
+        }
+
+        self.assertEqual(
+            {"POST /things": {"display_name", "audio"}},
+            audit_api_coverage._cli_request_fields(operations, self.MODELS),
+        )
+
+    def test_marks_a_passthrough_operation_as_unbounded(self):
+        operations = {
+            "POST /things": {
+                "request_bodies": {audit_api_coverage.PASSTHROUGH_BODY},
+            }
+        }
+
+        self.assertEqual(
+            {"POST /things": None},
+            audit_api_coverage._cli_request_fields(operations, self.MODELS),
+        )
+
+    def test_skips_an_operation_with_no_request_body(self):
+        operations = {"GET /things": {"request_bodies": set()}}
+
+        self.assertEqual(
+            {}, audit_api_coverage._cli_request_fields(operations, self.MODELS)
+        )
+
+    def test_rejects_a_body_struct_that_is_not_defined(self):
+        operations = {"POST /things": {"request_bodies": {"MissingRequest"}}}
+
+        with self.assertRaisesRegex(RuntimeError, "was not found"):
+            audit_api_coverage._cli_request_fields(operations, self.MODELS)
+
+
+class ManifestFieldTests(unittest.TestCase):
+    def test_rejects_a_missing_field_name(self):
+        with self.assertRaisesRegex(ValueError, "non-empty"):
+            audit_api_coverage._manifest_field_entries(
+                [{"operation": "POST /agents", "reason": "Reviewed"}],
+                "known_field_gap",
+            )
+
+    def test_rejects_a_method_that_carries_no_request_body(self):
+        with self.assertRaisesRegex(ValueError, "invalid operation"):
+            audit_api_coverage._manifest_field_entries(
+                [{"operation": "GET /agents", "field": "tags", "reason": "Reviewed"}],
+                "known_field_gap",
+            )
+
+    def test_rejects_a_duplicate_entry(self):
+        with self.assertRaisesRegex(ValueError, "duplicate entry"):
+            audit_api_coverage._manifest_field_entries(
+                [
+                    {"operation": "POST /agents", "field": "tags", "reason": "First"},
+                    {"operation": "POST /agents", "field": "tags", "reason": "Second"},
+                ],
+                "known_field_gap",
+            )
+
+    def test_canonicalizes_the_operation_path(self):
+        entries = audit_api_coverage._manifest_field_entries(
+            [
+                {
+                    "operation": "PATCH /agents/{agent_id}",
+                    "field": "tags",
+                    "reason": "Reviewed",
+                }
+            ],
+            "known_field_gap",
+        )
+
+        self.assertEqual([("PATCH /agents/{id}", "tags")], list(entries))
+
+
+class FieldReconciliationTests(unittest.TestCase):
+    def test_classifies_gaps_extras_and_stale_exceptions(self):
+        result = audit_api_coverage._field_reconciliation(
+            published_fields={"POST /things": {"name", "tags"}},
+            cli_fields={"POST /things": {"name", "legacy"}},
+            known_field_gaps={("POST /things", "retired"): {}},
+            allowed_extra_fields={("POST /things", "legacy"): {}},
+        )
+
+        self.assertEqual({("POST /things", "tags")}, result["new_gaps"])
+        self.assertEqual({("POST /things", "retired")}, result["stale_gaps"])
+        self.assertEqual(set(), result["unexpected_extras"])
+        self.assertEqual(set(), result["stale_allowed_extras"])
+        self.assertEqual(2, result["compared_field_count"])
+        self.assertEqual(1, result["modeled_field_count"])
+
+    def test_counts_a_passthrough_operation_as_fully_modeled(self):
+        result = audit_api_coverage._field_reconciliation(
+            published_fields={"POST /things": {"name", "tags"}},
+            cli_fields={"POST /things": None},
+            known_field_gaps={},
+            allowed_extra_fields={},
+        )
+
+        self.assertEqual(set(), result["actual_gaps"])
+        self.assertEqual(2, result["modeled_field_count"])
+
+    def test_ignores_an_operation_the_cli_does_not_implement(self):
+        result = audit_api_coverage._field_reconciliation(
+            published_fields={"POST /things": {"name"}, "POST /others": {"name"}},
+            cli_fields={"POST /things": {"name"}},
+            known_field_gaps={},
+            allowed_extra_fields={},
+        )
+
+        self.assertEqual(["POST /things"], result["compared_operations"])
+        self.assertEqual(set(), result["actual_gaps"])
+
+
 class ManifestTests(unittest.TestCase):
     def test_rejects_missing_reason(self):
         with self.assertRaisesRegex(ValueError, "non-empty"):
@@ -273,16 +647,24 @@ class AuditAggregationTests(unittest.TestCase):
         manifest: str,
         published: dict[str, str],
         commands: dict[str, dict],
+        published_fields: dict[str, set[str]] | None = None,
+        cli_fields: dict[str, set[str] | None] | None = None,
     ) -> tuple[dict, bool]:
         with tempfile.TemporaryDirectory() as directory:
             manifest_path = Path(directory) / "api-coverage.toml"
             manifest_path.write_text(manifest)
             with (
                 patch.object(audit_api_coverage, "MANIFEST_PATH", manifest_path),
+                patch.object(audit_api_coverage, "_published_specs", return_value=[]),
                 patch.object(
                     audit_api_coverage,
                     "_published_operations",
                     return_value=published,
+                ),
+                patch.object(
+                    audit_api_coverage,
+                    "_published_request_fields",
+                    return_value=published_fields or {},
                 ),
                 patch.object(
                     audit_api_coverage,
@@ -294,6 +676,14 @@ class AuditAggregationTests(unittest.TestCase):
                     "_command_operations",
                     return_value=(commands, []),
                 ),
+                patch.object(
+                    audit_api_coverage, "_model_request_fields", return_value={}
+                ),
+                patch.object(
+                    audit_api_coverage,
+                    "_cli_request_fields",
+                    return_value=cli_fields or {},
+                ),
             ):
                 return audit_api_coverage.audit(audit_api_coverage.CATALOG_URL)
 
@@ -303,6 +693,8 @@ class AuditAggregationTests(unittest.TestCase):
 catalog_url = "{audit_api_coverage.CATALOG_URL}"
 published_operations = 2
 cli_supported_operations = 1
+published_request_fields = 0
+cli_modeled_request_fields = 0
 
 [[known_gap]]
 operation = "GET /beta"
@@ -334,6 +726,8 @@ reason = "Pre-deploy"
 catalog_url = "{audit_api_coverage.CATALOG_URL}"
 published_operations = 2
 cli_supported_operations = 1
+published_request_fields = 0
+cli_modeled_request_fields = 0
 """
         published = {
             "GET /alpha": "GET /v1/alpha",
@@ -350,12 +744,95 @@ cli_supported_operations = 1
         self.assertEqual(["GET /v1/beta"], report["new_gaps"])
         self.assertEqual(["POST /gamma"], report["unexpected_cli_operations"])
 
+    def test_classifies_an_unreviewed_dropped_field_as_failure(self):
+        manifest = f"""
+[snapshot]
+catalog_url = "{audit_api_coverage.CATALOG_URL}"
+published_operations = 1
+cli_supported_operations = 1
+published_request_fields = 2
+cli_modeled_request_fields = 1
+"""
+        published = {"POST /things": "POST /v1/things"}
+        commands = {"POST /things": {"operation": "POST /things"}}
+
+        report, passed = self._audit(
+            manifest,
+            published,
+            commands,
+            published_fields={"POST /things": {"name", "tags"}},
+            cli_fields={"POST /things": {"name"}},
+        )
+
+        self.assertFalse(passed)
+        self.assertEqual(["POST /things tags"], report["new_field_gaps"])
+        self.assertEqual(["POST /things tags"], report["all_current_field_gaps"])
+
+    def test_accepts_a_reviewed_field_gap_and_allowed_extra_field(self):
+        manifest = f"""
+[snapshot]
+catalog_url = "{audit_api_coverage.CATALOG_URL}"
+published_operations = 1
+cli_supported_operations = 1
+published_request_fields = 2
+cli_modeled_request_fields = 1
+
+[[known_field_gap]]
+operation = "POST /things"
+field = "tags"
+reason = "Reviewed"
+
+[[allowed_extra_field]]
+operation = "POST /things"
+field = "legacy"
+reason = "Served but undocumented"
+"""
+        published = {"POST /things": "POST /v1/things"}
+        commands = {"POST /things": {"operation": "POST /things"}}
+
+        report, passed = self._audit(
+            manifest,
+            published,
+            commands,
+            published_fields={"POST /things": {"name", "tags"}},
+            cli_fields={"POST /things": {"name", "legacy"}},
+        )
+
+        self.assertTrue(passed)
+        self.assertEqual(1, report["known_field_gap_count"])
+        self.assertEqual([], report["new_field_gaps"])
+        self.assertEqual([], report["unexpected_cli_request_fields"])
+
+    def test_rejects_request_field_in_multiple_manifest_sections(self):
+        manifest = """
+[snapshot]
+catalog_url = "https://api.coval.dev/v1/openapi"
+published_operations = 0
+cli_supported_operations = 0
+published_request_fields = 0
+cli_modeled_request_fields = 0
+
+[[known_field_gap]]
+operation = "POST /agents"
+field = "tags"
+reason = "Reviewed"
+
+[[allowed_extra_field]]
+operation = "POST /agents"
+field = "tags"
+reason = "Served but undocumented"
+"""
+        with self.assertRaisesRegex(ValueError, "only one section"):
+            self._audit(manifest, {}, {})
+
     def test_rejects_operation_in_multiple_manifest_sections(self):
         manifest = """
 [snapshot]
 catalog_url = "https://api.coval.dev/v1/openapi"
 published_operations = 0
 cli_supported_operations = 0
+published_request_fields = 0
+cli_modeled_request_fields = 0
 
 [[known_gap]]
 operation = "GET /agents"
@@ -376,14 +853,40 @@ class SnapshotTests(unittest.TestCase):
                 "catalog_url": audit_api_coverage.CATALOG_URL,
                 "published_operations": 10,
                 "cli_supported_operations": 8,
+                "published_request_fields": 40,
+                "cli_modeled_request_fields": 40,
             },
             catalog_url=audit_api_coverage.CATALOG_URL,
             published_operation_count=11,
             supported_operation_count=8,
+            compared_field_count=40,
+            modeled_field_count=40,
         )
 
         self.assertEqual(
             ["published_operations: recorded 10, current 11"],
+            mismatches,
+        )
+
+    def test_reports_an_unrecorded_request_field_count(self):
+        mismatches = audit_api_coverage._snapshot_mismatches(
+            {
+                "catalog_url": audit_api_coverage.CATALOG_URL,
+                "published_operations": 10,
+                "cli_supported_operations": 8,
+            },
+            catalog_url=audit_api_coverage.CATALOG_URL,
+            published_operation_count=10,
+            supported_operation_count=8,
+            compared_field_count=40,
+            modeled_field_count=39,
+        )
+
+        self.assertEqual(
+            [
+                "published_request_fields: recorded None, current 40",
+                "cli_modeled_request_fields: recorded None, current 39",
+            ],
             mismatches,
         )
 
@@ -406,6 +909,14 @@ class MarkdownReportTests(unittest.TestCase):
             "unmapped_command_client_methods": [],
             "snapshot_mismatches": ["published_operations: recorded 2, current 3"],
             "all_current_gaps": ["GET /v1/beta"],
+            "compared_request_field_count": 4,
+            "modeled_request_field_count": 3,
+            "known_field_gap_count": 0,
+            "new_field_gaps": ["POST /things tags"],
+            "stale_field_gaps": [],
+            "unexpected_cli_request_fields": [],
+            "stale_allowed_extra_fields": [],
+            "all_current_field_gaps": ["POST /things tags"],
         }
 
     def test_renders_deterministic_actionable_report(self):
@@ -417,6 +928,9 @@ class MarkdownReportTests(unittest.TestCase):
             "- `published_operations: recorded 2, current 3`",
             rendered,
         )
+        self.assertIn("| Request fields modeled by the CLI | 3 |", rendered)
+        self.assertIn("## New published request fields the CLI drops", rendered)
+        self.assertIn("- `POST /things tags`", rendered)
         self.assertNotIn("Generated at", rendered)
 
     @patch("scripts.audit_api_coverage.audit")
