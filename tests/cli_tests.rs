@@ -3840,6 +3840,387 @@ async fn test_metrics_create_composite_test_case() {
         .stdout(predicate::str::contains("comp1"));
 }
 
+fn metric_response_body() -> Value {
+    json!({
+        "metric": {
+            "name": "metrics/met1",
+            "id": "met1",
+            "metric_name": "Pause analysis",
+            "description": "Silence handling",
+            "metric_type": "METRIC_PAUSE_ANALYSIS",
+            "create_time": "2026-09-02T10:30:00Z"
+        }
+    })
+}
+
+/// Every request field the audit records as published for POST /v1/metrics, so a
+/// struct that stops declaring one fails here rather than dropping it in silence.
+fn newly_modeled_metric_fields() -> Value {
+    json!({
+        "max_silence_duration_seconds": 4.5,
+        "min_silence_gap_seconds": 0.75,
+        "frequency_threshold": 2.0,
+        "direction": "above",
+        "success_sentiments": ["Happy", "Neutral"],
+        "percent_above": 25.0,
+        "success_end_reasons": ["AGENT_ENDED_CALL"],
+        "observation_name": "long pauses",
+        "expected_body": {"status": "ok"},
+        "match_path": "payload.status",
+        "min_volume_change_for_pitch_misalignment": 3.5,
+        "threshold": 4,
+        "operator": ">=",
+        "sql_query": "SELECT 1",
+        "runtime_config": {"model_version": "openai:gpt-4.1-mini-2025-04-14"},
+        "tags": ["voice", "latency"]
+    })
+}
+
+#[tokio::test]
+async fn test_metrics_create_forwards_every_modeled_field() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("POST"))
+        .and(path("/v1/metrics"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(metric_response_body()))
+        .mount(&mock_server)
+        .await;
+
+    let fields = newly_modeled_metric_fields();
+    let mut input = fields.as_object().unwrap().clone();
+    input.insert("metric_name".into(), json!("Pause analysis"));
+    input.insert("description".into(), json!("Silence handling"));
+    input.insert("metric_type".into(), json!("METRIC_PAUSE_ANALYSIS"));
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("metrics")
+        .arg("create")
+        .arg("--input-json")
+        .arg(Value::Object(input).to_string())
+        .assert()
+        .success();
+
+    let body = capture.take();
+    for (key, expected) in fields.as_object().unwrap() {
+        assert_eq!(&body[key], expected, "field {key} must reach the API");
+    }
+}
+
+#[tokio::test]
+async fn test_metrics_update_forwards_every_modeled_field() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/metrics/met1"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(metric_response_body()))
+        .mount(&mock_server)
+        .await;
+
+    let fields = newly_modeled_metric_fields();
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("metrics")
+        .arg("update")
+        .arg("met1")
+        .arg("--input-json")
+        .arg(fields.to_string())
+        .assert()
+        .success();
+
+    let body = capture.take();
+    for (key, expected) in fields.as_object().unwrap() {
+        assert_eq!(&body[key], expected, "field {key} must reach the API");
+    }
+}
+
+#[tokio::test]
+async fn test_metrics_create_forwards_flag_values() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("POST"))
+        .and(path("/v1/metrics"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(metric_response_body()))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("metrics")
+        .arg("create")
+        .arg("--name")
+        .arg("Pause analysis")
+        .arg("--description")
+        .arg("Silence handling")
+        .arg("--type")
+        .arg("pause")
+        .arg("--direction")
+        .arg("above")
+        .arg("--threshold")
+        .arg("4")
+        .arg("--operator")
+        .arg(">=")
+        .arg("--success-sentiments")
+        .arg("Happy,Neutral")
+        .arg("--tags")
+        .arg("voice,latency")
+        .arg("--runtime-config")
+        .arg(r#"{"model_version":"openai:gpt-4.1-mini-2025-04-14"}"#)
+        .assert()
+        .success();
+
+    let body = capture.take();
+    assert_eq!(body["direction"], "above");
+    assert_eq!(body["threshold"], 4);
+    assert_eq!(body["operator"], ">=");
+    assert_eq!(body["success_sentiments"], json!(["Happy", "Neutral"]));
+    assert_eq!(body["tags"], json!(["voice", "latency"]));
+    assert_eq!(
+        body["runtime_config"],
+        json!({"model_version": "openai:gpt-4.1-mini-2025-04-14"})
+    );
+}
+
+#[tokio::test]
+async fn test_metrics_create_accepts_a_plain_string_expected_body() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("POST"))
+        .and(path("/v1/metrics"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(metric_response_body()))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("metrics")
+        .arg("create")
+        .arg("--name")
+        .arg("Toolcall check")
+        .arg("--description")
+        .arg("Body match")
+        .arg("--type")
+        .arg("toolcall")
+        .arg("--expected-body")
+        .arg("not json at all")
+        .assert()
+        .success();
+
+    assert_eq!(capture.take()["expected_body"], "not json at all");
+}
+
+#[tokio::test]
+async fn test_metrics_create_omits_unset_fields() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("POST"))
+        .and(path("/v1/metrics"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(metric_response_body()))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("metrics")
+        .arg("create")
+        .arg("--name")
+        .arg("Simple")
+        .arg("--description")
+        .arg("No optional fields")
+        .arg("--type")
+        .arg("llm-binary")
+        .arg("--prompt")
+        .arg("Did the agent greet the caller?")
+        .assert()
+        .success();
+
+    let body = capture.take();
+    for key in newly_modeled_metric_fields().as_object().unwrap().keys() {
+        assert!(body.get(key).is_none(), "unset field {key} must be omitted");
+    }
+}
+
+#[tokio::test]
+async fn test_metrics_update_clears_tags_with_an_empty_list() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/metrics/met1"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(metric_response_body()))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("metrics")
+        .arg("update")
+        .arg("met1")
+        .arg("--input-json")
+        .arg(r#"{"tags":[]}"#)
+        .assert()
+        .success();
+
+    assert_eq!(capture.take()["tags"], json!([]));
+}
+
+#[tokio::test]
+async fn test_metrics_test_sends_a_batch_and_reports_each_result() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("POST"))
+        .and(path("/v1/metrics/met1/test"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "results": [
+                {
+                    "simulation_output_id": "aaaaaaaaaaaaaaaaaaaaaa",
+                    "status": "QUEUED",
+                    "metric_output_ulid": "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+                },
+                {
+                    "simulation_output_id": "bbbbbbbbbbbbbbbbbbbbbb",
+                    "status": "NOT_FOUND",
+                    "error": "Simulation output not found"
+                }
+            ],
+            "metric_output_ulid": null
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("metrics")
+        .arg("test")
+        .arg("met1")
+        .arg("--simulation-output-ids")
+        .arg("aaaaaaaaaaaaaaaaaaaaaa,bbbbbbbbbbbbbbbbbbbbbb")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("NOT_FOUND"));
+
+    let body = capture.take();
+    assert_eq!(
+        body["simulation_output_ids"],
+        json!(["aaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbb"])
+    );
+    assert!(body.get("simulation_output_id").is_none());
+}
+
+#[tokio::test]
+async fn test_metrics_test_still_accepts_the_deprecated_single_id() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("POST"))
+        .and(path("/v1/metrics/met1/test"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "results": [
+                {
+                    "simulation_output_id": "aaaaaaaaaaaaaaaaaaaaaa",
+                    "status": "QUEUED",
+                    "metric_output_ulid": "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+                }
+            ],
+            "metric_output_ulid": "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("metrics")
+        .arg("test")
+        .arg("met1")
+        .arg("--simulation-output-id")
+        .arg("aaaaaaaaaaaaaaaaaaaaaa")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("01ARZ3NDEKTSV4RRFFQ69G5FAV"));
+
+    let body = capture.take();
+    assert_eq!(body["simulation_output_id"], "aaaaaaaaaaaaaaaaaaaaaa");
+    assert!(body.get("simulation_output_ids").is_none());
+}
+
+#[test]
+fn test_metrics_test_requires_a_simulation_target() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("metrics")
+        .arg("test")
+        .arg("met1")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "Provide --simulation-output-id or --simulation-output-ids",
+        ));
+}
+
+#[test]
+fn test_metrics_test_rejects_both_simulation_targets() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("metrics")
+        .arg("test")
+        .arg("met1")
+        .arg("--simulation-output-id")
+        .arg("aaaaaaaaaaaaaaaaaaaaaa")
+        .arg("--simulation-output-ids")
+        .arg("bbbbbbbbbbbbbbbbbbbbbb")
+        .assert()
+        .failure();
+}
+
 #[tokio::test]
 async fn test_metrics_duplicate() {
     let mock_server = MockServer::start().await;

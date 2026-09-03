@@ -171,6 +171,29 @@ coval metrics create \
   --criteria-path expected_behaviors \
   --reporting-method all_criteria_met
 
+# Create a pause metric and tag it
+coval metrics create \
+  --name "Long silences" \
+  --description "Flag silences the agent leaves unfilled" \
+  --type pause \
+  --min-pause-duration 2.5 \
+  --max-silence-duration-seconds 8 \
+  --direction above \
+  --threshold 3 \
+  --operator ">=" \
+  --tags voice,latency
+
+# Clear a metric's tags (an empty list clears; omitting the flag leaves them alone)
+coval metrics update met123456 --input-json '{"tags":[]}'
+
+# Pin the model a judge metric evaluates with
+coval metrics update met123456 \
+  --runtime-config '{"model_version":"openai:gpt-4.1-mini-2025-04-14"}'
+
+# Test a metric against several simulations in one call
+coval metrics test met123456 \
+  --simulation-output-ids sim1,sim2,sim3
+
 # Save a report comparing runs by test case
 coval reports create \
   --name "Adversarial Scorecard" \
