@@ -1826,6 +1826,328 @@ async fn test_personas_background_sounds_update_accepts_custom_value() {
         .stdout(predicate::str::contains("archived"));
 }
 
+/// Every request field the audit records as published for POST /v1/personas that
+/// the CLI models, so a struct that stops declaring one fails here.
+fn newly_modeled_persona_fields() -> Value {
+    json!({
+        "background_sound_volume": 0.4,
+        "voice_volume": 1.5,
+        "voice_speed": 0.9,
+        "hold_music_timeout_seconds": 45.0,
+        "situate_speaker": "speakerphone-easy",
+        "tags": ["support", "noisy"]
+    })
+}
+
+#[tokio::test]
+async fn test_personas_create_forwards_every_modeled_field() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("POST"))
+        .and(path("/v1/personas"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(persona_response(false)))
+        .mount(&mock_server)
+        .await;
+
+    let fields = newly_modeled_persona_fields();
+    let mut input = fields.as_object().unwrap().clone();
+    input.insert("name".into(), json!("Noisy caller"));
+    input.insert("voice_name".into(), json!("marina"));
+    input.insert("language_code".into(), json!("en-US"));
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("personas")
+        .arg("create")
+        .arg("--input-json")
+        .arg(Value::Object(input).to_string())
+        .assert()
+        .success();
+
+    let body = capture.take();
+    for (key, expected) in fields.as_object().unwrap() {
+        assert_eq!(&body[key], expected, "field {key} must reach the API");
+    }
+}
+
+#[tokio::test]
+async fn test_personas_update_forwards_every_modeled_field() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/personas/persona1"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(persona_response(false)))
+        .mount(&mock_server)
+        .await;
+
+    let fields = newly_modeled_persona_fields();
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("personas")
+        .arg("update")
+        .arg("persona1")
+        .arg("--input-json")
+        .arg(fields.to_string())
+        .assert()
+        .success();
+
+    let body = capture.take();
+    for (key, expected) in fields.as_object().unwrap() {
+        assert_eq!(&body[key], expected, "field {key} must reach the API");
+    }
+}
+
+#[tokio::test]
+async fn test_personas_update_forwards_an_explicit_null_to_clear() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/personas/persona1"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(persona_response(false)))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("personas")
+        .arg("update")
+        .arg("persona1")
+        .arg("--input-json")
+        .arg(
+            json!({
+                "situate_speaker": null,
+                "audio_degradation": null,
+                "voice_volume": null,
+                "voice_speed": null,
+                "hold_music_timeout_seconds": null
+            })
+            .to_string(),
+        )
+        .assert()
+        .success();
+
+    // The API deletes a stored value only when the key is present and null, so an
+    // omitted key here would silently turn "clear this" into "leave it alone".
+    let body = capture.take();
+    for key in [
+        "situate_speaker",
+        "audio_degradation",
+        "voice_volume",
+        "voice_speed",
+        "hold_music_timeout_seconds",
+    ] {
+        assert!(body.get(key).is_some(), "{key} must be sent");
+        assert!(body[key].is_null(), "{key} must be sent as null");
+    }
+}
+
+#[tokio::test]
+async fn test_personas_update_omits_unset_clearable_fields() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/personas/persona1"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(persona_response(false)))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("personas")
+        .arg("update")
+        .arg("persona1")
+        .arg("--name")
+        .arg("Renamed")
+        .assert()
+        .success();
+
+    let body = capture.take();
+    assert_eq!(body["name"], "Renamed");
+    for key in [
+        "situate_speaker",
+        "audio_degradation",
+        "voice_volume",
+        "voice_speed",
+        "hold_music_timeout_seconds",
+        "tags",
+    ] {
+        assert!(body.get(key).is_none(), "unset {key} must be omitted");
+    }
+}
+
+#[tokio::test]
+async fn test_personas_update_audio_degradation_flag_accepts_a_preset_id() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/personas/persona1"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(persona_response(false)))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("personas")
+        .arg("update")
+        .arg("persona1")
+        .arg("--audio-degradation")
+        .arg("cell-handoff")
+        .assert()
+        .success();
+
+    assert_eq!(
+        capture.take()["audio_degradation"],
+        json!({"preset": "cell-handoff"})
+    );
+}
+
+#[tokio::test]
+async fn test_personas_update_audio_degradation_flag_accepts_a_json_object() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/personas/persona1"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(persona_response(false)))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("personas")
+        .arg("update")
+        .arg("persona1")
+        .arg("--audio-degradation")
+        .arg(r#"{"preset":"landline","preset_version":"v2"}"#)
+        .assert()
+        .success();
+
+    assert_eq!(
+        capture.take()["audio_degradation"],
+        json!({"preset": "landline", "preset_version": "v2"})
+    );
+}
+
+#[tokio::test]
+async fn test_personas_background_sounds_update_forwards_acoustic_source_type() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/personas/background-sounds/sound1"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "background_sound": {
+                "id": "sound1",
+                "value": "custom:sound1",
+                "source": "custom",
+                "display_name": "Lobby Noise",
+                "status": "active",
+                "default_volume": 0.42,
+                "content_type": "audio/mpeg",
+                "original_filename": "lobby-noise.mp3"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("personas")
+        .arg("background-sounds")
+        .arg("update")
+        .arg("custom:sound1")
+        .arg("--acoustic-source-type")
+        .arg("point_source")
+        .assert()
+        .success();
+
+    assert_eq!(capture.take()["acoustic_source_type"], "point_source");
+}
+
+#[tokio::test]
+async fn test_personas_background_sounds_update_clears_acoustic_source_type() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/personas/background-sounds/sound1"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "background_sound": {
+                "id": "sound1",
+                "value": "custom:sound1",
+                "source": "custom",
+                "display_name": "Lobby Noise",
+                "status": "active",
+                "default_volume": 0.42,
+                "content_type": "audio/mpeg",
+                "original_filename": "lobby-noise.mp3"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("personas")
+        .arg("background-sounds")
+        .arg("update")
+        .arg("custom:sound1")
+        .arg("--input-json")
+        .arg(r#"{"acoustic_source_type":null}"#)
+        .assert()
+        .success();
+
+    let body = capture.take();
+    assert!(body.get("acoustic_source_type").is_some());
+    assert!(body["acoustic_source_type"].is_null());
+}
+
 #[tokio::test]
 async fn test_api_key_create_warning_agent_mode() {
     let mock_server = MockServer::start().await;

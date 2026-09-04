@@ -12,14 +12,14 @@ only when coverage actually changes.
 
 | Metric | Value |
 | --- | ---: |
-| Reconciliation status | PASS |
+| Reconciliation status | ACTION REQUIRED |
 | Published operations | 181 |
 | First-class CLI operations | 119 |
 | Reviewed gaps | 62 |
 | Client operations | 143 |
-| Published request fields on covered operations | 360 |
-| Request fields modeled by the CLI | 313 |
-| Reviewed request-field gaps | 47 |
+| Published request fields on covered operations | 363 |
+| Request fields modeled by the CLI | 329 |
+| Reviewed request-field gaps | 31 |
 
 Catalog: https://api.coval.dev/v1/openapi
 
@@ -49,7 +49,8 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## Coverage snapshot mismatches
 
-- None.
+- `published_request_fields: recorded 360, current 363`
+- `cli_modeled_request_fields: recorded 313, current 329`
 
 ## Client-only operations
 
@@ -122,7 +123,9 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## New published request fields the CLI drops
 
-- None.
+- `PATCH /metrics/{id} ivr_flow`
+- `POST /metrics ivr_flow`
+- `POST /runs config_overrides`
 
 ## Reviewed request-field gaps no longer present
 
@@ -144,14 +147,7 @@ Catalog: https://api.coval.dev/v1/openapi
 - `PATCH /agents/{id} tags`
 - `PATCH /agents/{id} workflows`
 - `PATCH /conversations/uploaded/{id} metadata`
-- `PATCH /personas/background-sounds/{id} acoustic_source_type`
-- `PATCH /personas/{id} audio_degradation`
-- `PATCH /personas/{id} background_sound_volume`
-- `PATCH /personas/{id} hold_music_timeout_seconds`
-- `PATCH /personas/{id} situate_speaker`
-- `PATCH /personas/{id} tags`
-- `PATCH /personas/{id} voice_speed`
-- `PATCH /personas/{id} voice_volume`
+- `PATCH /metrics/{id} ivr_flow`
 - `PATCH /reports/{id} simulation_output_ids`
 - `PATCH /reports/{id} source_human_review_project_id`
 - `PATCH /reports/{id} view_config`
@@ -167,14 +163,7 @@ Catalog: https://api.coval.dev/v1/openapi
 - `PATCH /run-templates/{id} test_set_id`
 - `PATCH /test-sets/{id} tags`
 - `POST /conversations/uploaded:submit tags`
-- `POST /personas audio_degradation`
-- `POST /personas background_sound_volume`
-- `POST /personas hold_music_timeout_seconds`
-- `POST /personas situate_speaker`
-- `POST /personas tags`
-- `POST /personas voice_speed`
-- `POST /personas voice_volume`
-- `POST /personas/background-sounds acoustic_source_type`
+- `POST /metrics ivr_flow`
 - `POST /reports simulation_output_ids`
 - `POST /reports source_human_review_project_id`
 - `POST /review-projects blind_labeling_shown_metric_ids`
@@ -184,4 +173,5 @@ Catalog: https://api.coval.dev/v1/openapi
 - `POST /run-templates persona_id`
 - `POST /run-templates tags`
 - `POST /run-templates test_set_id`
+- `POST /runs config_overrides`
 - `POST /test-sets tags`

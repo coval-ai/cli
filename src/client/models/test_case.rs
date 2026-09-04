@@ -79,7 +79,7 @@ pub struct UpdateTestCaseRequest {
     /// JSON null clears the stored turns, so absent and null must stay distinct.
     #[serde(
         default,
-        deserialize_with = "explicit_option",
+        deserialize_with = "super::explicit_option",
         skip_serializing_if = "Option::is_none"
     )]
     pub script_turns: Option<Option<Vec<serde_json::Value>>>,
@@ -89,16 +89,6 @@ pub struct UpdateTestCaseRequest {
     pub metric_input: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_notes: Option<String>,
-}
-
-/// Deserializes a present field into `Some(..)` even when its value is null, so
-/// callers can tell "field omitted" from "field explicitly cleared".
-fn explicit_option<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    Option::<T>::deserialize(deserializer).map(Some)
 }
 
 #[derive(Debug, Deserialize)]
