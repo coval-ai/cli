@@ -18,8 +18,8 @@ only when coverage actually changes.
 | Reviewed gaps | 62 |
 | Client operations | 143 |
 | Published request fields on covered operations | 363 |
-| Request fields modeled by the CLI | 329 |
-| Reviewed request-field gaps | 31 |
+| Request fields modeled by the CLI | 343 |
+| Reviewed request-field gaps | 17 |
 
 Catalog: https://api.coval.dev/v1/openapi
 
@@ -50,7 +50,7 @@ Catalog: https://api.coval.dev/v1/openapi
 ## Coverage snapshot mismatches
 
 - `published_request_fields: recorded 360, current 363`
-- `cli_modeled_request_fields: recorded 313, current 329`
+- `cli_modeled_request_fields: recorded 313, current 343`
 
 ## Client-only operations
 
@@ -148,15 +148,6 @@ Catalog: https://api.coval.dev/v1/openapi
 - `PATCH /agents/{id} workflows`
 - `PATCH /conversations/uploaded/{id} metadata`
 - `PATCH /metrics/{id} ivr_flow`
-- `PATCH /reports/{id} simulation_output_ids`
-- `PATCH /reports/{id} source_human_review_project_id`
-- `PATCH /reports/{id} view_config`
-- `PATCH /review-projects/{id} add_linked_simulation_ids`
-- `PATCH /review-projects/{id} blind_labeling_shown_metric_ids`
-- `PATCH /review-projects/{id} enforced_collaboration`
-- `PATCH /review-projects/{id} metric_addition_completion_action`
-- `PATCH /review-projects/{id} project_rules`
-- `PATCH /review-projects/{id} remove_linked_simulation_ids`
 - `PATCH /run-templates/{id} agent_id`
 - `PATCH /run-templates/{id} persona_id`
 - `PATCH /run-templates/{id} tags`
@@ -164,11 +155,6 @@ Catalog: https://api.coval.dev/v1/openapi
 - `PATCH /test-sets/{id} tags`
 - `POST /conversations/uploaded:submit tags`
 - `POST /metrics ivr_flow`
-- `POST /reports simulation_output_ids`
-- `POST /reports source_human_review_project_id`
-- `POST /review-projects blind_labeling_shown_metric_ids`
-- `POST /review-projects enforced_collaboration`
-- `POST /review-projects project_rules`
 - `POST /run-templates agent_id`
 - `POST /run-templates persona_id`
 - `POST /run-templates tags`

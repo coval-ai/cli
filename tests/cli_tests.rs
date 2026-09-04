@@ -4002,6 +4002,292 @@ async fn test_review_projects_get() {
         .stdout(predicate::str::contains("proj123"));
 }
 
+fn review_project_response() -> Value {
+    json!({
+        "review_project": {
+            "id": "proj456",
+            "display_name": "New Project",
+            "assignees": ["alice@example.com"],
+            "linked_simulation_ids": ["sim1"],
+            "linked_metric_ids": ["met1"],
+            "project_type": "PROJECT_COLLABORATIVE",
+            "notifications": true,
+            "create_time": "2026-09-02T10:30:00Z",
+            "update_time": "2026-09-02T10:30:00Z"
+        }
+    })
+}
+
+fn report_response() -> Value {
+    json!({
+        "report": {
+            "id": "01HXXXXXXXXXXXXXXXXXXXXXXX",
+            "name": "Scorecard",
+            "run_ids": ["run1"],
+            "compare_by": "none",
+            "permissions": "PRIVATE"
+        }
+    })
+}
+
+#[tokio::test]
+async fn test_review_projects_create_forwards_every_modeled_field() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("POST"))
+        .and(path("/v1/review-projects"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(review_project_response()))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("review-projects")
+        .arg("create")
+        .arg("--name")
+        .arg("New Project")
+        .arg("--assignees")
+        .arg("alice@example.com")
+        .arg("--simulation-ids")
+        .arg("sim1")
+        .arg("--metric-ids")
+        .arg("met1")
+        .arg("--project-rules")
+        .arg("rule-a,rule-b")
+        .arg("--blind-labeling-shown-metric-ids")
+        .arg("met1")
+        .arg("--enforced-collaboration")
+        .assert()
+        .success();
+
+    let body = capture.take();
+    assert_eq!(body["project_rules"], json!(["rule-a", "rule-b"]));
+    assert_eq!(body["blind_labeling_shown_metric_ids"], json!(["met1"]));
+    assert_eq!(body["enforced_collaboration"], true);
+}
+
+#[tokio::test]
+async fn test_review_projects_update_sends_membership_deltas() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/review-projects/proj456"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(review_project_response()))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("review-projects")
+        .arg("update")
+        .arg("proj456")
+        .arg("--add-simulation-ids")
+        .arg("sim2,sim3")
+        .arg("--remove-simulation-ids")
+        .arg("sim1")
+        .arg("--metric-addition-completion-action")
+        .arg("REOPEN_COMPLETED")
+        .assert()
+        .success();
+
+    let body = capture.take();
+    assert_eq!(body["add_linked_simulation_ids"], json!(["sim2", "sim3"]));
+    assert_eq!(body["remove_linked_simulation_ids"], json!(["sim1"]));
+    assert_eq!(
+        body["metric_addition_completion_action"],
+        "REOPEN_COMPLETED"
+    );
+    // Replacing the linked set is a different operation from a delta, so the
+    // wholesale field must not ride along.
+    assert!(body.get("linked_simulation_ids").is_none());
+}
+
+#[test]
+fn test_review_projects_update_rejects_a_delta_with_a_replacement() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("review-projects")
+        .arg("update")
+        .arg("proj456")
+        .arg("--simulation-ids")
+        .arg("sim1")
+        .arg("--add-simulation-ids")
+        .arg("sim2")
+        .assert()
+        .failure();
+}
+
+#[tokio::test]
+async fn test_reports_create_forwards_pinned_simulations() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("POST"))
+        .and(path("/v1/reports"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(report_response()))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("create")
+        .arg("--name")
+        .arg("Scorecard")
+        .arg("--run-ids")
+        .arg("run1")
+        .arg("--simulation-output-ids")
+        .arg("sim1,sim2")
+        .arg("--source-human-review-project-id")
+        .arg("01ARZ3NDEKTSV4RRFFQ69G5FAV")
+        .assert()
+        .success();
+
+    let body = capture.take();
+    assert_eq!(body["simulation_output_ids"], json!(["sim1", "sim2"]));
+    assert_eq!(
+        body["source_human_review_project_id"],
+        "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+    );
+}
+
+#[tokio::test]
+async fn test_reports_update_forwards_view_config() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/reports/01HXXXXXXXXXXXXXXXXXXXXXXX"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(report_response()))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("update")
+        .arg("01HXXXXXXXXXXXXXXXXXXXXXXX")
+        .arg("--view-config")
+        .arg(r#"{"view_mode":"grouped","secondary_compare_by":"agent"}"#)
+        .assert()
+        .success();
+
+    assert_eq!(
+        capture.take()["view_config"],
+        json!({"view_mode": "grouped", "secondary_compare_by": "agent"})
+    );
+}
+
+#[test]
+fn test_reports_update_rejects_invalid_view_config_json() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("reports")
+        .arg("update")
+        .arg("01HXXXXXXXXXXXXXXXXXXXXXXX")
+        .arg("--view-config")
+        .arg("{not json")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Invalid JSON for --view-config"));
+}
+
+#[tokio::test]
+async fn test_reports_update_forwards_an_explicit_null_to_unpin() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/reports/01HXXXXXXXXXXXXXXXXXXXXXXX"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(report_response()))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("update")
+        .arg("01HXXXXXXXXXXXXXXXXXXXXXXX")
+        .arg("--input-json")
+        .arg(r#"{"simulation_output_ids":null,"source_human_review_project_id":null}"#)
+        .assert()
+        .success();
+
+    // The API unpins through `model_fields_set`, so dropping the key would turn a
+    // deliberate unpin into a no-op.
+    let body = capture.take();
+    for key in ["simulation_output_ids", "source_human_review_project_id"] {
+        assert!(body.get(key).is_some(), "{key} must be sent");
+        assert!(body[key].is_null(), "{key} must be sent as null");
+    }
+}
+
+#[tokio::test]
+async fn test_reports_update_omits_unset_fields() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/reports/01HXXXXXXXXXXXXXXXXXXXXXXX"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(report_response()))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("reports")
+        .arg("update")
+        .arg("01HXXXXXXXXXXXXXXXXXXXXXXX")
+        .arg("--name")
+        .arg("Renamed")
+        .assert()
+        .success();
+
+    let body = capture.take();
+    assert_eq!(body["name"], "Renamed");
+    for key in [
+        "simulation_output_ids",
+        "source_human_review_project_id",
+        "view_config",
+    ] {
+        assert!(body.get(key).is_none(), "unset {key} must be omitted");
+    }
+}
+
 #[tokio::test]
 async fn test_review_projects_create() {
     let mock_server = MockServer::start().await;

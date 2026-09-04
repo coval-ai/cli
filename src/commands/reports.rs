@@ -106,6 +106,12 @@ pub struct CreateArgs {
     /// Report layout (default rows)
     #[arg(long, value_enum)]
     view_mode: Option<ReportViewMode>,
+    /// Comma-separated simulation IDs pinning the report to a subset of the runs
+    #[arg(long, value_delimiter = ',')]
+    simulation_output_ids: Option<Vec<String>>,
+    /// Human-review project the pinned simulations came from (26-character ULID)
+    #[arg(long)]
+    source_human_review_project_id: Option<String>,
     /// Report visibility (default PRIVATE)
     #[arg(long, value_enum)]
     permissions: Option<ReportPermission>,
@@ -145,6 +151,15 @@ pub struct UpdateArgs {
     /// Updated metadata key (only valid when compare-by is metadata)
     #[arg(long)]
     metadata_key: Option<String>,
+    /// Updated comma-separated simulation IDs (replaces existing)
+    #[arg(long, value_delimiter = ',')]
+    simulation_output_ids: Option<Vec<String>>,
+    /// Updated human-review project the pinned simulations came from
+    #[arg(long)]
+    source_human_review_project_id: Option<String>,
+    /// JSON partial update to the saved view configuration
+    #[arg(long)]
+    view_config: Option<String>,
     /// Updated visibility
     #[arg(long, value_enum)]
     permissions: Option<ReportPermission>,
@@ -214,6 +229,16 @@ pub async fn execute(cmd: ReportCommands, client: &CovalClient, ctx: &OutputCont
             input_json::insert(&mut input, "compare_by", args.compare_by)?;
             input_json::insert(&mut input, "metadata_key", args.metadata_key)?;
             input_json::insert(&mut input, "view_mode", args.view_mode)?;
+            input_json::insert(
+                &mut input,
+                "simulation_output_ids",
+                args.simulation_output_ids,
+            )?;
+            input_json::insert(
+                &mut input,
+                "source_human_review_project_id",
+                args.source_human_review_project_id,
+            )?;
             input_json::insert(&mut input, "permissions", args.permissions)?;
             validate_metadata_key(&input)?;
             validate_custom_dimensions(&input)?;
@@ -246,6 +271,22 @@ pub async fn execute(cmd: ReportCommands, client: &CovalClient, ctx: &OutputCont
             input_json::insert(&mut input, "run_ids", args.run_ids)?;
             input_json::insert(&mut input, "compare_by", args.compare_by)?;
             input_json::insert(&mut input, "metadata_key", args.metadata_key)?;
+            input_json::insert(
+                &mut input,
+                "simulation_output_ids",
+                args.simulation_output_ids,
+            )?;
+            input_json::insert(
+                &mut input,
+                "source_human_review_project_id",
+                args.source_human_review_project_id,
+            )?;
+            let view_config: Option<serde_json::Value> = args
+                .view_config
+                .map(|raw| serde_json::from_str(&raw))
+                .transpose()
+                .map_err(|e| anyhow::anyhow!("Invalid JSON for --view-config: {e}"))?;
+            input_json::insert(&mut input, "view_config", view_config)?;
             input_json::insert(&mut input, "permissions", args.permissions)?;
             validate_metadata_key(&input)?;
             let req: UpdateReportRequest = input_json::finish(input)?;
@@ -378,6 +419,8 @@ async fn merge_reports(
     let request = CreateReportRequest {
         name: args.name,
         run_ids,
+        simulation_output_ids: None,
+        source_human_review_project_id: None,
         compare_by: Some(CompareBy::Custom),
         metadata_key: None,
         custom_dimensions: Some(vec![ReportCustomDimension {

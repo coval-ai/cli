@@ -422,51 +422,6 @@ field = "metadata"
 reason = "The additive customer-metadata patch path is served but unmodeled; tracked under COVAL-5823."
 
 [[known_field_gap]]
-operation = "PATCH /reports/{report_id}"
-field = "simulation_output_ids"
-reason = "Report fields are served but unmodeled; tracked under COVAL-5822."
-
-[[known_field_gap]]
-operation = "PATCH /reports/{report_id}"
-field = "source_human_review_project_id"
-reason = "Report fields are served but unmodeled; tracked under COVAL-5822."
-
-[[known_field_gap]]
-operation = "PATCH /reports/{report_id}"
-field = "view_config"
-reason = "Report fields are served but unmodeled; tracked under COVAL-5822."
-
-[[known_field_gap]]
-operation = "PATCH /review-projects/{project_id}"
-field = "add_linked_simulation_ids"
-reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
-
-[[known_field_gap]]
-operation = "PATCH /review-projects/{project_id}"
-field = "blind_labeling_shown_metric_ids"
-reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
-
-[[known_field_gap]]
-operation = "PATCH /review-projects/{project_id}"
-field = "enforced_collaboration"
-reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
-
-[[known_field_gap]]
-operation = "PATCH /review-projects/{project_id}"
-field = "metric_addition_completion_action"
-reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
-
-[[known_field_gap]]
-operation = "PATCH /review-projects/{project_id}"
-field = "project_rules"
-reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
-
-[[known_field_gap]]
-operation = "PATCH /review-projects/{project_id}"
-field = "remove_linked_simulation_ids"
-reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
-
-[[known_field_gap]]
 operation = "PATCH /run-templates/{run_template_id}"
 field = "agent_id"
 reason = "Documented but not served: the transport forbids extra fields and takes the plural `agent_ids` array the CLI already sends, so modeling this name would break the call. Spec drift tracked under COVAL-5825."
@@ -495,31 +450,6 @@ reason = "Resource tagging on write is served but unmodeled; tracked under COVAL
 operation = "POST /conversations/uploaded:submit"
 field = "tags"
 reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
-
-[[known_field_gap]]
-operation = "POST /reports"
-field = "simulation_output_ids"
-reason = "Report fields are served but unmodeled; tracked under COVAL-5822."
-
-[[known_field_gap]]
-operation = "POST /reports"
-field = "source_human_review_project_id"
-reason = "Report fields are served but unmodeled; tracked under COVAL-5822."
-
-[[known_field_gap]]
-operation = "POST /review-projects"
-field = "blind_labeling_shown_metric_ids"
-reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
-
-[[known_field_gap]]
-operation = "POST /review-projects"
-field = "enforced_collaboration"
-reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
-
-[[known_field_gap]]
-operation = "POST /review-projects"
-field = "project_rules"
-reason = "Review-project fields are served but unmodeled; tracked under COVAL-5822."
 
 [[known_field_gap]]
 operation = "POST /run-templates"

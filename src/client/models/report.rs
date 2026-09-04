@@ -89,6 +89,12 @@ pub enum ReportPermission {
 pub struct CreateReportRequest {
     pub name: String,
     pub run_ids: Vec<String>,
+    /// Pins the report to a subset of the runs' simulations.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub simulation_output_ids: Option<Vec<String>>,
+    /// Human-review project the pinned simulations came from.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_human_review_project_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compare_by: Option<CompareBy>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -109,10 +115,28 @@ pub struct UpdateReportRequest {
     pub name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run_ids: Option<Vec<String>>,
+    // The API applies these through `model_fields_set`, so an explicit null unpins
+    // the report rather than leaving it as it was.
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub simulation_output_ids: Option<Option<Vec<String>>>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub source_human_review_project_id: Option<Option<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compare_by: Option<CompareBy>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata_key: Option<String>,
+    /// Partial update to the saved view configuration. Its members are validated by
+    /// the API, and it must never be sent as null.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub view_config: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub permissions: Option<ReportPermission>,
 }

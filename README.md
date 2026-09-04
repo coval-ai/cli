@@ -200,6 +200,21 @@ coval reports create \
   --run-ids run1,run2 \
   --compare-by test_case
 
+# Pin a report to specific simulations from a human-review project
+coval reports create \
+  --name "Reviewed Subset" \
+  --run-ids run1,run2 \
+  --simulation-output-ids sim1,sim2 \
+  --source-human-review-project-id 01ARZ3NDEKTSV4RRFFQ69G5FAV
+
+# Unpin it again (a flag can only set a value, so clearing needs an explicit null)
+coval reports update <report_id> --input-json '{"simulation_output_ids":null}'
+
+# Add and remove review-project simulations without re-sending the whole set
+coval review-projects update <project_id> \
+  --add-simulation-ids sim3,sim4 \
+  --remove-simulation-ids sim1
+
 # Merge existing reports into one report with a group per source report
 coval reports merge \
   --name "Q3 Scorecard" \
