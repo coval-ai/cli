@@ -109,6 +109,9 @@ pub struct SubmitArgs {
     /// When the conversation occurred (ISO 8601, e.g. 2026-05-05T12:34:56Z)
     #[arg(long)]
     occurred_at: Option<DateTime<Utc>>,
+    /// Tag to apply to the conversation (repeat for multiple)
+    #[arg(long = "tag")]
+    tags: Vec<String>,
 }
 
 fn parse_kv(raw: &str) -> Result<(String, String), String> {
@@ -139,6 +142,10 @@ pub struct PatchArgs {
     audio_url: Option<String>,
     #[arg(long)]
     audio_file: Option<PathBuf>,
+    /// Metadata to add as key=value (repeat for multiple). Additive only: the API
+    /// rejects a key that already has a value.
+    #[arg(long = "metadata", value_parser = parse_kv)]
+    metadata: Vec<(String, String)>,
 }
 
 #[derive(Clone, Copy)]
@@ -398,11 +405,22 @@ async fn execute_for(
         }
         ConversationCommands::Patch(args) => {
             use crate::client::models::PatchConversationRequest;
-            if args.audio_file.is_some() && args.audio_url.is_some() {
-                anyhow::bail!("--audio-file and --audio-url are mutually exclusive");
+            // The API patches audio and metadata separately so a rejected metadata
+            // key can never leave audio half-attached, and accepts exactly one
+            // target per call.
+            let targets = [
+                args.audio_file.is_some(),
+                args.audio_url.is_some(),
+                !args.metadata.is_empty(),
+            ]
+            .into_iter()
+            .filter(|supplied| *supplied)
+            .count();
+            if targets > 1 {
+                anyhow::bail!("--audio-file, --audio-url, and --metadata are mutually exclusive");
             }
-            if args.audio_file.is_none() && args.audio_url.is_none() {
-                anyhow::bail!("must provide at least one of: --audio-file, --audio-url");
+            if targets == 0 {
+                anyhow::bail!("must provide exactly one of: --audio-file, --audio-url, --metadata");
             }
             let audio_b64 = match args.audio_file {
                 Some(path) => {
@@ -413,10 +431,17 @@ async fn execute_for(
                 }
                 None => None,
             };
+            let metadata = (!args.metadata.is_empty()).then(|| {
+                args.metadata
+                    .into_iter()
+                    .map(|(key, value)| (key, serde_json::Value::String(value)))
+                    .collect()
+            });
             let req = PatchConversationRequest {
                 audio: audio_b64,
                 audio_url: args.audio_url,
                 audio_reference: None,
+                metadata,
             };
             let result = match collection {
                 ConversationCollection::Uploaded => {
@@ -605,6 +630,11 @@ fn build_submit_request(args: SubmitArgs) -> Result<SubmitConversationRequest> {
     input_json::insert(&mut input, "external_conversation_id", args.external_id)?;
     input_json::insert(&mut input, "occurred_at", args.occurred_at)?;
     input_json::insert(&mut input, "agent_id", args.agent_id)?;
+    input_json::insert(
+        &mut input,
+        "tags",
+        (!args.tags.is_empty()).then_some(args.tags),
+    )?;
     input_json::finish(input)
 }
 

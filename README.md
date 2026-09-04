@@ -142,7 +142,23 @@ coval agents create \
 # Create a test set
 coval test-sets create \
   --name "Customer Support Scenarios" \
-  --type SCENARIO
+  --type SCENARIO \
+  --tags regression,voice
+
+# Change an agent's identity and routing fields
+coval agents update <agent_id> \
+  --customer-agent-id crm-42 \
+  --language en-US \
+  --attributes '{"tier":"gold"}' \
+  --tags prod,voice
+
+# Clear one of them. A flag can only set a value, so clearing needs an explicit null.
+coval agents update <agent_id> --input-json '{"attributes":null}'
+
+# Add metadata to an already-submitted conversation (additive; a key with a value is rejected)
+coval uploaded-conversations patch <conversation_id> \
+  --metadata csat_bucket=promoter \
+  --metadata called_back=yes
 
 # Create a test case
 coval test-cases create \

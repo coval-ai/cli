@@ -67,6 +67,9 @@ pub struct CreateArgs {
     /// Test set type (e.g. DEFAULT, SCENARIO, TRANSCRIPT, WORKFLOW)
     #[arg(long)]
     r#type: Option<String>,
+    /// Comma-separated tag names; pass an empty value to clear all tags
+    #[arg(long, value_delimiter = ',')]
+    tags: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -83,6 +86,9 @@ pub struct UpdateArgs {
     /// Human-readable description
     #[arg(long)]
     description: Option<String>,
+    /// Comma-separated tag names; pass an empty value to clear all tags
+    #[arg(long, value_delimiter = ',')]
+    tags: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -137,6 +143,7 @@ pub async fn execute(
             input_json::insert(&mut input, "slug", args.slug)?;
             input_json::insert(&mut input, "description", args.description)?;
             input_json::insert(&mut input, "test_set_type", args.r#type)?;
+            input_json::insert(&mut input, "tags", args.tags)?;
             let req: CreateTestSetRequest = input_json::finish(input)?;
             let test_set = client.test_sets().create(req).await?;
             emit_one_with_actions(
@@ -152,6 +159,7 @@ pub async fn execute(
             input_json::insert(&mut input, "display_name", args.name)?;
             input_json::insert(&mut input, "slug", args.slug)?;
             input_json::insert(&mut input, "description", args.description)?;
+            input_json::insert(&mut input, "tags", args.tags)?;
             let req: UpdateTestSetRequest = input_json::finish(input)?;
             let test_set = client.test_sets().update(&args.test_set_id, req).await?;
             emit_one_with_actions(

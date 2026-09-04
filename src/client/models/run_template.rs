@@ -75,6 +75,9 @@ pub struct CreateRunTemplateRequest {
     pub sub_sample_seed: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<serde_json::Value>,
+    /// Tag names. Omitted leaves tags unchanged; an empty list clears them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -103,6 +106,9 @@ pub struct UpdateRunTemplateRequest {
     pub sub_sample_seed: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<serde_json::Value>,
+    /// Tag names. Omitted leaves tags unchanged; an empty list clears them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]

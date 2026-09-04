@@ -39,6 +39,9 @@ pub struct CreateTestSetRequest {
     pub test_set_metadata: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parameters: Option<serde_json::Value>,
+    /// Tag names. Omitted leaves tags unchanged; an empty list clears them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -55,6 +58,9 @@ pub struct UpdateTestSetRequest {
     pub test_set_metadata: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parameters: Option<serde_json::Value>,
+    /// Tag names. Omitted leaves tags unchanged; an empty list clears them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]

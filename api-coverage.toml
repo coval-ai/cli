@@ -392,36 +392,6 @@ reason = "Workspace management remains to be modeled under COVAL-2079."
 # src/services/api/tests/v1/openapi_parity_baseline.txt.
 
 [[known_field_gap]]
-operation = "PATCH /agents/{agent_id}"
-field = "attributes"
-reason = "Served by the agent merge-patch and already modeled on create, so update is asymmetric; tracked under COVAL-5823."
-
-[[known_field_gap]]
-operation = "PATCH /agents/{agent_id}"
-field = "customer_agent_id"
-reason = "Served by the agent merge-patch and already modeled on create, so update is asymmetric; tracked under COVAL-5823."
-
-[[known_field_gap]]
-operation = "PATCH /agents/{agent_id}"
-field = "language"
-reason = "Served by the agent merge-patch and already modeled on create, so update is asymmetric; tracked under COVAL-5823."
-
-[[known_field_gap]]
-operation = "PATCH /agents/{agent_id}"
-field = "tags"
-reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
-
-[[known_field_gap]]
-operation = "PATCH /agents/{agent_id}"
-field = "workflows"
-reason = "Served by the agent merge-patch and already modeled on create, so update is asymmetric; tracked under COVAL-5823."
-
-[[known_field_gap]]
-operation = "PATCH /conversations/uploaded/{conversation_id}"
-field = "metadata"
-reason = "The additive customer-metadata patch path is served but unmodeled; tracked under COVAL-5823."
-
-[[known_field_gap]]
 operation = "PATCH /run-templates/{run_template_id}"
 field = "agent_id"
 reason = "Documented but not served: the transport forbids extra fields and takes the plural `agent_ids` array the CLI already sends, so modeling this name would break the call. Spec drift tracked under COVAL-5825."
@@ -433,23 +403,8 @@ reason = "Documented but not served: the transport forbids extra fields and take
 
 [[known_field_gap]]
 operation = "PATCH /run-templates/{run_template_id}"
-field = "tags"
-reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
-
-[[known_field_gap]]
-operation = "PATCH /run-templates/{run_template_id}"
 field = "test_set_id"
 reason = "Documented but not served: the transport forbids extra fields and takes the plural `test_set_ids` array the CLI already sends, so modeling this name would break the call. Spec drift tracked under COVAL-5825."
-
-[[known_field_gap]]
-operation = "PATCH /test-sets/{test_set_id}"
-field = "tags"
-reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
-
-[[known_field_gap]]
-operation = "POST /conversations/uploaded:submit"
-field = "tags"
-reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
 
 [[known_field_gap]]
 operation = "POST /run-templates"
@@ -463,18 +418,8 @@ reason = "Documented but not served: the transport forbids extra fields and take
 
 [[known_field_gap]]
 operation = "POST /run-templates"
-field = "tags"
-reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
-
-[[known_field_gap]]
-operation = "POST /run-templates"
 field = "test_set_id"
 reason = "Documented but not served: the transport forbids extra fields and takes the plural `test_set_ids` array the CLI already sends, so modeling this name would break the call. Spec drift tracked under COVAL-5825."
-
-[[known_field_gap]]
-operation = "POST /test-sets"
-field = "tags"
-reason = "Resource tagging on write is served but unmodeled; tracked under COVAL-5823."
 
 # Fields the CLI sends that the published schema does not declare. Most are served
 # but undocumented, so removing them from the CLI would lose working behavior.

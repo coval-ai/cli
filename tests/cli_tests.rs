@@ -2957,6 +2957,335 @@ async fn test_mutations_list() {
         .stdout(predicate::str::contains("GPT-4 Fast"));
 }
 
+fn agent_patch_response() -> Value {
+    json!({
+        "agent": {
+            "id": "abc123",
+            "display_name": "Test Agent",
+            "model_type": "MODEL_TYPE_VOICE",
+            "create_time": "2026-09-02T10:30:00Z"
+        }
+    })
+}
+
+fn run_template_response() -> Value {
+    json!({
+        "run_template": {
+            "id": "rt123",
+            "display_name": "My Template",
+            "metric_ids": [],
+            "mutation_ids": [],
+            "metadata": {},
+            "create_time": "2026-09-02T10:30:00Z"
+        }
+    })
+}
+
+fn test_set_patch_response() -> Value {
+    json!({
+        "test_set": {
+            "name": "testSets/ts123",
+            "id": "ts123",
+            "slug": "tagged",
+            "display_name": "Tagged",
+            "create_time": "2026-09-02T10:30:00Z"
+        }
+    })
+}
+
+#[tokio::test]
+async fn test_agents_update_forwards_every_modeled_field() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/agents/abc123"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(agent_patch_response()))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("agents")
+        .arg("update")
+        .arg("abc123")
+        .arg("--customer-agent-id")
+        .arg("crm-42")
+        .arg("--language")
+        .arg("en-US")
+        .arg("--attributes")
+        .arg(r#"{"tier":"gold"}"#)
+        .arg("--workflows")
+        .arg(r#"{"greeting":"short"}"#)
+        .arg("--tags")
+        .arg("prod,voice")
+        .assert()
+        .success();
+
+    let body = capture.take();
+    assert_eq!(body["customer_agent_id"], "crm-42");
+    assert_eq!(body["language"], "en-US");
+    assert_eq!(body["attributes"], json!({"tier": "gold"}));
+    assert_eq!(body["workflows"], json!({"greeting": "short"}));
+    assert_eq!(body["tags"], json!(["prod", "voice"]));
+}
+
+#[tokio::test]
+async fn test_agents_update_forwards_an_explicit_null_to_clear() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/agents/abc123"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(agent_patch_response()))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("agents")
+        .arg("update")
+        .arg("abc123")
+        .arg("--input-json")
+        .arg(r#"{"language":null,"attributes":null,"workflows":null,"tags":null}"#)
+        .assert()
+        .success();
+
+    // The merge patch writes only supplied columns and normalizes null to an empty
+    // value, so dropping the key would turn a deliberate clear into a no-op.
+    let body = capture.take();
+    for key in ["language", "attributes", "workflows", "tags"] {
+        assert!(body.get(key).is_some(), "{key} must be sent");
+        assert!(body[key].is_null(), "{key} must be sent as null");
+    }
+}
+
+#[tokio::test]
+async fn test_agents_update_omits_unset_fields() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/agents/abc123"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(agent_patch_response()))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("agents")
+        .arg("update")
+        .arg("abc123")
+        .arg("--name")
+        .arg("Renamed")
+        .assert()
+        .success();
+
+    let body = capture.take();
+    assert_eq!(body["display_name"], "Renamed");
+    for key in [
+        "customer_agent_id",
+        "language",
+        "attributes",
+        "workflows",
+        "tags",
+    ] {
+        assert!(body.get(key).is_none(), "unset {key} must be omitted");
+    }
+}
+
+#[tokio::test]
+async fn test_test_sets_update_forwards_tags() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/test-sets/ts123"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(test_set_patch_response()))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("test-sets")
+        .arg("update")
+        .arg("ts123")
+        .arg("--tags")
+        .arg("regression,voice")
+        .assert()
+        .success();
+
+    assert_eq!(capture.take()["tags"], json!(["regression", "voice"]));
+}
+
+#[tokio::test]
+async fn test_run_templates_update_forwards_tags() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/run-templates/rt123"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(run_template_response()))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("run-templates")
+        .arg("update")
+        .arg("rt123")
+        .arg("--tags")
+        .arg("nightly")
+        .assert()
+        .success();
+
+    assert_eq!(capture.take()["tags"], json!(["nightly"]));
+}
+
+#[tokio::test]
+async fn test_uploaded_conversations_submit_forwards_tags() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("POST"))
+        .and(path("/v1/conversations/uploaded:submit"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "uploaded_conversation": {
+                "name": "conversations/uploaded123",
+                "conversation_id": "uploaded123",
+                "status": "COMPLETED",
+                "create_time": "2026-09-02T12:00:00Z",
+                "has_audio": false
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("uploaded-conversations")
+        .arg("submit")
+        .arg("--audio-url")
+        .arg("https://example.com/call.wav")
+        .arg("--tag")
+        .arg("restaurant")
+        .arg("--tag")
+        .arg("support-tier-1")
+        .assert()
+        .success();
+
+    assert_eq!(
+        capture.take()["tags"],
+        json!(["restaurant", "support-tier-1"])
+    );
+}
+
+#[tokio::test]
+async fn test_uploaded_conversations_patch_forwards_metadata() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/conversations/uploaded/uploaded123"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "uploaded_conversation": {
+                "name": "conversations/uploaded123",
+                "conversation_id": "uploaded123",
+                "status": "COMPLETED",
+                "create_time": "2026-09-02T12:00:00Z",
+                "has_audio": true
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("uploaded-conversations")
+        .arg("patch")
+        .arg("uploaded123")
+        .arg("--metadata")
+        .arg("csat_bucket=promoter")
+        .arg("--metadata")
+        .arg("called_back=yes")
+        .assert()
+        .success();
+
+    let body = capture.take();
+    assert_eq!(
+        body["metadata"],
+        json!({"csat_bucket": "promoter", "called_back": "yes"})
+    );
+    // The API patches audio and metadata separately, so neither audio key rides along.
+    assert!(body.get("audio").is_none());
+    assert!(body.get("audio_url").is_none());
+}
+
+#[test]
+fn test_uploaded_conversations_patch_rejects_audio_with_metadata() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("uploaded-conversations")
+        .arg("patch")
+        .arg("uploaded123")
+        .arg("--audio-url")
+        .arg("https://example.com/call.wav")
+        .arg("--metadata")
+        .arg("csat_bucket=promoter")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("mutually exclusive"));
+}
+
+#[test]
+fn test_uploaded_conversations_patch_requires_a_target() {
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("uploaded-conversations")
+        .arg("patch")
+        .arg("uploaded123")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("must provide exactly one of"));
+}
+
 #[tokio::test]
 async fn test_run_templates_list_hyphenated_path() {
     let mock_server = MockServer::start().await;
