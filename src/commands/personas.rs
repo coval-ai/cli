@@ -112,6 +112,9 @@ pub struct CreateArgs {
     /// Enable multilingual speech-to-text
     #[arg(long, num_args = 0..=1, default_missing_value = "true")]
     multi_language_stt: Option<bool>,
+    /// Timer-driven interruption of agent speech (NONE, LOW, MEDIUM, or HIGH)
+    #[arg(long)]
+    interruption_rate: Option<String>,
     /// Background sound volume multiplier (>= 0.0)
     #[arg(long)]
     background_sound_volume: Option<f64>,
@@ -161,6 +164,9 @@ pub struct UpdateArgs {
     /// Enable or disable multilingual speech-to-text
     #[arg(long, num_args = 0..=1, default_missing_value = "true")]
     multi_language_stt: Option<bool>,
+    /// Timer-driven interruption of agent speech (NONE, LOW, MEDIUM, or HIGH)
+    #[arg(long)]
+    interruption_rate: Option<String>,
     /// Background sound volume multiplier (>= 0.0)
     #[arg(long)]
     background_sound_volume: Option<f64>,
@@ -286,6 +292,7 @@ pub async fn execute(
             input_json::insert(&mut input, "background_sound", args.background)?;
             input_json::insert(&mut input, "wait_seconds", args.wait_seconds)?;
             input_json::insert(&mut input, "multi_language_stt", args.multi_language_stt)?;
+            input_json::insert(&mut input, "interruption_rate", args.interruption_rate)?;
             input_json::insert(
                 &mut input,
                 "background_sound_volume",
@@ -325,6 +332,7 @@ pub async fn execute(
             input_json::insert(&mut input, "background_sound", args.background)?;
             input_json::insert(&mut input, "wait_seconds", args.wait_seconds)?;
             input_json::insert(&mut input, "multi_language_stt", args.multi_language_stt)?;
+            input_json::insert(&mut input, "interruption_rate", args.interruption_rate)?;
             input_json::insert(
                 &mut input,
                 "background_sound_volume",
