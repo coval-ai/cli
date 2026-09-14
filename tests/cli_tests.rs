@@ -1446,6 +1446,52 @@ async fn test_runs_update_tags() {
 }
 
 #[tokio::test]
+async fn test_runs_launch_forwards_config_overrides() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("POST"))
+        .and(path("/v1/runs"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "run": {
+                "name": "Test Run",
+                "run_id": "run123",
+                "status": "COMPLETED",
+                "create_time": "2025-01-15T10:30:00Z"
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let overrides = json!({"temperature": 0.7});
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("runs")
+        .arg("launch")
+        .arg("--agent-id")
+        .arg("agent123")
+        .arg("--persona-id")
+        .arg("persona1")
+        .arg("--test-set-id")
+        .arg("ts123456")
+        .arg("--config-overrides")
+        .arg(overrides.to_string())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("run123"));
+
+    let body = capture.take();
+    assert_eq!(body["agent_id"], "agent123");
+    assert_eq!(body["config_overrides"], overrides);
+}
+
+#[tokio::test]
 async fn test_api_error_handling() {
     let mock_server = MockServer::start().await;
 
@@ -1835,6 +1881,7 @@ fn newly_modeled_persona_fields() -> Value {
         "voice_speed": 0.9,
         "hold_music_timeout_seconds": 45.0,
         "situate_speaker": "speakerphone-easy",
+        "interruption_rate": "HIGH",
         "tags": ["support", "noisy"]
     })
 }
@@ -1994,10 +2041,40 @@ async fn test_personas_update_omits_unset_clearable_fields() {
         "voice_volume",
         "voice_speed",
         "hold_music_timeout_seconds",
+        "interruption_rate",
         "tags",
     ] {
         assert!(body.get(key).is_none(), "unset {key} must be omitted");
     }
+}
+
+#[tokio::test]
+async fn test_personas_update_forwards_the_interruption_rate_flag() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/personas/persona1"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(persona_response(false)))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("personas")
+        .arg("update")
+        .arg("persona1")
+        .arg("--interruption-rate")
+        .arg("HIGH")
+        .assert()
+        .success();
+
+    assert_eq!(capture.take()["interruption_rate"], "HIGH");
 }
 
 #[tokio::test]
@@ -4807,6 +4884,7 @@ fn newly_modeled_metric_fields() -> Value {
         "min_volume_change_for_pitch_misalignment": 3.5,
         "threshold": 4,
         "operator": ">=",
+        "ivr_flow": {"start_node": "welcome", "nodes": [{"id": "welcome", "prompt": "Press 1"}]},
         "sql_query": "SELECT 1",
         "runtime_config": {"model_version": "openai:gpt-4.1-mini-2025-04-14"},
         "tags": ["voice", "latency"]
@@ -4882,6 +4960,68 @@ async fn test_metrics_update_forwards_every_modeled_field() {
     for (key, expected) in fields.as_object().unwrap() {
         assert_eq!(&body[key], expected, "field {key} must reach the API");
     }
+}
+
+#[tokio::test]
+async fn test_metrics_update_clears_ivr_flow_with_an_explicit_null() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/metrics/met1"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(metric_response_body()))
+        .mount(&mock_server)
+        .await;
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("metrics")
+        .arg("update")
+        .arg("met1")
+        .arg("--input-json")
+        .arg(r#"{"ivr_flow":null}"#)
+        .assert()
+        .success();
+
+    let body = capture.take();
+    assert!(body.get("ivr_flow").is_some(), "ivr_flow must be sent");
+    assert!(body["ivr_flow"].is_null(), "ivr_flow must be sent as null");
+}
+
+#[tokio::test]
+async fn test_metrics_update_forwards_the_ivr_flow_flag() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path("/v1/metrics/met1"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(metric_response_body()))
+        .mount(&mock_server)
+        .await;
+
+    let flow = json!({"start_node": "welcome", "nodes": [{"id": "welcome", "prompt": "Press 1"}]});
+
+    coval()
+        .arg("--api-key")
+        .arg("test_key")
+        .arg("--api-url")
+        .arg(mock_server.uri())
+        .arg("metrics")
+        .arg("update")
+        .arg("met1")
+        .arg("--ivr-flow")
+        .arg(flow.to_string())
+        .assert()
+        .success();
+
+    assert_eq!(capture.take()["ivr_flow"], flow);
 }
 
 #[tokio::test]

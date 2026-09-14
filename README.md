@@ -122,6 +122,13 @@ coval runs launch \
   --iterations 3 \
   --concurrency 5 \
   --name "Regression Test"
+
+# Override the stored agent config for this launch only
+coval runs launch \
+  --agent-id abc123 \
+  --persona-id xyz789 \
+  --test-set-id ts123456 \
+  --config-overrides '{"temperature":0.7}'
 ```
 
 ### Create Resources
@@ -206,6 +213,17 @@ coval metrics update met123456 --input-json '{"tags":[]}'
 coval metrics update met123456 \
   --runtime-config '{"model_version":"openai:gpt-4.1-mini-2025-04-14"}'
 
+# Define an IVR-flow-adherence metric's call graph
+coval metrics create \
+  --name "IVR flow adherence" \
+  --description "Caller follows the billing menu path" \
+  --type ivr-flow-adherence \
+  --ivr-flow '{"start_node":"welcome","nodes":[{"id":"welcome","prompt":"Press 1 for billing, 2 for support","auto_advance_to":"billing"}]}'
+
+# Replace the graph (or clear it with --input-json '{"ivr_flow":null}')
+coval metrics update met123456 \
+  --ivr-flow '{"start_node":"root","nodes":[{"id":"root","prompt":"Press 1"}]}'
+
 # Test a metric against several simulations in one call
 coval metrics test met123456 \
   --simulation-output-ids sim1,sim2,sim3
@@ -253,6 +271,9 @@ coval personas update <persona_id> \
 
 # Channel degradation instead of placement (the two are mutually exclusive)
 coval personas update <persona_id> --audio-degradation cell-handoff
+
+# Make the persona interrupt the agent more often (NONE, LOW, MEDIUM, or HIGH)
+coval personas update <persona_id> --interruption-rate HIGH
 
 # Clear a preset. A flag can only set a value, so clearing needs an explicit null.
 coval personas update <persona_id> --input-json '{"situate_speaker":null}'

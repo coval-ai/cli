@@ -12,13 +12,13 @@ only when coverage actually changes.
 
 | Metric | Value |
 | --- | ---: |
-| Reconciliation status | ACTION REQUIRED |
+| Reconciliation status | PASS |
 | Published operations | 181 |
 | First-class CLI operations | 119 |
 | Reviewed gaps | 62 |
 | Client operations | 143 |
 | Published request fields on covered operations | 365 |
-| Request fields modeled by the CLI | 354 |
+| Request fields modeled by the CLI | 359 |
 | Reviewed request-field gaps | 6 |
 
 Catalog: https://api.coval.dev/v1/openapi
@@ -49,8 +49,7 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## Coverage snapshot mismatches
 
-- `published_request_fields: recorded 360, current 365`
-- `cli_modeled_request_fields: recorded 313, current 354`
+- None.
 
 ## Client-only operations
 
@@ -123,11 +122,7 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## New published request fields the CLI drops
 
-- `PATCH /metrics/{id} ivr_flow`
-- `PATCH /personas/{id} interruption_rate`
-- `POST /metrics ivr_flow`
-- `POST /personas interruption_rate`
-- `POST /runs config_overrides`
+- None.
 
 ## Reviewed request-field gaps no longer present
 
@@ -143,14 +138,9 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## All current request-field gaps
 
-- `PATCH /metrics/{id} ivr_flow`
-- `PATCH /personas/{id} interruption_rate`
 - `PATCH /run-templates/{id} agent_id`
 - `PATCH /run-templates/{id} persona_id`
 - `PATCH /run-templates/{id} test_set_id`
-- `POST /metrics ivr_flow`
-- `POST /personas interruption_rate`
 - `POST /run-templates agent_id`
 - `POST /run-templates persona_id`
 - `POST /run-templates test_set_id`
-- `POST /runs config_overrides`
