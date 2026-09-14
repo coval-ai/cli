@@ -81,6 +81,9 @@ pub enum MetricType {
     #[serde(rename = "METRIC_COMPOSITE_EVALUATION")]
     #[value(name = "composite")]
     CompositeEvaluation,
+    #[serde(rename = "METRIC_IVR_FLOW_ADHERENCE")]
+    #[value(name = "ivr-flow-adherence")]
+    IvrFlowAdherence,
     #[serde(other)]
     #[value(skip)]
     Unknown,
@@ -100,6 +103,7 @@ impl std::fmt::Display for MetricType {
             Self::Regex => write!(f, "REGEX"),
             Self::Pause => write!(f, "PAUSE"),
             Self::CompositeEvaluation => write!(f, "COMPOSITE"),
+            Self::IvrFlowAdherence => write!(f, "IVR_FLOW_ADHERENCE"),
             Self::Unknown => write!(f, "BUILT_IN"),
         }
     }
@@ -175,6 +179,9 @@ pub struct CreateMetricRequest {
     pub threshold: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operator: Option<String>,
+    /// IVR flow graph for METRIC_IVR_FLOW_ADHERENCE: `{"start_node": ..., "nodes": [...]}`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ivr_flow: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sql_query: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -258,6 +265,13 @@ pub struct UpdateMetricRequest {
     pub threshold: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operator: Option<String>,
+    /// IVR flow graph for METRIC_IVR_FLOW_ADHERENCE; an explicit null clears it.
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub ivr_flow: Option<Option<serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sql_query: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

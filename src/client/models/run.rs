@@ -94,6 +94,9 @@ pub struct LaunchRunRequest {
     pub options: Option<LaunchOptions>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<LaunchMetadata>,
+    /// Launch-specific simulator configuration overriding the stored agent config.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config_overrides: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]

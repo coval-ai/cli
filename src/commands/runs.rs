@@ -105,6 +105,9 @@ pub struct LaunchArgs {
     /// Comma-separated tags for categorizing the run
     #[arg(long, value_delimiter = ',')]
     tags: Option<Vec<String>>,
+    /// JSON object of launch-specific simulator configuration overriding the stored agent config
+    #[arg(long)]
+    config_overrides: Option<String>,
 }
 
 #[derive(Args)]
@@ -188,6 +191,12 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext
                 None
             };
 
+            let config_overrides: Option<serde_json::Value> = args
+                .config_overrides
+                .map(|s| serde_json::from_str(&s))
+                .transpose()
+                .map_err(|e| anyhow::anyhow!("Invalid JSON for --config-overrides: {e}"))?;
+
             let req = LaunchRunRequest {
                 agent_id: args.agent_id.unwrap_or_default(),
                 persona_id: args.persona_id.unwrap_or_default(),
@@ -198,6 +207,7 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext
                 persona_metrics: None,
                 options,
                 metadata,
+                config_overrides,
             };
             let mut input = args.input_json.object()?;
             input_json::insert(&mut input, "agent_id", empty_to_none(req.agent_id))?;
@@ -208,6 +218,7 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext
             input_json::insert(&mut input, "mutation_ids", req.mutation_ids)?;
             input_json::insert(&mut input, "options", req.options)?;
             input_json::insert(&mut input, "metadata", req.metadata)?;
+            input_json::insert(&mut input, "config_overrides", req.config_overrides)?;
             let req: LaunchRunRequest = input_json::finish(input)?;
             let run = client.runs().launch(req).await?;
             emit_one_with_actions(ctx, "runs", operation, &run, run_actions(&run));
