@@ -228,6 +228,10 @@ impl CovalClient {
         MonitorsClient(self)
     }
 
+    pub fn issues(&self) -> IssuesClient<'_> {
+        IssuesClient(self)
+    }
+
     pub fn tags(&self) -> TagsClient<'_> {
         TagsClient(self)
     }
@@ -264,6 +268,7 @@ pub struct WidgetsClient<'a> {
     dashboard_id: String,
 }
 pub struct TagsClient<'a>(&'a CovalClient);
+pub struct IssuesClient<'a>(&'a CovalClient);
 pub struct TracesClient<'a>(&'a CovalClient);
 
 pub struct MonitorsClient<'a>(&'a CovalClient);
@@ -1552,6 +1557,71 @@ impl TagsClient<'_> {
     pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
         let url = self.0.url(&format!("/v1/tags/{id}"));
         self.0.delete(url).await
+    }
+}
+
+impl IssuesClient<'_> {
+    pub async fn list(
+        &self,
+        status: Option<&str>,
+        mine: bool,
+        agent_id: Option<&str>,
+    ) -> Result<models::ListIssuesResponse, ApiError> {
+        let mut url = self.0.url("/v1/issues");
+        {
+            let mut query = url.query_pairs_mut();
+            if let Some(status) = status {
+                query.append_pair("status", status);
+            }
+            if mine {
+                query.append_pair("owner", "me");
+            }
+            if let Some(agent_id) = agent_id {
+                query.append_pair("agent_id", agent_id);
+            }
+        }
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::IssueDetailResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/issues/{id}"));
+        self.0.get(url).await
+    }
+
+    pub async fn create(
+        &self,
+        req: serde_json::Value,
+    ) -> Result<models::IssueActionResponse, ApiError> {
+        let url = self.0.url("/v1/issues");
+        self.0.post(url, &req).await
+    }
+
+    pub async fn action(
+        &self,
+        id: &str,
+        req: &serde_json::Value,
+    ) -> Result<models::IssueActionResponse, ApiError> {
+        let url = self.0.url(&format!("/v1/issues/{id}/actions"));
+        self.0.post(url, req).await
+    }
+
+    pub async fn summary(&self, period: &str, buckets: u32) -> Result<serde_json::Value, ApiError> {
+        let mut url = self.0.url("/v1/issues/summary");
+        url.query_pairs_mut()
+            .append_pair("period", period)
+            .append_pair("buckets", &buckets.to_string());
+        self.0.get(url).await
+    }
+
+    pub async fn regression_suite(
+        &self,
+        agent_id: Option<&str>,
+    ) -> Result<models::ListRegressionSuiteResponse, ApiError> {
+        let mut url = self.0.url("/v1/regression-suite");
+        if let Some(agent_id) = agent_id {
+            url.query_pairs_mut().append_pair("agent_id", agent_id);
+        }
+        self.0.get(url).await
     }
 }
 

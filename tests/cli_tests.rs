@@ -118,6 +118,7 @@ const AGENT_RESOURCES: &[&str] = &[
     "monitors",
     "tags",
     "traces",
+    "issues",
 ];
 
 const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
@@ -169,6 +170,8 @@ const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
     &["tags", "create", "--help"],
     &["tags", "update", "--help"],
     &["traces", "search", "--help"],
+    &["issues", "create", "--help"],
+    &["issues", "action", "--help"],
 ];
 
 #[test]

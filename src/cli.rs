@@ -148,6 +148,10 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::tags::TagCommands,
     },
+    Issues {
+        #[command(subcommand)]
+        command: commands::issues::IssueCommands,
+    },
     Traces {
         #[command(subcommand)]
         command: commands::traces::TraceCommands,
@@ -187,6 +191,7 @@ impl Commands {
             Self::Reports { .. } => "reports",
             Self::Monitors { .. } => "monitors",
             Self::Tags { .. } => "tags",
+            Self::Issues { .. } => "issues",
             Self::Traces { .. } => "traces",
         }
     }
@@ -220,6 +225,7 @@ impl Commands {
             Self::Reports { command } => command.operation(),
             Self::Monitors { command } => command.operation(),
             Self::Tags { command } => command.operation(),
+            Self::Issues { command } => command.operation(),
             Self::Traces { command } => command.operation(),
         }
     }
@@ -322,6 +328,9 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
         Commands::Tags {
             command: commands::tags::TagCommands::Context,
         } => commands::agent::resource_context("tags", ctx),
+        Commands::Issues {
+            command: commands::issues::IssueCommands::Context,
+        } => commands::agent::resource_context("issues", ctx),
         Commands::Traces {
             command: commands::traces::TraceCommands::Context,
         } => commands::agent::resource_context("traces", ctx),
@@ -394,6 +403,9 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
                     commands::monitors::execute(command, &client, ctx).await
                 }
                 Commands::Tags { command } => commands::tags::execute(command, &client, ctx).await,
+                Commands::Issues { command } => {
+                    commands::issues::execute(command, &client, ctx).await
+                }
                 Commands::Traces { command } => {
                     commands::traces::execute(command, &client, ctx).await
                 }

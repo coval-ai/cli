@@ -5,6 +5,7 @@ pub mod auth;
 pub mod config;
 pub mod conversations;
 pub mod dashboards;
+pub mod issues;
 pub mod metrics;
 pub mod models;
 pub mod monitors;

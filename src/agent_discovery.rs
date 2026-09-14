@@ -664,6 +664,34 @@ const RESOURCE_SPECS: &[ResourceSpec] = &[
         ],
     },
     ResourceSpec {
+        name: "issues",
+        commands: &[
+            "context", "list", "get", "create", "confirm", "assign", "attach-suite", "set-policy", "clear", "action", "summary", "regression",
+        ],
+        description: "Issues are the agent improvement loop: a Sofia finding becomes an owned issue, the owner iterates against a focused suite, an explicit clearance policy verifies the fix, and the proven suite joins the agent's regression baseline.",
+        id_name: "issue_id",
+        id_format: "Coval issue ID",
+        requires: &[],
+        optional: &["agents", "test-sets", "runs", "metrics"],
+        produces: &["issues", "clearance attempts", "regression baseline memberships", "improvement summary"],
+        related: &["runs", "test-sets", "metrics", "agents"],
+        workflows: &[
+            WorkflowSpec {
+                name: "Review the board",
+                argv: &["issues", "list", "--status", "needs_review,confirmed,clearing"],
+            },
+            WorkflowSpec {
+                name: "Improvement summary",
+                argv: &["issues", "summary", "--period", "week"],
+            },
+        ],
+        pitfalls: &[
+            "Every lifecycle action needs --expected-version (the version you last read); a stale value is rejected.",
+            "start_clearance judges an already completed run of the attached suite; launch the run first with `runs launch`.",
+            "A manual close is labelled closed_manual and never counts as a verified resolution.",
+        ],
+    },
+    ResourceSpec {
         name: "tags",
         commands: &["context", "list", "get", "create", "update", "delete"],
         description: "Tags label Coval resources for filtering, organization, and monitor targeting.",
