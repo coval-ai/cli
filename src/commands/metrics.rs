@@ -221,6 +221,9 @@ pub struct CreateArgs {
     /// Comparison operator (<, <=, >, >=, ==, !=)
     #[arg(long)]
     operator: Option<String>,
+    /// IVR flow graph JSON for ivr-flow-adherence metrics
+    #[arg(long)]
+    ivr_flow: Option<String>,
     /// SQL query defining a SQL metric
     #[arg(long)]
     sql_query: Option<String>,
@@ -340,6 +343,9 @@ pub struct UpdateArgs {
     /// Comparison operator (<, <=, >, >=, ==, !=)
     #[arg(long)]
     operator: Option<String>,
+    /// IVR flow graph JSON for ivr-flow-adherence metrics; --input-json '{"ivr_flow":null}' clears it
+    #[arg(long)]
+    ivr_flow: Option<String>,
     /// SQL query defining a SQL metric
     #[arg(long)]
     sql_query: Option<String>,
@@ -502,6 +508,11 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 .map(|s| serde_json::from_str(&s))
                 .transpose()
                 .map_err(|e| anyhow::anyhow!("Invalid JSON for --runtime-config: {e}"))?;
+            let ivr_flow: Option<serde_json::Value> = args
+                .ivr_flow
+                .map(|s| serde_json::from_str(&s))
+                .transpose()
+                .map_err(|e| anyhow::anyhow!("Invalid JSON for --ivr-flow: {e}"))?;
             // The API accepts either a JSON value or a plain string here, so fall
             // back to the literal text rather than rejecting unparseable input.
             let expected_body: Option<serde_json::Value> = args
@@ -563,6 +574,7 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
             )?;
             input_json::insert(&mut input, "threshold", args.threshold)?;
             input_json::insert(&mut input, "operator", args.operator)?;
+            input_json::insert(&mut input, "ivr_flow", ivr_flow)?;
             input_json::insert(&mut input, "sql_query", args.sql_query)?;
             input_json::insert(&mut input, "runtime_config", runtime_config)?;
             input_json::insert(&mut input, "tags", args.tags)?;
@@ -600,6 +612,11 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 .map(|s| serde_json::from_str(&s))
                 .transpose()
                 .map_err(|e| anyhow::anyhow!("Invalid JSON for --runtime-config: {e}"))?;
+            let ivr_flow: Option<serde_json::Value> = args
+                .ivr_flow
+                .map(|s| serde_json::from_str(&s))
+                .transpose()
+                .map_err(|e| anyhow::anyhow!("Invalid JSON for --ivr-flow: {e}"))?;
             // The API accepts either a JSON value or a plain string here, so fall
             // back to the literal text rather than rejecting unparseable input.
             let expected_body: Option<serde_json::Value> = args
@@ -661,6 +678,7 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
             )?;
             input_json::insert(&mut input, "threshold", args.threshold)?;
             input_json::insert(&mut input, "operator", args.operator)?;
+            input_json::insert(&mut input, "ivr_flow", ivr_flow)?;
             input_json::insert(&mut input, "sql_query", args.sql_query)?;
             input_json::insert(&mut input, "runtime_config", runtime_config)?;
             input_json::insert(&mut input, "tags", args.tags)?;
