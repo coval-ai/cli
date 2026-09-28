@@ -12,20 +12,21 @@ only when coverage actually changes.
 
 | Metric | Value |
 | --- | ---: |
-| Reconciliation status | PASS |
-| Published operations | 181 |
+| Reconciliation status | ACTION REQUIRED |
+| Published operations | 183 |
 | First-class CLI operations | 119 |
 | Reviewed gaps | 62 |
 | Client operations | 143 |
-| Published request fields on covered operations | 365 |
-| Request fields modeled by the CLI | 359 |
-| Reviewed request-field gaps | 6 |
+| Published request fields on covered operations | 437 |
+| Request fields modeled by the CLI | 370 |
+| Reviewed request-field gaps | 0 |
 
 Catalog: https://api.coval.dev/v1/openapi
 
 ## New published operations without CLI commands
 
-- None.
+- `POST /review-projects/{project_id}/complete-conversation`
+- `POST /sofia/delegation-token`
 
 ## Reviewed gaps no longer present
 
@@ -49,7 +50,9 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## Coverage snapshot mismatches
 
-- None.
+- `published_operations: recorded 181, current 183`
+- `published_request_fields: recorded 365, current 437`
+- `cli_modeled_request_fields: recorded 359, current 370`
 
 ## Client-only operations
 
@@ -112,6 +115,8 @@ Catalog: https://api.coval.dev/v1/openapi
 - `POST /personas/{persona_id}/versions/{version_id}/revert`
 - `POST /review-annotations:withMetricOutputs`
 - `POST /review-projects/disagreement-state`
+- `POST /review-projects/{project_id}/complete-conversation`
+- `POST /sofia/delegation-token`
 - `POST /test-sets/{test_set_id}/agents:add`
 - `POST /test-sets/{test_set_id}/duplicate`
 - `POST /test-sets/{test_set_id}/versions/{version_id}/revert`
@@ -122,21 +127,75 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## New published request fields the CLI drops
 
-- None.
+- `PATCH /metrics/{id} aggregation_method`
+- `PATCH /metrics/{id} detection_preset`
+- `PATCH /metrics/{id} enabled_tools`
+- `PATCH /metrics/{id} harmonics_to_noise_ratio_threshold_offset_db`
+- `PATCH /metrics/{id} jitter_threshold_multiplier`
+- `PATCH /metrics/{id} judge_mode`
+- `PATCH /metrics/{id} loud_threshold_db`
+- `PATCH /metrics/{id} low_pitch_threshold_multiplier`
+- `PATCH /metrics/{id} mad_z_score_threshold`
+- `PATCH /metrics/{id} metric_attribute`
+- `PATCH /metrics/{id} metric_metadata`
+- `PATCH /metrics/{id} min_fry_segment_seconds`
+- `PATCH /metrics/{id} pause_detection_preset`
+- `PATCH /metrics/{id} pitch_change_threshold_hz`
+- `PATCH /metrics/{id} significant_changes_threshold_hz`
+- `PATCH /metrics/{id} soft_threshold_db`
+- `PATCH /metrics/{id} span_name`
+- `PATCH /metrics/{id} threshold_preset`
+- `PATCH /metrics/{id} unit`
+- `PATCH /metrics/{id} value_source`
+- `PATCH /personas/{id} custom_persona_data`
+- `PATCH /personas/{id} custom_voice_id`
+- `PATCH /personas/{id} initialization_parameters`
+- `PATCH /personas/{id} multi_phone_config`
+- `PATCH /personas/{id} silent_mode`
+- `PATCH /personas/{id} voice`
+- `PATCH /review-annotations/{id} annotations`
+- `PATCH /review-annotations/{id} ground_truth_json`
+- `PATCH /review-annotations/{id} ground_truth_set_value`
+- `PATCH /review-projects/{id} project_type`
+- `PATCH /review-projects/{id} review_label_input_mode`
+- `PATCH /review-projects/{id} review_label_options`
+- `PATCH /review-projects/{id} review_label_selection_mode`
+- `PATCH /run-templates/{id} test_case_ids`
+- `POST /metrics aggregation_method`
+- `POST /metrics detection_preset`
+- `POST /metrics enabled_tools`
+- `POST /metrics harmonics_to_noise_ratio_threshold_offset_db`
+- `POST /metrics jitter_threshold_multiplier`
+- `POST /metrics judge_mode`
+- `POST /metrics loud_threshold_db`
+- `POST /metrics low_pitch_threshold_multiplier`
+- `POST /metrics mad_z_score_threshold`
+- `POST /metrics metric_attribute`
+- `POST /metrics metric_metadata`
+- `POST /metrics min_fry_segment_seconds`
+- `POST /metrics pause_detection_preset`
+- `POST /metrics pitch_change_threshold_hz`
+- `POST /metrics significant_changes_threshold_hz`
+- `POST /metrics soft_threshold_db`
+- `POST /metrics span_name`
+- `POST /metrics threshold_preset`
+- `POST /metrics unit`
+- `POST /metrics value_source`
+- `POST /personas custom_persona_data`
+- `POST /personas custom_voice_id`
+- `POST /personas initialization_parameters`
+- `POST /personas multi_phone_config`
+- `POST /personas silent_mode`
+- `POST /personas voice`
+- `POST /review-annotations annotations`
+- `POST /review-annotations ground_truth_json`
+- `POST /review-annotations ground_truth_set_value`
+- `POST /review-projects review_label_input_mode`
+- `POST /review-projects review_label_options`
+- `POST /review-projects review_label_selection_mode`
+- `POST /run-templates test_case_ids`
 
 ## Reviewed request-field gaps no longer present
-
-- None.
-
-## CLI request fields absent from published OpenAPI
-
-- None.
-
-## Allowed extra request fields no longer present
-
-- None.
-
-## All current request-field gaps
 
 - `PATCH /run-templates/{id} agent_id`
 - `PATCH /run-templates/{id} persona_id`
@@ -144,3 +203,94 @@ Catalog: https://api.coval.dev/v1/openapi
 - `POST /run-templates agent_id`
 - `POST /run-templates persona_id`
 - `POST /run-templates test_set_id`
+
+## CLI request fields absent from published OpenAPI
+
+- `POST /review-annotations priority`
+- `POST /runs persona_metrics`
+
+## Allowed extra request fields no longer present
+
+- `PATCH /metrics/{id} case_insensitive`
+- `PATCH /metrics/{id} match_mode`
+- `PATCH /metrics/{id} position`
+- `PATCH /run-templates/{id} agent_ids`
+- `PATCH /run-templates/{id} persona_ids`
+- `PATCH /run-templates/{id} test_set_ids`
+- `POST /api-keys environment`
+- `POST /metrics case_insensitive`
+- `POST /metrics match_mode`
+- `POST /metrics position`
+- `POST /run-templates agent_ids`
+- `POST /run-templates persona_ids`
+- `POST /run-templates test_set_ids`
+
+## All current request-field gaps
+
+- `PATCH /metrics/{id} aggregation_method`
+- `PATCH /metrics/{id} detection_preset`
+- `PATCH /metrics/{id} enabled_tools`
+- `PATCH /metrics/{id} harmonics_to_noise_ratio_threshold_offset_db`
+- `PATCH /metrics/{id} jitter_threshold_multiplier`
+- `PATCH /metrics/{id} judge_mode`
+- `PATCH /metrics/{id} loud_threshold_db`
+- `PATCH /metrics/{id} low_pitch_threshold_multiplier`
+- `PATCH /metrics/{id} mad_z_score_threshold`
+- `PATCH /metrics/{id} metric_attribute`
+- `PATCH /metrics/{id} metric_metadata`
+- `PATCH /metrics/{id} min_fry_segment_seconds`
+- `PATCH /metrics/{id} pause_detection_preset`
+- `PATCH /metrics/{id} pitch_change_threshold_hz`
+- `PATCH /metrics/{id} significant_changes_threshold_hz`
+- `PATCH /metrics/{id} soft_threshold_db`
+- `PATCH /metrics/{id} span_name`
+- `PATCH /metrics/{id} threshold_preset`
+- `PATCH /metrics/{id} unit`
+- `PATCH /metrics/{id} value_source`
+- `PATCH /personas/{id} custom_persona_data`
+- `PATCH /personas/{id} custom_voice_id`
+- `PATCH /personas/{id} initialization_parameters`
+- `PATCH /personas/{id} multi_phone_config`
+- `PATCH /personas/{id} silent_mode`
+- `PATCH /personas/{id} voice`
+- `PATCH /review-annotations/{id} annotations`
+- `PATCH /review-annotations/{id} ground_truth_json`
+- `PATCH /review-annotations/{id} ground_truth_set_value`
+- `PATCH /review-projects/{id} project_type`
+- `PATCH /review-projects/{id} review_label_input_mode`
+- `PATCH /review-projects/{id} review_label_options`
+- `PATCH /review-projects/{id} review_label_selection_mode`
+- `PATCH /run-templates/{id} test_case_ids`
+- `POST /metrics aggregation_method`
+- `POST /metrics detection_preset`
+- `POST /metrics enabled_tools`
+- `POST /metrics harmonics_to_noise_ratio_threshold_offset_db`
+- `POST /metrics jitter_threshold_multiplier`
+- `POST /metrics judge_mode`
+- `POST /metrics loud_threshold_db`
+- `POST /metrics low_pitch_threshold_multiplier`
+- `POST /metrics mad_z_score_threshold`
+- `POST /metrics metric_attribute`
+- `POST /metrics metric_metadata`
+- `POST /metrics min_fry_segment_seconds`
+- `POST /metrics pause_detection_preset`
+- `POST /metrics pitch_change_threshold_hz`
+- `POST /metrics significant_changes_threshold_hz`
+- `POST /metrics soft_threshold_db`
+- `POST /metrics span_name`
+- `POST /metrics threshold_preset`
+- `POST /metrics unit`
+- `POST /metrics value_source`
+- `POST /personas custom_persona_data`
+- `POST /personas custom_voice_id`
+- `POST /personas initialization_parameters`
+- `POST /personas multi_phone_config`
+- `POST /personas silent_mode`
+- `POST /personas voice`
+- `POST /review-annotations annotations`
+- `POST /review-annotations ground_truth_json`
+- `POST /review-annotations ground_truth_set_value`
+- `POST /review-projects review_label_input_mode`
+- `POST /review-projects review_label_options`
+- `POST /review-projects review_label_selection_mode`
+- `POST /run-templates test_case_ids`
