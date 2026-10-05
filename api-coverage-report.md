@@ -13,13 +13,13 @@ only when coverage actually changes.
 | Metric | Value |
 | --- | ---: |
 | Reconciliation status | PASS |
-| Published operations | 181 |
+| Published operations | 183 |
 | First-class CLI operations | 119 |
-| Reviewed gaps | 62 |
+| Reviewed gaps | 64 |
 | Client operations | 143 |
-| Published request fields on covered operations | 365 |
-| Request fields modeled by the CLI | 359 |
-| Reviewed request-field gaps | 6 |
+| Published request fields on covered operations | 437 |
+| Request fields modeled by the CLI | 437 |
+| Reviewed request-field gaps | 0 |
 
 Catalog: https://api.coval.dev/v1/openapi
 
@@ -112,6 +112,8 @@ Catalog: https://api.coval.dev/v1/openapi
 - `POST /personas/{persona_id}/versions/{version_id}/revert`
 - `POST /review-annotations:withMetricOutputs`
 - `POST /review-projects/disagreement-state`
+- `POST /review-projects/{project_id}/complete-conversation`
+- `POST /sofia/delegation-token`
 - `POST /test-sets/{test_set_id}/agents:add`
 - `POST /test-sets/{test_set_id}/duplicate`
 - `POST /test-sets/{test_set_id}/versions/{version_id}/revert`
@@ -138,9 +140,4 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## All current request-field gaps
 
-- `PATCH /run-templates/{id} agent_id`
-- `PATCH /run-templates/{id} persona_id`
-- `PATCH /run-templates/{id} test_set_id`
-- `POST /run-templates agent_id`
-- `POST /run-templates persona_id`
-- `POST /run-templates test_set_id`
+- None.

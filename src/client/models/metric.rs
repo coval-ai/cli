@@ -13,6 +13,9 @@ pub struct Metric {
     pub metric_type: MetricType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt: Option<String>,
+    /// Agent Judge evidence tools. An empty list disables all tools.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled_tools: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub categories: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -116,6 +119,47 @@ pub struct CreateMetricRequest {
     pub metric_type: MetricType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt: Option<String>,
+    /// Agent Judge evidence tools. An empty list disables all tools.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled_tools: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub judge_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aggregation_method: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unit: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detection_preset: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub harmonics_to_noise_ratio_threshold_offset_db: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jitter_threshold_multiplier: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loud_threshold_db: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub low_pitch_threshold_multiplier: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mad_z_score_threshold: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metric_attribute: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metric_metadata: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_fry_segment_seconds: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pause_detection_preset: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pitch_change_threshold_hz: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub significant_changes_threshold_hz: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub soft_threshold_db: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub threshold_preset: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value_source: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub categories: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -202,6 +246,57 @@ pub struct UpdateMetricRequest {
     pub metric_type: Option<MetricType>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt: Option<String>,
+    /// Agent Judge evidence tools. An empty list disables all tools.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled_tools: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub judge_mode: Option<String>,
+    /// SQL and custom-trace aggregation; an explicit null resets it to the default.
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub aggregation_method: Option<Option<String>>,
+    /// Display unit; an explicit null clears it.
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub unit: Option<Option<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detection_preset: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub harmonics_to_noise_ratio_threshold_offset_db: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jitter_threshold_multiplier: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loud_threshold_db: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub low_pitch_threshold_multiplier: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mad_z_score_threshold: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metric_attribute: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metric_metadata: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_fry_segment_seconds: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pause_detection_preset: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pitch_change_threshold_hz: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub significant_changes_threshold_hz: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub soft_threshold_db: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub threshold_preset: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value_source: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub categories: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]

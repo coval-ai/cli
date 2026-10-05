@@ -75,9 +75,6 @@ pub struct CreateArgs {
     /// Reviewer notes
     #[arg(long)]
     notes: Option<String>,
-    /// Annotation priority
-    #[arg(long, value_enum)]
-    priority: Option<AnnotationPriority>,
 }
 
 #[derive(Args)]
@@ -183,7 +180,6 @@ pub async fn execute(
             )?;
             input_json::insert(&mut input, "ground_truth_subvalues_by_timestamp", subvalues)?;
             input_json::insert(&mut input, "reviewer_notes", args.notes)?;
-            input_json::insert(&mut input, "priority", args.priority)?;
             let req: CreateReviewAnnotationRequest = input_json::finish(input)?;
             let annotation = client.review_annotations().create(req).await?;
             emit_one_with_actions(

@@ -1882,6 +1882,12 @@ fn newly_modeled_persona_fields() -> Value {
         "hold_music_timeout_seconds": 45.0,
         "situate_speaker": "speakerphone-easy",
         "interruption_rate": "HIGH",
+        "silent_mode": false,
+        "multi_phone_config": {"phone_number_index": 1, "phone_number_name": "Primary"},
+        "initialization_parameters": {"caller_name": "Jordan", "loyalty_status": "gold"},
+        "custom_persona_data": "{\"customer\":\"example\"}",
+        "voice": "marin",
+        "custom_voice_id": "voice_custom_123",
         "tags": ["support", "noisy"]
     })
 }
@@ -1985,7 +1991,13 @@ async fn test_personas_update_forwards_an_explicit_null_to_clear() {
                 "audio_degradation": null,
                 "voice_volume": null,
                 "voice_speed": null,
-                "hold_music_timeout_seconds": null
+                "hold_music_timeout_seconds": null,
+                "silent_mode": null,
+                "multi_phone_config": null,
+                "initialization_parameters": null,
+                "custom_persona_data": null,
+                "voice": null,
+                "custom_voice_id": null
             })
             .to_string(),
         )
@@ -2001,6 +2013,12 @@ async fn test_personas_update_forwards_an_explicit_null_to_clear() {
         "voice_volume",
         "voice_speed",
         "hold_music_timeout_seconds",
+        "silent_mode",
+        "multi_phone_config",
+        "initialization_parameters",
+        "custom_persona_data",
+        "voice",
+        "custom_voice_id",
     ] {
         assert!(body.get(key).is_some(), "{key} must be sent");
         assert!(body[key].is_null(), "{key} must be sent as null");
@@ -3245,6 +3263,48 @@ async fn test_run_templates_update_forwards_tags() {
 }
 
 #[tokio::test]
+async fn test_run_templates_forward_test_case_ids() {
+    for (method_name, command, path_value, required) in [
+        ("POST", "create", "/v1/run-templates", true),
+        ("PATCH", "update", "/v1/run-templates/rt123", false),
+    ] {
+        let mock_server = MockServer::start().await;
+        let capture = BodyCapture::default();
+        Mock::given(method(method_name))
+            .and(path(path_value))
+            .and(capture.clone())
+            .respond_with(ResponseTemplate::new(200).set_body_json(run_template_response()))
+            .mount(&mock_server)
+            .await;
+        let mut input = json!({"test_case_ids": ["tc1", "tc2"]});
+        if required {
+            let object = input.as_object_mut().unwrap();
+            object.insert("display_name".into(), json!("My Template"));
+            object.insert("agent_ids".into(), json!(["agent1"]));
+            object.insert("persona_ids".into(), json!(["persona1"]));
+            object.insert("test_set_ids".into(), json!(["ts123"]));
+        }
+        let mut command_line = coval();
+        command_line
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("run-templates")
+            .arg(command);
+        if !required {
+            command_line.arg("rt123");
+        }
+        command_line
+            .arg("--input-json")
+            .arg(input.to_string())
+            .assert()
+            .success();
+        assert_eq!(capture.take()["test_case_ids"], json!(["tc1", "tc2"]));
+    }
+}
+
+#[tokio::test]
 async fn test_uploaded_conversations_submit_forwards_tags() {
     let mock_server = MockServer::start().await;
     let capture = BodyCapture::default();
@@ -4408,6 +4468,66 @@ async fn test_review_projects_get() {
         .stdout(predicate::str::contains("proj123"));
 }
 
+#[tokio::test]
+async fn test_review_annotations_forward_structured_ground_truth_fields() {
+    for (method_name, command, path_value, required) in [
+        ("POST", "create", "/v1/review-annotations", true),
+        ("PATCH", "update", "/v1/review-annotations/ann123", false),
+    ] {
+        let mock_server = MockServer::start().await;
+        let capture = BodyCapture::default();
+        Mock::given(method(method_name))
+            .and(path(path_value))
+            .and(capture.clone())
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "review_annotation": {
+                    "id": "ann123", "simulation_output_id": "so123", "metric_id": "met123",
+                    "assignee": "reviewer@example.com", "status": "ACTIVE",
+                    "completion_status": "COMPLETED", "priority": "PRIORITY_STANDARD",
+                    "create_time": "2025-01-15T10:30:00Z", "update_time": "2025-01-15T11:00:00Z"
+                }
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let mut input = json!({
+            "annotations": {"label": "accurate"},
+            "ground_truth_json": {"score": 1},
+            "ground_truth_set_value": ["accurate", "complete"]
+        });
+        if required {
+            let object = input.as_object_mut().unwrap();
+            object.insert("simulation_output_id".into(), json!("so123"));
+            object.insert("metric_id".into(), json!("met123"));
+            object.insert("assignee".into(), json!("reviewer@example.com"));
+        }
+        let mut command_line = coval();
+        command_line
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("review-annotations")
+            .arg(command);
+        if !required {
+            command_line.arg("ann123");
+        }
+        command_line
+            .arg("--input-json")
+            .arg(input.to_string())
+            .assert()
+            .success();
+
+        let body = capture.take();
+        assert_eq!(body["annotations"], json!({"label": "accurate"}));
+        assert_eq!(body["ground_truth_json"], json!({"score": 1}));
+        assert_eq!(
+            body["ground_truth_set_value"],
+            json!(["accurate", "complete"])
+        );
+    }
+}
+
 fn review_project_response() -> Value {
     json!({
         "review_project": {
@@ -4476,6 +4596,64 @@ async fn test_review_projects_create_forwards_every_modeled_field() {
     assert_eq!(body["project_rules"], json!(["rule-a", "rule-b"]));
     assert_eq!(body["blind_labeling_shown_metric_ids"], json!(["met1"]));
     assert_eq!(body["enforced_collaboration"], true);
+}
+
+#[tokio::test]
+async fn test_review_projects_forward_label_configuration() {
+    let fields = json!({
+        "review_label_input_mode": "OPTION_OR_CUSTOM",
+        "review_label_options": ["pass", "fail"],
+        "review_label_selection_mode": "MULTIPLE"
+    });
+    for (method_name, command, path_value, required) in [
+        ("POST", "create", "/v1/review-projects", true),
+        ("PATCH", "update", "/v1/review-projects/proj456", false),
+    ] {
+        let mock_server = MockServer::start().await;
+        let capture = BodyCapture::default();
+        Mock::given(method(method_name))
+            .and(path(path_value))
+            .and(capture.clone())
+            .respond_with(ResponseTemplate::new(200).set_body_json(review_project_response()))
+            .mount(&mock_server)
+            .await;
+        let mut input = fields.clone();
+        if required {
+            let object = input.as_object_mut().unwrap();
+            object.insert("display_name".into(), json!("New Project"));
+            object.insert("assignees".into(), json!(["alice@example.com"]));
+            object.insert("linked_simulation_ids".into(), json!(["sim1"]));
+            object.insert("linked_metric_ids".into(), json!(["met1"]));
+        } else {
+            input
+                .as_object_mut()
+                .unwrap()
+                .insert("project_type".into(), json!("PROJECT_COLLABORATIVE"));
+        }
+        let mut command_line = coval();
+        command_line
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("--api-url")
+            .arg(mock_server.uri())
+            .arg("review-projects")
+            .arg(command);
+        if !required {
+            command_line.arg("proj456");
+        }
+        command_line
+            .arg("--input-json")
+            .arg(input.to_string())
+            .assert()
+            .success();
+        let body = capture.take();
+        for (key, expected) in fields.as_object().unwrap() {
+            assert_eq!(&body[key], expected, "field {key} must reach the API");
+        }
+        if !required {
+            assert_eq!(body["project_type"], "PROJECT_COLLABORATIVE");
+        }
+    }
 }
 
 #[tokio::test]
@@ -4871,6 +5049,26 @@ fn metric_response_body() -> Value {
 /// struct that stops declaring one fails here rather than dropping it in silence.
 fn newly_modeled_metric_fields() -> Value {
     json!({
+        "enabled_tools": ["get_transcript", "get_trace_spans"],
+        "judge_mode": "AGENTIC",
+        "aggregation_method": "AVERAGE",
+        "unit": "s",
+        "detection_preset": "normal",
+        "harmonics_to_noise_ratio_threshold_offset_db": -10.0,
+        "jitter_threshold_multiplier": 2.0,
+        "loud_threshold_db": -8.0,
+        "low_pitch_threshold_multiplier": 0.7,
+        "mad_z_score_threshold": 3.0,
+        "metric_attribute": "http.status_code",
+        "metric_metadata": {"derived_type": "DERIVED_AGGREGATE"},
+        "min_fry_segment_seconds": 0.2,
+        "pause_detection_preset": "strict",
+        "pitch_change_threshold_hz": 25.0,
+        "significant_changes_threshold_hz": 30.0,
+        "soft_threshold_db": -35.0,
+        "span_name": "http.request",
+        "threshold_preset": "lenient",
+        "value_source": "attribute",
         "max_silence_duration_seconds": 4.5,
         "min_silence_gap_seconds": 0.75,
         "frequency_threshold": 2.0,
@@ -7473,4 +7671,99 @@ async fn test_simulated_conversation_commands_use_canonical_routes() {
         .args(["simulated-conversations", "delete", "simulated123"])
         .assert()
         .success();
+}
+
+async fn patch_body_for(resource_path: &str, response: Value, args: &[&str]) -> Value {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path(resource_path))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(response))
+        .mount(&mock_server)
+        .await;
+
+    coval_with_api(&mock_server).args(args).assert().success();
+
+    capture.take()
+}
+
+fn assert_sent_as_null(body: &Value, keys: &[&str]) {
+    // The API clears a stored value only when the key is present and null, so an
+    // omitted key would silently turn "clear this" into "leave it alone".
+    for key in keys {
+        assert!(body.get(key).is_some(), "{key} must be sent");
+        assert!(body[key].is_null(), "{key} must be sent as null");
+    }
+}
+
+#[tokio::test]
+async fn test_run_templates_update_clears_test_case_ids_with_an_explicit_null() {
+    let body = patch_body_for(
+        "/v1/run-templates/rt123",
+        run_template_response(),
+        &[
+            "run-templates",
+            "update",
+            "rt123",
+            "--input-json",
+            r#"{"test_case_ids":null}"#,
+        ],
+    )
+    .await;
+
+    assert_sent_as_null(&body, &["test_case_ids"]);
+}
+
+#[tokio::test]
+async fn test_metrics_update_clears_aggregation_and_unit_with_an_explicit_null() {
+    let body = patch_body_for(
+        "/v1/metrics/met1",
+        metric_response_body(),
+        &[
+            "metrics",
+            "update",
+            "met1",
+            "--input-json",
+            r#"{"aggregation_method":null,"unit":null}"#,
+        ],
+    )
+    .await;
+
+    assert_sent_as_null(&body, &["aggregation_method", "unit"]);
+}
+
+#[tokio::test]
+async fn test_review_annotations_update_clears_structured_ground_truth_with_an_explicit_null() {
+    let body = patch_body_for(
+        "/v1/review-annotations/ann123",
+        json!({
+            "review_annotation": {
+                "id": "ann123",
+                "simulation_output_id": "so123",
+                "metric_id": "met123",
+                "assignee": "reviewer@example.com",
+                "status": "ACTIVE",
+                "completion_status": "COMPLETED",
+                "priority": "PRIORITY_PRIMARY",
+                "create_time": "2025-01-15T10:30:00Z",
+                "update_time": "2025-01-15T11:00:00Z"
+            }
+        }),
+        &[
+            "review-annotations",
+            "update",
+            "ann123",
+            "--input-json",
+            r#"{"annotations":null,"ground_truth_json":null,"ground_truth_set_value":null}"#,
+        ],
+    )
+    .await;
+
+    assert_sent_as_null(
+        &body,
+        &["annotations", "ground_truth_json", "ground_truth_set_value"],
+    );
 }

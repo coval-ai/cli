@@ -204,7 +204,6 @@ pub async fn execute(cmd: RunCommands, client: &CovalClient, ctx: &OutputContext
                 metric_ids: args.metric_ids,
                 mutation_id: args.mutation_id,
                 mutation_ids: args.mutation_ids,
-                persona_metrics: None,
                 options,
                 metadata,
                 config_overrides,
