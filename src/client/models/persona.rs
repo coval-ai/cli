@@ -97,6 +97,18 @@ pub struct CreatePersonaRequest {
     /// `situate_speaker`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_degradation: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub silent_mode: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub multi_phone_config: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub initialization_parameters: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_persona_data: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub voice: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_voice_id: Option<String>,
     /// Tag names. Omitted leaves tags unchanged; an empty list clears them.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Vec<String>>,
@@ -158,6 +170,44 @@ pub struct UpdatePersonaRequest {
         skip_serializing_if = "Option::is_none"
     )]
     pub audio_degradation: Option<Option<serde_json::Value>>,
+    // Advanced persona values are stored in metadata. The API uses field
+    // presence to distinguish an omitted update from an explicit null clear.
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub silent_mode: Option<Option<bool>>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub multi_phone_config: Option<Option<serde_json::Value>>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub initialization_parameters: Option<Option<serde_json::Value>>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub custom_persona_data: Option<Option<String>>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub voice: Option<Option<String>>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub custom_voice_id: Option<Option<String>>,
     /// Tag names. Omitted leaves tags unchanged; an empty list clears them.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Vec<String>>,

@@ -65,6 +65,12 @@ pub struct CreateReviewProjectRequest {
     /// Only takes effect on a collaborative project.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enforced_collaboration: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_label_input_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_label_options: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_label_selection_mode: Option<String>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -79,6 +85,8 @@ pub struct UpdateReviewProjectRequest {
     pub linked_simulation_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub linked_metric_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_type: Option<ProjectType>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notifications: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -102,6 +110,12 @@ pub struct UpdateReviewProjectRequest {
     /// Only takes effect on a collaborative project.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enforced_collaboration: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_label_input_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_label_options: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_label_selection_mode: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

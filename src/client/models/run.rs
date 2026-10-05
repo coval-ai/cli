@@ -89,8 +89,6 @@ pub struct LaunchRunRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mutation_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub persona_metrics: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub options: Option<LaunchOptions>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<LaunchMetadata>,

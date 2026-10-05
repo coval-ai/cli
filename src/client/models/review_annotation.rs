@@ -98,7 +98,11 @@ pub struct CreateReviewAnnotationRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reviewer_notes: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub priority: Option<AnnotationPriority>,
+    pub annotations: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ground_truth_json: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ground_truth_set_value: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -111,6 +115,12 @@ pub struct UpdateReviewAnnotationRequest {
     pub ground_truth_subvalues_by_timestamp: Option<Vec<serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reviewer_notes: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ground_truth_json: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ground_truth_set_value: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub priority: Option<AnnotationPriority>,
     #[serde(skip_serializing_if = "Option::is_none")]

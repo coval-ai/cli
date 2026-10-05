@@ -5,11 +5,11 @@
 
 [snapshot]
 catalog_url = "https://api.coval.dev/v1/openapi"
-reviewed_at = "2026-09-14"
-published_operations = 181
+reviewed_at = "2026-10-05"
+published_operations = 183
 cli_supported_operations = 119
-published_request_fields = 365
-cli_modeled_request_fields = 359
+published_request_fields = 437
+cli_modeled_request_fields = 437
 
 [[allowed_extra]]
 operation = "POST /test-cases/{test_case_id}/media:upload-url"
@@ -376,6 +376,14 @@ reason = "Workspace management remains to be modeled under COVAL-2079."
 operation = "POST /workspaces/{workspace_id}/archive"
 reason = "Workspace management remains to be modeled under COVAL-2079."
 
+[[known_gap]]
+operation = "POST /review-projects/{project_id}/complete-conversation"
+reason = "Project-scoped completion remains to be modeled under COVAL-2079; this explicit write needs a deliberate command workflow rather than being exposed by the parity refresh."
+
+[[known_gap]]
+operation = "POST /sofia/delegation-token"
+reason = "Customer API-key delegation token minting remains to be modeled under COVAL-2079 with an explicit security-sensitive CLI workflow."
+
 # =============================================================================
 # REQUEST FIELDS
 # =============================================================================
@@ -391,36 +399,6 @@ reason = "Workspace management remains to be modeled under COVAL-2079."
 # Pydantic model; coval-ai/backend records the known divergence in
 # src/services/api/tests/v1/openapi_parity_baseline.txt.
 
-[[known_field_gap]]
-operation = "PATCH /run-templates/{run_template_id}"
-field = "agent_id"
-reason = "Documented but not served: the transport forbids extra fields and takes the plural `agent_ids` array the CLI already sends, so modeling this name would break the call. Spec drift tracked under COVAL-5825."
-
-[[known_field_gap]]
-operation = "PATCH /run-templates/{run_template_id}"
-field = "persona_id"
-reason = "Documented but not served: the transport forbids extra fields and takes the plural `persona_ids` array the CLI already sends, so modeling this name would break the call. Spec drift tracked under COVAL-5825."
-
-[[known_field_gap]]
-operation = "PATCH /run-templates/{run_template_id}"
-field = "test_set_id"
-reason = "Documented but not served: the transport forbids extra fields and takes the plural `test_set_ids` array the CLI already sends, so modeling this name would break the call. Spec drift tracked under COVAL-5825."
-
-[[known_field_gap]]
-operation = "POST /run-templates"
-field = "agent_id"
-reason = "Documented but not served: the transport forbids extra fields and takes the plural `agent_ids` array the CLI already sends, so modeling this name would break the call. Spec drift tracked under COVAL-5825."
-
-[[known_field_gap]]
-operation = "POST /run-templates"
-field = "persona_id"
-reason = "Documented but not served: the transport forbids extra fields and takes the plural `persona_ids` array the CLI already sends, so modeling this name would break the call. Spec drift tracked under COVAL-5825."
-
-[[known_field_gap]]
-operation = "POST /run-templates"
-field = "test_set_id"
-reason = "Documented but not served: the transport forbids extra fields and takes the plural `test_set_ids` array the CLI already sends, so modeling this name would break the call. Spec drift tracked under COVAL-5825."
-
 # Fields the CLI sends that the published schema does not declare. Most are served
 # but undocumented, so removing them from the CLI would lose working behavior.
 
@@ -428,21 +406,6 @@ reason = "Documented but not served: the transport forbids extra fields and take
 operation = "PATCH /conversations/uploaded/{conversation_id}"
 field = "audio_reference"
 reason = "Served but deliberately hidden from the published schema as an internal field; the API still accepts it."
-
-[[allowed_extra_field]]
-operation = "PATCH /metrics/{metric_id}"
-field = "case_insensitive"
-reason = "Served but undocumented regex-matching field; recorded as spec drift in the backend's own openapi_parity_baseline.txt."
-
-[[allowed_extra_field]]
-operation = "PATCH /metrics/{metric_id}"
-field = "match_mode"
-reason = "Served but undocumented regex-matching field; recorded as spec drift in the backend's own openapi_parity_baseline.txt."
-
-[[allowed_extra_field]]
-operation = "PATCH /metrics/{metric_id}"
-field = "position"
-reason = "Served but undocumented regex-matching field; recorded as spec drift in the backend's own openapi_parity_baseline.txt."
 
 [[allowed_extra_field]]
 operation = "PATCH /review-annotations/{annotation_id}"
@@ -455,26 +418,6 @@ field = "status"
 reason = "Advertised by the CLI but absent from the served contract, which ignores unknown fields, so the flag silently does nothing. Tracked under COVAL-5824."
 
 [[allowed_extra_field]]
-operation = "PATCH /run-templates/{run_template_id}"
-field = "agent_ids"
-reason = "Served but undocumented: the run-template models take these plural arrays. The published singular form is stale spec, tracked under COVAL-5825."
-
-[[allowed_extra_field]]
-operation = "PATCH /run-templates/{run_template_id}"
-field = "persona_ids"
-reason = "Served but undocumented: the run-template models take these plural arrays. The published singular form is stale spec, tracked under COVAL-5825."
-
-[[allowed_extra_field]]
-operation = "PATCH /run-templates/{run_template_id}"
-field = "test_set_ids"
-reason = "Served but undocumented: the run-template models take these plural arrays. The published singular form is stale spec, tracked under COVAL-5825."
-
-[[allowed_extra_field]]
-operation = "POST /api-keys"
-field = "environment"
-reason = "Served but undocumented; recorded as spec drift in the backend's own openapi_parity_baseline.txt."
-
-[[allowed_extra_field]]
 operation = "POST /conversations/simulated/{simulation_id}/resimulate"
 field = "dev_id"
 reason = "Served but deliberately hidden from the published schema as an internal field; the API still accepts it."
@@ -483,33 +426,3 @@ reason = "Served but deliberately hidden from the published schema as an interna
 operation = "POST /conversations/uploaded:submit"
 field = "audio"
 reason = "Served but deliberately hidden from the published schema as an internal field; the API still accepts it."
-
-[[allowed_extra_field]]
-operation = "POST /metrics"
-field = "case_insensitive"
-reason = "Served but undocumented regex-matching field; recorded as spec drift in the backend's own openapi_parity_baseline.txt."
-
-[[allowed_extra_field]]
-operation = "POST /metrics"
-field = "match_mode"
-reason = "Served but undocumented regex-matching field; recorded as spec drift in the backend's own openapi_parity_baseline.txt."
-
-[[allowed_extra_field]]
-operation = "POST /metrics"
-field = "position"
-reason = "Served but undocumented regex-matching field; recorded as spec drift in the backend's own openapi_parity_baseline.txt."
-
-[[allowed_extra_field]]
-operation = "POST /run-templates"
-field = "agent_ids"
-reason = "Served but undocumented: the run-template models take these plural arrays. The published singular form is stale spec, tracked under COVAL-5825."
-
-[[allowed_extra_field]]
-operation = "POST /run-templates"
-field = "persona_ids"
-reason = "Served but undocumented: the run-template models take these plural arrays. The published singular form is stale spec, tracked under COVAL-5825."
-
-[[allowed_extra_field]]
-operation = "POST /run-templates"
-field = "test_set_ids"
-reason = "Served but undocumented: the run-template models take these plural arrays. The published singular form is stale spec, tracked under COVAL-5825."

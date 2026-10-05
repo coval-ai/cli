@@ -62,6 +62,8 @@ pub struct CreateRunTemplateRequest {
     pub persona_ids: Vec<String>,
     pub test_set_ids: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub test_case_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub metric_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mutation_ids: Option<Vec<String>>,
@@ -92,6 +94,8 @@ pub struct UpdateRunTemplateRequest {
     pub persona_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub test_set_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub test_case_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metric_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
