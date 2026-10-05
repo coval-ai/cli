@@ -115,12 +115,25 @@ pub struct UpdateReviewAnnotationRequest {
     pub ground_truth_subvalues_by_timestamp: Option<Vec<serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reviewer_notes: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub annotations: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ground_truth_json: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ground_truth_set_value: Option<Vec<String>>,
+    /// Structured ground truth. An explicit null clears each of these fields.
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub annotations: Option<Option<serde_json::Value>>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub ground_truth_json: Option<Option<serde_json::Value>>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub ground_truth_set_value: Option<Option<Vec<String>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub priority: Option<AnnotationPriority>,
     #[serde(skip_serializing_if = "Option::is_none")]

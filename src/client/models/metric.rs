@@ -251,10 +251,20 @@ pub struct UpdateMetricRequest {
     pub enabled_tools: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub judge_mode: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aggregation_method: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub unit: Option<String>,
+    /// SQL and custom-trace aggregation; an explicit null resets it to the default.
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub aggregation_method: Option<Option<String>>,
+    /// Display unit; an explicit null clears it.
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub unit: Option<Option<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detection_preset: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

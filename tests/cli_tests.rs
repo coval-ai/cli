@@ -1884,7 +1884,7 @@ fn newly_modeled_persona_fields() -> Value {
         "interruption_rate": "HIGH",
         "silent_mode": false,
         "multi_phone_config": {"phone_number_index": 1, "phone_number_name": "Primary"},
-        "initialization_parameters": {"account_tier": "premium"},
+        "initialization_parameters": {"caller_name": "Jordan", "loyalty_status": "gold"},
         "custom_persona_data": "{\"customer\":\"example\"}",
         "voice": "marin",
         "custom_voice_id": "voice_custom_123",
@@ -7671,4 +7671,99 @@ async fn test_simulated_conversation_commands_use_canonical_routes() {
         .args(["simulated-conversations", "delete", "simulated123"])
         .assert()
         .success();
+}
+
+async fn patch_body_for(resource_path: &str, response: Value, args: &[&str]) -> Value {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("PATCH"))
+        .and(path(resource_path))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(response))
+        .mount(&mock_server)
+        .await;
+
+    coval_with_api(&mock_server).args(args).assert().success();
+
+    capture.take()
+}
+
+fn assert_sent_as_null(body: &Value, keys: &[&str]) {
+    // The API clears a stored value only when the key is present and null, so an
+    // omitted key would silently turn "clear this" into "leave it alone".
+    for key in keys {
+        assert!(body.get(key).is_some(), "{key} must be sent");
+        assert!(body[key].is_null(), "{key} must be sent as null");
+    }
+}
+
+#[tokio::test]
+async fn test_run_templates_update_clears_test_case_ids_with_an_explicit_null() {
+    let body = patch_body_for(
+        "/v1/run-templates/rt123",
+        run_template_response(),
+        &[
+            "run-templates",
+            "update",
+            "rt123",
+            "--input-json",
+            r#"{"test_case_ids":null}"#,
+        ],
+    )
+    .await;
+
+    assert_sent_as_null(&body, &["test_case_ids"]);
+}
+
+#[tokio::test]
+async fn test_metrics_update_clears_aggregation_and_unit_with_an_explicit_null() {
+    let body = patch_body_for(
+        "/v1/metrics/met1",
+        metric_response_body(),
+        &[
+            "metrics",
+            "update",
+            "met1",
+            "--input-json",
+            r#"{"aggregation_method":null,"unit":null}"#,
+        ],
+    )
+    .await;
+
+    assert_sent_as_null(&body, &["aggregation_method", "unit"]);
+}
+
+#[tokio::test]
+async fn test_review_annotations_update_clears_structured_ground_truth_with_an_explicit_null() {
+    let body = patch_body_for(
+        "/v1/review-annotations/ann123",
+        json!({
+            "review_annotation": {
+                "id": "ann123",
+                "simulation_output_id": "so123",
+                "metric_id": "met123",
+                "assignee": "reviewer@example.com",
+                "status": "ACTIVE",
+                "completion_status": "COMPLETED",
+                "priority": "PRIORITY_PRIMARY",
+                "create_time": "2025-01-15T10:30:00Z",
+                "update_time": "2025-01-15T11:00:00Z"
+            }
+        }),
+        &[
+            "review-annotations",
+            "update",
+            "ann123",
+            "--input-json",
+            r#"{"annotations":null,"ground_truth_json":null,"ground_truth_set_value":null}"#,
+        ],
+    )
+    .await;
+
+    assert_sent_as_null(
+        &body,
+        &["annotations", "ground_truth_json", "ground_truth_set_value"],
+    );
 }
