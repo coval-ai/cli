@@ -5,6 +5,10 @@ name: Weekly API parity PR
 # when the public API and first-class CLI command surface change. It does not
 # claim to regenerate hand-written command UX from OpenAPI.
 #
+# It never resets a rolling branch that carries commits from anyone but the
+# bot: reconciliation pushed onto the PR is left alone and the run comments on
+# the PR instead.
+#
 # Prerequisite:
 #   REGEN_PR_TOKEN: a token with Contents and Pull requests write access to this
 #   repository. The organization does not allow GITHUB_TOKEN to create PRs.
@@ -18,6 +22,8 @@ on:
 permissions:
   contents: read
   issues: write
+  # Lists the open rolling PR to comment on when hand commits are present.
+  pull-requests: read
 
 concurrency:
   group: weekly-api-parity-pr
@@ -208,7 +214,66 @@ jobs:
           --write-markdown api-coverage-report.md
           --allow-drift
 
+      - name: Check the rolling branch for hand commits
+        id: rolling_branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: chore/weekly-api-parity
+          BOT_COMMITTER: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          set -euo pipefail
+
+          # create-pull-request rebuilds the branch from main and force-pushes,
+          # which would discard reconciliation someone pushed onto the PR.
+          refs="$(
+            gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BRANCH}" \
+              --jq "map(select(.ref == \"refs/heads/${BRANCH}\")) | length"
+          )"
+          if [ "$refs" = "0" ]; then
+            echo "hand_commits=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          hand_commits="$(
+            gh api "repos/${GITHUB_REPOSITORY}/compare/main...${BRANCH}" \
+              --jq "[.commits[] | select(.commit.committer.email != \"${BOT_COMMITTER}\")] | length"
+          )"
+          if [ "$hand_commits" = "0" ]; then
+            echo "hand_commits=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::${BRANCH} has ${hand_commits} commit(s) not made by the bot; leaving it unchanged."
+            echo "hand_commits=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment instead of resetting a hand-reconciled PR
+        if: steps.rolling_branch.outputs.hand_commits == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const { data: pulls } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:chore/weekly-api-parity`,
+              state: 'open',
+            });
+            const body = [
+              'The weekly refresh left this branch unchanged because it has commits not made by the bot.',
+              'Merge this PR, or rebase it onto `main` and regenerate `api-coverage-report.md`, so the next run can pick up new API changes.',
+              '',
+              `Run: ${runUrl}`,
+            ].join('\n');
+            for (const pull of pulls) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pull.number,
+                body,
+              });
+            }
+
       - name: Open or update the parity PR
+        if: steps.rolling_branch.outputs.hand_commits != 'true'
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.REGEN_PR_TOKEN }}

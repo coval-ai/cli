@@ -365,8 +365,11 @@ A repository-owned GitHub workflow runs every Monday and refreshes the
 deterministic `api-coverage-report.md`. When coverage changes, it opens or
 updates one rolling PR on `chore/weekly-api-parity`; the PR's CI remains blocked
 until the command implementation or an explicitly reviewed manifest exception
-reconciles the drift. A GitHub issue is used only if the automation itself
-fails before it can create or update that PR.
+reconciles the drift. Push reconciliation commits onto the rolling PR. The next
+weekly run leaves a branch with commits not made by the bot unchanged and
+comments on the PR instead of resetting it, so merge or rebase that PR to let
+later runs pick up new API changes. A GitHub issue is used only if the
+automation itself fails before it can create or update that PR.
 
 The schedule is Monday 2:00 AM PST (10:00 UTC; 3:00 AM during daylight saving
 time). GitHub Actions schedules can start later during busy periods. The audit
