@@ -224,6 +224,21 @@ coval metrics create \
 coval metrics update met123456 \
   --ivr-flow '{"start_node":"root","nodes":[{"id":"root","prompt":"Press 1"}]}'
 
+# Limit an audio metric to the caller's side of the recording
+coval metrics create \
+  --name "Caller politeness" \
+  --description "The caller stays polite" \
+  --type audio-binary \
+  --prompt "Was the caller polite?" \
+  --audio-filter '{"include":[{"type":"speaker","speakers":["persona"]}]}'
+
+# Remove the filter. A flag can only set a value, so removing needs an explicit null.
+coval metrics update met123456 --input-json '{"audio_filter":null}'
+
+# Set the metrics an Agent Judge metric depends on (an empty list clears them)
+coval metrics update met123456 \
+  --input-json '{"dependency_metric_ids":["met123457","met123458"]}'
+
 # Test a metric against several simulations in one call
 coval metrics test met123456 \
   --simulation-output-ids sim1,sim2,sim3

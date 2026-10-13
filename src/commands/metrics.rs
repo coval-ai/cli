@@ -230,6 +230,9 @@ pub struct CreateArgs {
     /// JSON string overriding the LLM model used to evaluate the metric
     #[arg(long)]
     runtime_config: Option<String>,
+    /// Audio metrics: JSON limiting the analysis to part of the recording, e.g. '{"include":[{"type":"speaker","speakers":["persona"]}]}'
+    #[arg(long)]
+    audio_filter: Option<String>,
     /// Comma-separated tag names; pass an empty value to clear all tags
     #[arg(long, value_delimiter = ',')]
     tags: Option<Vec<String>>,
@@ -352,6 +355,9 @@ pub struct UpdateArgs {
     /// JSON string overriding the LLM model used to evaluate the metric
     #[arg(long)]
     runtime_config: Option<String>,
+    /// Audio metrics: JSON limiting the analysis to part of the recording; --input-json '{"audio_filter":null}' removes it
+    #[arg(long)]
+    audio_filter: Option<String>,
     /// Comma-separated tag names; pass an empty value to clear all tags
     #[arg(long, value_delimiter = ',')]
     tags: Option<Vec<String>>,
@@ -513,6 +519,11 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 .map(|s| serde_json::from_str(&s))
                 .transpose()
                 .map_err(|e| anyhow::anyhow!("Invalid JSON for --ivr-flow: {e}"))?;
+            let audio_filter: Option<serde_json::Value> = args
+                .audio_filter
+                .map(|s| serde_json::from_str(&s))
+                .transpose()
+                .map_err(|e| anyhow::anyhow!("Invalid JSON for --audio-filter: {e}"))?;
             // The API accepts either a JSON value or a plain string here, so fall
             // back to the literal text rather than rejecting unparseable input.
             let expected_body: Option<serde_json::Value> = args
@@ -577,6 +588,7 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
             input_json::insert(&mut input, "ivr_flow", ivr_flow)?;
             input_json::insert(&mut input, "sql_query", args.sql_query)?;
             input_json::insert(&mut input, "runtime_config", runtime_config)?;
+            input_json::insert(&mut input, "audio_filter", audio_filter)?;
             input_json::insert(&mut input, "tags", args.tags)?;
             validate_composite(&input)?;
             let req: CreateMetricRequest = input_json::finish(input)?;
@@ -617,6 +629,11 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
                 .map(|s| serde_json::from_str(&s))
                 .transpose()
                 .map_err(|e| anyhow::anyhow!("Invalid JSON for --ivr-flow: {e}"))?;
+            let audio_filter: Option<serde_json::Value> = args
+                .audio_filter
+                .map(|s| serde_json::from_str(&s))
+                .transpose()
+                .map_err(|e| anyhow::anyhow!("Invalid JSON for --audio-filter: {e}"))?;
             // The API accepts either a JSON value or a plain string here, so fall
             // back to the literal text rather than rejecting unparseable input.
             let expected_body: Option<serde_json::Value> = args
@@ -681,6 +698,7 @@ pub async fn execute(cmd: MetricCommands, client: &CovalClient, ctx: &OutputCont
             input_json::insert(&mut input, "ivr_flow", ivr_flow)?;
             input_json::insert(&mut input, "sql_query", args.sql_query)?;
             input_json::insert(&mut input, "runtime_config", runtime_config)?;
+            input_json::insert(&mut input, "audio_filter", audio_filter)?;
             input_json::insert(&mut input, "tags", args.tags)?;
             let req: UpdateMetricRequest = input_json::finish(input)?;
             let metric = client.metrics().update(&args.metric_id, req).await?;

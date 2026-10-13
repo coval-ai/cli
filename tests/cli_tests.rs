@@ -1,3 +1,7 @@
+// The metric request fixture is one `json!` literal that has outgrown the default
+// macro recursion limit as the API has added fields.
+#![recursion_limit = "256"]
+
 use assert_cmd::Command;
 use predicates::prelude::*;
 use serde_json::{json, Value};
@@ -5050,6 +5054,8 @@ fn metric_response_body() -> Value {
 fn newly_modeled_metric_fields() -> Value {
     json!({
         "enabled_tools": ["get_transcript", "get_trace_spans"],
+        "dependency_metric_ids": ["met_dep_a", "met_dep_b"],
+        "audio_filter": {"include": [{"type": "speaker", "speakers": ["persona"]}]},
         "judge_mode": "AGENTIC",
         "aggregation_method": "AVERAGE",
         "unit": "s",
@@ -5220,6 +5226,123 @@ async fn test_metrics_update_forwards_the_ivr_flow_flag() {
         .success();
 
     assert_eq!(capture.take()["ivr_flow"], flow);
+}
+
+#[tokio::test]
+async fn test_metrics_forward_the_audio_filter_flag() {
+    let filter = json!({"include": [{"type": "speaker", "speakers": ["persona"]}]});
+    for (method_name, command, path_value) in [
+        ("POST", "create", "/v1/metrics"),
+        ("PATCH", "update", "/v1/metrics/met1"),
+    ] {
+        let mock_server = MockServer::start().await;
+        let capture = BodyCapture::default();
+        Mock::given(method(method_name))
+            .and(path(path_value))
+            .and(header("X-API-Key", "test_key"))
+            .and(capture.clone())
+            .respond_with(ResponseTemplate::new(200).set_body_json(metric_response_body()))
+            .mount(&mock_server)
+            .await;
+
+        let mut command_line = coval_with_api(&mock_server);
+        command_line.arg("metrics").arg(command);
+        if command == "create" {
+            command_line.args([
+                "--name",
+                "Polite caller",
+                "--description",
+                "Caller tone",
+                "--type",
+                "audio-binary",
+                "--prompt",
+                "Was the caller polite?",
+            ]);
+        } else {
+            command_line.arg("met1");
+        }
+        command_line
+            .arg("--audio-filter")
+            .arg(filter.to_string())
+            .assert()
+            .success();
+
+        assert_eq!(capture.take()["audio_filter"], filter);
+    }
+}
+
+#[test]
+fn test_metrics_reject_an_unparseable_audio_filter() {
+    for command in ["create", "update"] {
+        let mut command_line = coval();
+        command_line
+            .arg("--api-key")
+            .arg("test_key")
+            .arg("metrics")
+            .arg(command);
+        if command == "update" {
+            command_line.arg("met1");
+        }
+        command_line
+            .arg("--audio-filter")
+            .arg("{not json")
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("Invalid JSON for --audio-filter"));
+    }
+}
+
+#[tokio::test]
+async fn test_metrics_update_omits_unset_audio_filter_and_dependencies() {
+    // An update that names neither field must leave the saved scope and
+    // dependencies alone, so neither may ride along as a default.
+    let body = patch_body_for(
+        "/v1/metrics/met1",
+        metric_response_body(),
+        &["metrics", "update", "met1", "--name", "Renamed"],
+    )
+    .await;
+
+    assert_eq!(body["metric_name"], "Renamed");
+    for key in ["audio_filter", "dependency_metric_ids"] {
+        assert!(body.get(key).is_none(), "unset {key} must be omitted");
+    }
+}
+
+#[tokio::test]
+async fn test_metrics_update_removes_the_audio_filter_and_dependencies_with_an_explicit_null() {
+    let body = patch_body_for(
+        "/v1/metrics/met1",
+        metric_response_body(),
+        &[
+            "metrics",
+            "update",
+            "met1",
+            "--input-json",
+            r#"{"audio_filter":null,"dependency_metric_ids":null}"#,
+        ],
+    )
+    .await;
+
+    assert_sent_as_null(&body, &["audio_filter", "dependency_metric_ids"]);
+}
+
+#[tokio::test]
+async fn test_metrics_update_clears_dependencies_with_an_empty_list() {
+    let body = patch_body_for(
+        "/v1/metrics/met1",
+        metric_response_body(),
+        &[
+            "metrics",
+            "update",
+            "met1",
+            "--input-json",
+            r#"{"dependency_metric_ids":[]}"#,
+        ],
+    )
+    .await;
+
+    assert_eq!(body["dependency_metric_ids"], json!([]));
 }
 
 #[tokio::test]
