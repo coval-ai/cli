@@ -48,7 +48,13 @@ impl std::fmt::Display for ProjectType {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateReviewProjectRequest {
     pub display_name: String,
+    /// Reviewer emails. Left out when `assignee_user_ids` selects the reviewers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub assignees: Vec<String>,
+    /// Reviewer user IDs, instead of `assignees`; the API rejects a request that
+    /// sets both.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assignee_user_ids: Option<Vec<String>>,
     pub linked_simulation_ids: Vec<String>,
     pub linked_metric_ids: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -65,12 +71,20 @@ pub struct CreateReviewProjectRequest {
     /// Only takes effect on a collaborative project.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enforced_collaboration: Option<bool>,
+    /// Lets reviewers skip linked metrics.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_metric_skipping: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub review_label_input_mode: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub review_label_options: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub review_label_selection_mode: Option<String>,
+    /// False pauses conversation triage while keeping its categories, modes and
+    /// saved labels; true enables it. Left out, activation follows the triage
+    /// configuration.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_label_enabled: Option<bool>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -81,6 +95,10 @@ pub struct UpdateReviewProjectRequest {
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub assignees: Option<Vec<String>>,
+    /// Reviewer user IDs, instead of `assignees`; the API rejects a request that
+    /// sets both.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assignee_user_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub linked_simulation_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -91,6 +109,10 @@ pub struct UpdateReviewProjectRequest {
     pub notifications: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub opted_out_assignees: Option<Vec<String>>,
+    /// Reviewer user IDs opting out of notifications, instead of
+    /// `opted_out_assignees`; an empty list clears the opt-outs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opted_out_assignee_user_ids: Option<Vec<String>>,
     /// Adds to the linked simulations instead of replacing them; cannot be combined
     /// with `linked_simulation_ids`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -110,12 +132,24 @@ pub struct UpdateReviewProjectRequest {
     /// Only takes effect on a collaborative project.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enforced_collaboration: Option<bool>,
+    /// Lets reviewers skip linked metrics. Left out, the saved setting is kept.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_metric_skipping: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub review_label_input_mode: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub review_label_options: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub review_label_selection_mode: Option<String>,
+    /// False pauses conversation triage while keeping its categories, modes and
+    /// saved labels; true enables it. An explicit null returns activation to the
+    /// triage configuration, and leaving it out keeps the current state.
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub review_label_enabled: Option<Option<bool>>,
 }
 
 #[derive(Debug, Deserialize)]

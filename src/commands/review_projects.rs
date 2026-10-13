@@ -59,6 +59,9 @@ pub struct CreateArgs {
     /// Comma-separated reviewer emails
     #[arg(long, value_delimiter = ',')]
     assignees: Option<Vec<String>>,
+    /// Comma-separated reviewer user IDs, instead of --assignees
+    #[arg(long, value_delimiter = ',', conflicts_with = "assignees")]
+    assignee_user_ids: Option<Vec<String>>,
     /// Comma-separated simulation output IDs
     #[arg(long, value_delimiter = ',')]
     simulation_ids: Option<Vec<String>>,
@@ -83,6 +86,9 @@ pub struct CreateArgs {
     /// Require claims and explicit single-author completion (collaborative projects only)
     #[arg(long, num_args = 0..=1, default_missing_value = "true")]
     enforced_collaboration: Option<bool>,
+    /// Let reviewers skip linked metrics
+    #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+    allow_metric_skipping: Option<bool>,
 }
 
 #[derive(Args)]
@@ -99,6 +105,9 @@ pub struct UpdateArgs {
     /// Comma-separated updated reviewer emails
     #[arg(long, value_delimiter = ',')]
     assignees: Option<Vec<String>>,
+    /// Comma-separated updated reviewer user IDs, instead of --assignees
+    #[arg(long, value_delimiter = ',', conflicts_with = "assignees")]
+    assignee_user_ids: Option<Vec<String>>,
     /// Comma-separated updated simulation output IDs
     #[arg(long, value_delimiter = ',')]
     simulation_ids: Option<Vec<String>>,
@@ -111,6 +120,9 @@ pub struct UpdateArgs {
     /// Comma-separated emails of assignees to opt out
     #[arg(long, value_delimiter = ',')]
     opted_out_assignees: Option<Vec<String>>,
+    /// Comma-separated user IDs of assignees to opt out, instead of --opted-out-assignees
+    #[arg(long, value_delimiter = ',', conflicts_with = "opted_out_assignees")]
+    opted_out_assignee_user_ids: Option<Vec<String>>,
     /// Comma-separated simulation output IDs to add, instead of replacing the linked set
     #[arg(long, value_delimiter = ',', conflicts_with = "simulation_ids")]
     add_simulation_ids: Option<Vec<String>>,
@@ -129,6 +141,9 @@ pub struct UpdateArgs {
     /// Require claims and explicit single-author completion (collaborative projects only)
     #[arg(long, num_args = 0..=1, default_missing_value = "true")]
     enforced_collaboration: Option<bool>,
+    /// Let reviewers skip linked metrics
+    #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+    allow_metric_skipping: Option<bool>,
 }
 
 #[derive(Args)]
@@ -182,6 +197,7 @@ pub async fn execute(
             let mut input = args.input_json.object()?;
             input_json::insert(&mut input, "display_name", args.name)?;
             input_json::insert(&mut input, "assignees", args.assignees)?;
+            input_json::insert(&mut input, "assignee_user_ids", args.assignee_user_ids)?;
             input_json::insert(&mut input, "linked_simulation_ids", args.simulation_ids)?;
             input_json::insert(&mut input, "linked_metric_ids", args.metric_ids)?;
             input_json::insert(&mut input, "description", args.description)?;
@@ -198,6 +214,11 @@ pub async fn execute(
                 "enforced_collaboration",
                 args.enforced_collaboration,
             )?;
+            input_json::insert(
+                &mut input,
+                "allow_metric_skipping",
+                args.allow_metric_skipping,
+            )?;
             let req: CreateReviewProjectRequest = input_json::finish(input)?;
             let project = client.review_projects().create(req).await?;
             emit_one_with_actions(
@@ -213,10 +234,16 @@ pub async fn execute(
             input_json::insert(&mut input, "display_name", args.name)?;
             input_json::insert(&mut input, "description", args.description)?;
             input_json::insert(&mut input, "assignees", args.assignees)?;
+            input_json::insert(&mut input, "assignee_user_ids", args.assignee_user_ids)?;
             input_json::insert(&mut input, "linked_simulation_ids", args.simulation_ids)?;
             input_json::insert(&mut input, "linked_metric_ids", args.metric_ids)?;
             input_json::insert(&mut input, "notifications", args.notifications)?;
             input_json::insert(&mut input, "opted_out_assignees", args.opted_out_assignees)?;
+            input_json::insert(
+                &mut input,
+                "opted_out_assignee_user_ids",
+                args.opted_out_assignee_user_ids,
+            )?;
             input_json::insert(
                 &mut input,
                 "add_linked_simulation_ids",
@@ -242,6 +269,11 @@ pub async fn execute(
                 &mut input,
                 "enforced_collaboration",
                 args.enforced_collaboration,
+            )?;
+            input_json::insert(
+                &mut input,
+                "allow_metric_skipping",
+                args.allow_metric_skipping,
             )?;
             let req: UpdateReviewProjectRequest = input_json::finish(input)?;
             let project = client

@@ -264,6 +264,23 @@ coval review-projects update <project_id> \
   --add-simulation-ids sim3,sim4 \
   --remove-simulation-ids sim1
 
+# Select review-project reviewers by user ID instead of email, and let them skip metrics
+coval review-projects create \
+  --name "Weekly QA" \
+  --assignee-user-ids 01ARZ3NDEKTSV4RRFFQ69G5FAV,01BX5ZZKBKACTAV9WEVGEMMVRZ \
+  --simulation-ids sim1,sim2 \
+  --metric-ids met1 \
+  --allow-metric-skipping
+
+# Pause conversation triage in a project; its categories, modes, and saved labels are kept
+coval review-projects update <project_id> --input-json '{"review_label_enabled":false}'
+
+# Assign a review annotation by reviewer user ID
+coval review-annotations create \
+  --simulation-output-id sim_out1 \
+  --metric-id met1 \
+  --assignee-user-id 01ARZ3NDEKTSV4RRFFQ69G5FAV
+
 # Merge existing reports into one report with a group per source report
 coval reports merge \
   --name "Q3 Scorecard" \

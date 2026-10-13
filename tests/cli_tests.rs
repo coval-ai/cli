@@ -4718,6 +4718,213 @@ fn test_review_projects_update_rejects_a_delta_with_a_replacement() {
         .failure();
 }
 
+const REVIEWER_USER_ID: &str = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
+const OTHER_REVIEWER_USER_ID: &str = "01BX5ZZKBKACTAV9WEVGEMMVRZ";
+
+#[tokio::test]
+async fn test_review_projects_forward_reviewer_user_ids_and_skipping() {
+    let fields = json!({
+        "assignee_user_ids": [REVIEWER_USER_ID, OTHER_REVIEWER_USER_ID],
+        "allow_metric_skipping": true,
+        "review_label_enabled": false
+    });
+    for (method_name, command, path_value, required) in [
+        ("POST", "create", "/v1/review-projects", true),
+        ("PATCH", "update", "/v1/review-projects/proj456", false),
+    ] {
+        let mock_server = MockServer::start().await;
+        let capture = BodyCapture::default();
+        Mock::given(method(method_name))
+            .and(path(path_value))
+            .and(capture.clone())
+            .respond_with(ResponseTemplate::new(200).set_body_json(review_project_response()))
+            .mount(&mock_server)
+            .await;
+        let mut input = fields.clone();
+        let object = input.as_object_mut().unwrap();
+        if required {
+            // No `assignees`: the user IDs select the reviewers on their own.
+            object.insert("display_name".into(), json!("New Project"));
+            object.insert("linked_simulation_ids".into(), json!(["sim1"]));
+            object.insert("linked_metric_ids".into(), json!(["met1"]));
+        } else {
+            object.insert(
+                "opted_out_assignee_user_ids".into(),
+                json!([OTHER_REVIEWER_USER_ID]),
+            );
+        }
+        let mut command_line = coval_with_api(&mock_server);
+        command_line.arg("review-projects").arg(command);
+        if !required {
+            command_line.arg("proj456");
+        }
+        command_line
+            .arg("--input-json")
+            .arg(input.to_string())
+            .assert()
+            .success();
+
+        let body = capture.take();
+        for (key, expected) in input.as_object().unwrap() {
+            assert_eq!(&body[key], expected, "field {key} must reach the API");
+        }
+        if required {
+            assert!(
+                body.get("assignees").is_none(),
+                "an empty assignees list must not ride along with user IDs"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_review_projects_create_flags_select_reviewers_by_user_id() {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+    Mock::given(method("POST"))
+        .and(path("/v1/review-projects"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(review_project_response()))
+        .mount(&mock_server)
+        .await;
+
+    coval_with_api(&mock_server)
+        .args([
+            "review-projects",
+            "create",
+            "--name",
+            "New Project",
+            "--assignee-user-ids",
+            &format!("{REVIEWER_USER_ID},{OTHER_REVIEWER_USER_ID}"),
+            "--simulation-ids",
+            "sim1",
+            "--metric-ids",
+            "met1",
+            "--allow-metric-skipping",
+        ])
+        .assert()
+        .success();
+
+    let body = capture.take();
+    assert_eq!(
+        body["assignee_user_ids"],
+        json!([REVIEWER_USER_ID, OTHER_REVIEWER_USER_ID])
+    );
+    assert_eq!(body["allow_metric_skipping"], true);
+    assert!(body.get("assignees").is_none());
+}
+
+#[tokio::test]
+async fn test_review_projects_update_flags_forward_reviewer_user_ids() {
+    let body = patch_body_for(
+        "/v1/review-projects/proj456",
+        review_project_response(),
+        &[
+            "review-projects",
+            "update",
+            "proj456",
+            "--assignee-user-ids",
+            REVIEWER_USER_ID,
+            "--opted-out-assignee-user-ids",
+            OTHER_REVIEWER_USER_ID,
+            "--allow-metric-skipping",
+            "false",
+        ],
+    )
+    .await;
+
+    assert_eq!(body["assignee_user_ids"], json!([REVIEWER_USER_ID]));
+    assert_eq!(
+        body["opted_out_assignee_user_ids"],
+        json!([OTHER_REVIEWER_USER_ID])
+    );
+    // A deliberate false is a real change, unlike the omitted default.
+    assert_eq!(body["allow_metric_skipping"], false);
+}
+
+#[tokio::test]
+async fn test_review_projects_update_omits_unset_reviewer_and_label_fields() {
+    // The API applies each of these only when it is present, and a skipping
+    // default of false would silently switch the saved setting off.
+    let body = patch_body_for(
+        "/v1/review-projects/proj456",
+        review_project_response(),
+        &["review-projects", "update", "proj456", "--name", "Renamed"],
+    )
+    .await;
+
+    assert_eq!(body["display_name"], "Renamed");
+    for key in [
+        "assignee_user_ids",
+        "opted_out_assignee_user_ids",
+        "allow_metric_skipping",
+        "review_label_enabled",
+    ] {
+        assert!(body.get(key).is_none(), "unset {key} must be omitted");
+    }
+}
+
+#[tokio::test]
+async fn test_review_projects_update_forwards_review_label_enabled_null() {
+    // Null returns activation to the triage configuration, which is not what an
+    // omitted field does, so it has to reach the API as an explicit null.
+    let body = patch_body_for(
+        "/v1/review-projects/proj456",
+        review_project_response(),
+        &[
+            "review-projects",
+            "update",
+            "proj456",
+            "--input-json",
+            r#"{"review_label_enabled":null}"#,
+        ],
+    )
+    .await;
+
+    assert_sent_as_null(&body, &["review_label_enabled"]);
+}
+
+#[test]
+fn test_review_projects_reject_selecting_reviewers_both_ways() {
+    for args in [
+        vec![
+            "review-projects",
+            "create",
+            "--assignees",
+            "alice@example.com",
+            "--assignee-user-ids",
+            REVIEWER_USER_ID,
+        ],
+        vec![
+            "review-projects",
+            "update",
+            "proj456",
+            "--assignees",
+            "alice@example.com",
+            "--assignee-user-ids",
+            REVIEWER_USER_ID,
+        ],
+        vec![
+            "review-projects",
+            "update",
+            "proj456",
+            "--opted-out-assignees",
+            "alice@example.com",
+            "--opted-out-assignee-user-ids",
+            REVIEWER_USER_ID,
+        ],
+    ] {
+        coval()
+            .arg("--api-key")
+            .arg("test_key")
+            .args(&args)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("cannot be used with"));
+    }
+}
+
 #[tokio::test]
 async fn test_reports_create_forwards_pinned_simulations() {
     let mock_server = MockServer::start().await;
@@ -7889,4 +8096,74 @@ async fn test_review_annotations_update_clears_structured_ground_truth_with_an_e
         &body,
         &["annotations", "ground_truth_json", "ground_truth_set_value"],
     );
+}
+
+fn review_annotation_response() -> Value {
+    json!({
+        "review_annotation": {
+            "id": "ann123",
+            "simulation_output_id": "so123",
+            "metric_id": "met123",
+            "assignee": "reviewer@example.com",
+            "status": "ACTIVE",
+            "completion_status": "PENDING",
+            "priority": "PRIORITY_STANDARD",
+            "create_time": "2025-01-15T10:30:00Z",
+            "update_time": "2025-01-15T10:30:00Z"
+        }
+    })
+}
+
+async fn post_review_annotation_body(args: &[&str]) -> Value {
+    let mock_server = MockServer::start().await;
+    let capture = BodyCapture::default();
+
+    Mock::given(method("POST"))
+        .and(path("/v1/review-annotations"))
+        .and(header("X-API-Key", "test_key"))
+        .and(capture.clone())
+        .respond_with(ResponseTemplate::new(200).set_body_json(review_annotation_response()))
+        .mount(&mock_server)
+        .await;
+
+    coval_with_api(&mock_server)
+        .args(["review-annotations", "create"])
+        .args(args)
+        .assert()
+        .success();
+
+    capture.take()
+}
+
+#[tokio::test]
+async fn test_review_annotations_create_identifies_the_reviewer_by_user_id() {
+    let body = post_review_annotation_body(&[
+        "--simulation-output-id",
+        "so123",
+        "--metric-id",
+        "met123",
+        "--assignee-user-id",
+        REVIEWER_USER_ID,
+    ])
+    .await;
+
+    assert_eq!(body["assignee_user_id"], REVIEWER_USER_ID);
+    assert!(
+        body.get("assignee").is_none(),
+        "an email must not be invented when only a user ID is given"
+    );
+}
+
+#[tokio::test]
+async fn test_review_annotations_create_forwards_both_reviewer_identifiers() {
+    let input = json!({
+        "simulation_output_id": "so123",
+        "metric_id": "met123",
+        "assignee": "reviewer@example.com",
+        "assignee_user_id": REVIEWER_USER_ID
+    });
+    let body = post_review_annotation_body(&["--input-json", &input.to_string()]).await;
+
+    assert_eq!(body["assignee"], "reviewer@example.com");
+    assert_eq!(body["assignee_user_id"], REVIEWER_USER_ID);
 }

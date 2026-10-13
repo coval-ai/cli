@@ -63,6 +63,9 @@ pub struct CreateArgs {
     /// Email of the reviewer to assign
     #[arg(long)]
     assignee: Option<String>,
+    /// User ID of the reviewer to assign, as an alternative to --assignee
+    #[arg(long)]
+    assignee_user_id: Option<String>,
     /// Ground truth numeric value (auto-completes annotation)
     #[arg(long)]
     ground_truth_float: Option<f64>,
@@ -168,6 +171,7 @@ pub async fn execute(
             )?;
             input_json::insert(&mut input, "metric_id", args.metric_id)?;
             input_json::insert(&mut input, "assignee", args.assignee)?;
+            input_json::insert(&mut input, "assignee_user_id", args.assignee_user_id)?;
             input_json::insert(
                 &mut input,
                 "ground_truth_float_value",
