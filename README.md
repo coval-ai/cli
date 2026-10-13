@@ -224,6 +224,21 @@ coval metrics create \
 coval metrics update met123456 \
   --ivr-flow '{"start_node":"root","nodes":[{"id":"root","prompt":"Press 1"}]}'
 
+# Limit an audio metric to the caller's side of the recording
+coval metrics create \
+  --name "Caller politeness" \
+  --description "The caller stays polite" \
+  --type audio-binary \
+  --prompt "Was the caller polite?" \
+  --audio-filter '{"include":[{"type":"speaker","speakers":["persona"]}]}'
+
+# Remove the filter. A flag can only set a value, so removing needs an explicit null.
+coval metrics update met123456 --input-json '{"audio_filter":null}'
+
+# Set the metrics an Agent Judge metric depends on (an empty list clears them)
+coval metrics update met123456 \
+  --input-json '{"dependency_metric_ids":["met123457","met123458"]}'
+
 # Test a metric against several simulations in one call
 coval metrics test met123456 \
   --simulation-output-ids sim1,sim2,sim3
@@ -248,6 +263,23 @@ coval reports update <report_id> --input-json '{"simulation_output_ids":null}'
 coval review-projects update <project_id> \
   --add-simulation-ids sim3,sim4 \
   --remove-simulation-ids sim1
+
+# Select review-project reviewers by user ID instead of email, and let them skip metrics
+coval review-projects create \
+  --name "Weekly QA" \
+  --assignee-user-ids 01ARZ3NDEKTSV4RRFFQ69G5FAV,01BX5ZZKBKACTAV9WEVGEMMVRZ \
+  --simulation-ids sim1,sim2 \
+  --metric-ids met1 \
+  --allow-metric-skipping
+
+# Pause conversation triage in a project; its categories, modes, and saved labels are kept
+coval review-projects update <project_id> --input-json '{"review_label_enabled":false}'
+
+# Assign a review annotation by reviewer user ID
+coval review-annotations create \
+  --simulation-output-id sim_out1 \
+  --metric-id met1 \
+  --assignee-user-id 01ARZ3NDEKTSV4RRFFQ69G5FAV
 
 # Merge existing reports into one report with a group per source report
 coval reports merge \

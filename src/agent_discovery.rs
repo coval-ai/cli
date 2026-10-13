@@ -579,7 +579,10 @@ const RESOURCE_SPECS: &[ResourceSpec] = &[
             name: "Inspect review projects",
             argv: &["review-projects", "list"],
         }],
-        pitfalls: &["Assignee lists are comma-delimited in CLI flags."],
+        pitfalls: &[
+            "Assignee lists are comma-delimited in CLI flags.",
+            "Select reviewers by email or by user ID, not both.",
+        ],
     },
     ResourceSpec {
         name: "reports",

@@ -122,6 +122,13 @@ pub struct CreateMetricRequest {
     /// Agent Judge evidence tools. An empty list disables all tools.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enabled_tools: Option<Vec<String>>,
+    /// Agent Judge metric dependencies (at most 10).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dependency_metric_ids: Option<Vec<String>>,
+    /// Restricts an audio metric to part of the recording, for example
+    /// `{"include": [{"type": "speaker", "speakers": ["persona"]}]}`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio_filter: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub judge_mode: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -249,6 +256,22 @@ pub struct UpdateMetricRequest {
     /// Agent Judge evidence tools. An empty list disables all tools.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enabled_tools: Option<Vec<String>>,
+    /// Agent Judge metric dependencies (at most 10). An empty list or an explicit
+    /// null clears them.
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub dependency_metric_ids: Option<Option<Vec<String>>>,
+    /// Restricts an audio metric to part of the recording. An explicit null removes
+    /// the filter so the metric analyzes its default scope.
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub audio_filter: Option<Option<serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub judge_mode: Option<String>,
     /// SQL and custom-trace aggregation; an explicit null resets it to the default.

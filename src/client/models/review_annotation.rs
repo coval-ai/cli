@@ -88,7 +88,12 @@ impl std::fmt::Display for AnnotationPriority {
 pub struct CreateReviewAnnotationRequest {
     pub simulation_output_id: String,
     pub metric_id: String,
-    pub assignee: String,
+    /// Reviewer email. Left out when `assignee_user_id` identifies the reviewer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assignee: Option<String>,
+    /// Reviewer user ID; checked against the organization's members.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assignee_user_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ground_truth_float_value: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
