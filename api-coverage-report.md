@@ -12,13 +12,13 @@ only when coverage actually changes.
 
 | Metric | Value |
 | --- | ---: |
-| Reconciliation status | ACTION REQUIRED |
+| Reconciliation status | PASS |
 | Published operations | 183 |
 | First-class CLI operations | 119 |
 | Reviewed gaps | 64 |
 | Client operations | 143 |
 | Published request fields on covered operations | 449 |
-| Request fields modeled by the CLI | 437 |
+| Request fields modeled by the CLI | 449 |
 | Reviewed request-field gaps | 0 |
 
 Catalog: https://api.coval.dev/v1/openapi
@@ -49,7 +49,7 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## Coverage snapshot mismatches
 
-- `published_request_fields: recorded 437, current 449`
+- None.
 
 ## Client-only operations
 
@@ -124,18 +124,7 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## New published request fields the CLI drops
 
-- `PATCH /metrics/{id} audio_filter`
-- `PATCH /metrics/{id} dependency_metric_ids`
-- `PATCH /review-projects/{id} allow_metric_skipping`
-- `PATCH /review-projects/{id} assignee_user_ids`
-- `PATCH /review-projects/{id} opted_out_assignee_user_ids`
-- `PATCH /review-projects/{id} review_label_enabled`
-- `POST /metrics audio_filter`
-- `POST /metrics dependency_metric_ids`
-- `POST /review-annotations assignee_user_id`
-- `POST /review-projects allow_metric_skipping`
-- `POST /review-projects assignee_user_ids`
-- `POST /review-projects review_label_enabled`
+- None.
 
 ## Reviewed request-field gaps no longer present
 
@@ -151,15 +140,4 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## All current request-field gaps
 
-- `PATCH /metrics/{id} audio_filter`
-- `PATCH /metrics/{id} dependency_metric_ids`
-- `PATCH /review-projects/{id} allow_metric_skipping`
-- `PATCH /review-projects/{id} assignee_user_ids`
-- `PATCH /review-projects/{id} opted_out_assignee_user_ids`
-- `PATCH /review-projects/{id} review_label_enabled`
-- `POST /metrics audio_filter`
-- `POST /metrics dependency_metric_ids`
-- `POST /review-annotations assignee_user_id`
-- `POST /review-projects allow_metric_skipping`
-- `POST /review-projects assignee_user_ids`
-- `POST /review-projects review_label_enabled`
+- None.
