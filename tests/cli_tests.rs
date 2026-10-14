@@ -1088,6 +1088,7 @@ fn test_agents_create_help_lists_all_agent_types() {
         .success()
         .stdout(predicate::str::contains("chat-a2a"))
         .stdout(predicate::str::contains("chat-websocket"))
+        .stdout(predicate::str::contains("sdk-websocket"))
         .stdout(predicate::str::contains("livekit"))
         .stdout(predicate::str::contains("pipecat"))
         .stdout(predicate::str::contains("openai-realtime"))
