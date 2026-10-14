@@ -13,9 +13,9 @@ only when coverage actually changes.
 | Metric | Value |
 | --- | ---: |
 | Reconciliation status | PASS |
-| Published operations | 183 |
+| Published operations | 186 |
 | First-class CLI operations | 119 |
-| Reviewed gaps | 64 |
+| Reviewed gaps | 67 |
 | Client operations | 143 |
 | Published request fields on covered operations | 449 |
 | Request fields modeled by the CLI | 449 |
@@ -76,6 +76,7 @@ Catalog: https://api.coval.dev/v1/openapi
 - `GET /metrics/{metric_id}/baselines/{baseline_id}/history`
 - `GET /organization/conversation-metrics`
 - `GET /organization/monitoring-metrics`
+- `GET /organization/users`
 - `GET /personas/tags`
 - `GET /personas/{persona_id}/versions`
 - `GET /review-annotations/metric-health-stats`
@@ -84,6 +85,8 @@ Catalog: https://api.coval.dev/v1/openapi
 - `GET /review-projects/{project_id}/progress`
 - `GET /runs/tags`
 - `GET /scheduled-runs/{scheduled_run_id}/runs`
+- `GET /simulations/{simulation_id}/attributes/{attribute_name}`
+- `GET /simulations/{simulation_id}/connect`
 - `GET /test-sets/{test_set_id}/agents`
 - `GET /test-sets/{test_set_id}/records`
 - `GET /test-sets/{test_set_id}/versions`

@@ -55,6 +55,9 @@ pub enum AgentType {
     #[serde(rename = "MODEL_TYPE_WEBSOCKET")]
     #[value(name = "websocket")]
     Websocket,
+    #[serde(rename = "MODEL_TYPE_SDK_WEBSOCKET")]
+    #[value(name = "sdk-websocket")]
+    SdkWebsocket,
     #[serde(rename = "MODEL_TYPE_LIVEKIT")]
     #[value(name = "livekit")]
     Livekit,
@@ -85,6 +88,7 @@ impl std::fmt::Display for AgentType {
             Self::ChatWebsocket => write!(f, "CHAT_WEBSOCKET"),
             Self::Sms => write!(f, "SMS"),
             Self::Websocket => write!(f, "WEBSOCKET"),
+            Self::SdkWebsocket => write!(f, "SDK_WEBSOCKET"),
             Self::Livekit => write!(f, "LIVEKIT"),
             Self::Pipecat => write!(f, "PIPECAT"),
             Self::OpenAiRealtime => write!(f, "OPENAI_REALTIME"),
@@ -232,6 +236,7 @@ mod tests {
             (AgentType::ChatWebsocket, "MODEL_TYPE_CHAT_WEBSOCKET"),
             (AgentType::Sms, "MODEL_TYPE_SMS"),
             (AgentType::Websocket, "MODEL_TYPE_WEBSOCKET"),
+            (AgentType::SdkWebsocket, "MODEL_TYPE_SDK_WEBSOCKET"),
             (AgentType::Livekit, "MODEL_TYPE_LIVEKIT"),
             (AgentType::Pipecat, "MODEL_TYPE_DAILY"),
             (AgentType::OpenAiRealtime, "MODEL_TYPE_OPENAI_REALTIME"),

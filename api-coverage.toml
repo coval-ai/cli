@@ -5,8 +5,8 @@
 
 [snapshot]
 catalog_url = "https://api.coval.dev/v1/openapi"
-reviewed_at = "2026-10-13"
-published_operations = 183
+reviewed_at = "2026-10-14"
+published_operations = 186
 cli_supported_operations = 119
 published_request_fields = 449
 cli_modeled_request_fields = 449
@@ -241,6 +241,10 @@ operation = "PATCH /organization/monitoring-metrics"
 reason = "Organization monitoring configuration remains to be modeled under COVAL-2079."
 
 [[known_gap]]
+operation = "GET /organization/users"
+reason = "The organization user roster remains to be modeled under COVAL-2079."
+
+[[known_gap]]
 operation = "GET /personas/tags"
 reason = "Persona tag-value discovery remains to be modeled under COVAL-2079."
 
@@ -291,6 +295,14 @@ reason = "Scheduled-run execution history remains to be modeled under COVAL-2079
 [[known_gap]]
 operation = "POST /conversations/simulated:rerunMetrics"
 reason = "Batch metric reruns need a dedicated confirmation-aware CLI workflow."
+
+[[known_gap]]
+operation = "GET /simulations/{simulation_id}/attributes/{attribute_name}"
+reason = "Named simulation-attribute reads remain to be modeled under COVAL-2079."
+
+[[known_gap]]
+operation = "GET /simulations/{simulation_id}/connect"
+reason = "SDK WebSocket connection discovery is intentionally delegated to the Coval Agent SDK, which consumes its one-use relay token."
 
 [[known_gap]]
 operation = "GET /integrations/slack"
