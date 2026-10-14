@@ -120,6 +120,27 @@ class HomebrewFormulaTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid SHA-256"):
             render_homebrew_formula.render_formula("0.6.0", self.checksums)
 
+    def test_pull_request_body_lists_release_assets_and_checksums(self):
+        run_url = "https://github.com/coval-ai/cli/actions/runs/1"
+        body = render_homebrew_formula.render_pull_request_body(
+            "0.6.0", self.checksums, run_url
+        )
+
+        releases = "https://github.com/coval-ai/cli/releases"
+        self.assertIn(f"{releases}/tag/v0.6.0", body)
+        self.assertIn(f"{releases}/download/v0.6.0/SHA256SUMS", body)
+        self.assertIn(
+            f"({releases}/download/v0.6.0/coval-linux-arm64.tar.gz) | `{'c' * 64}` |",
+            body,
+        )
+        self.assertIn(run_url, body)
+
+    def test_pull_request_body_rejects_invalid_version(self):
+        with self.assertRaisesRegex(ValueError, "invalid release version"):
+            render_homebrew_formula.render_pull_request_body(
+                "v0.6.0", self.checksums, "https://example.invalid"
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

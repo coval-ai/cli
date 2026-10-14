@@ -57,7 +57,32 @@ jobs:
             exit 1
           fi
           if [ "$can_push" != "true" ]; then
-            echo "::error::HOMEBREW_TAP_TOKEN cannot push to coval-ai/homebrew-tap. Replace it with a token that has Contents read/write access."
+            echo "::error::HOMEBREW_TAP_TOKEN cannot push to coval-ai/homebrew-tap. Replace it with a token that has Contents and Pull requests read/write access."
+            exit 1
+          fi
+
+          # The tap accepts changes only through pull requests. This request
+          # names branches that do not exist, so it can never open one; GitHub
+          # returns 422 only after authorizing the Pull requests write.
+          probe_suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          probe_response="$RUNNER_TEMP/homebrew-tap-pull-probe.json"
+          if ! pr_status="$(
+            curl --silent --show-error --connect-timeout 10 --max-time 30 \
+              --output "$probe_response" \
+              --write-out '%{http_code}' \
+              --request POST \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              --data "{\"title\":\"permission probe\",\"head\":\"__permission_probe_head_${probe_suffix}__\",\"base\":\"__permission_probe_base_${probe_suffix}__\"}" \
+              https://api.github.com/repos/coval-ai/homebrew-tap/pulls
+          )"; then
+            echo "::error::Could not reach GitHub to check that HOMEBREW_TAP_TOKEN can open pull requests on coval-ai/homebrew-tap."
+            exit 1
+          fi
+          if [ "$pr_status" != "422" ]; then
+            message="$(jq -r '.message // empty' "$probe_response" 2>/dev/null || true)"
+            echo "::error::HOMEBREW_TAP_TOKEN cannot open pull requests on coval-ai/homebrew-tap (HTTP ${pr_status}${message:+: $message}). Replace it with a token that has Contents and Pull requests read/write access."
             exit 1
           fi
 
@@ -166,6 +191,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      tap_pr_url: ${{ steps.tap.outputs.pr_url }}
 
     steps:
       - uses: actions/checkout@v6
@@ -195,7 +222,8 @@ jobs:
             echo "linux_x64=$(grep 'coval-linux-x64' SHA256SUMS | awk '{print $1}')"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Update Homebrew tap
+      - name: Open or update the Homebrew tap pull request
+        id: tap
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ env.RELEASE_TAG }}
@@ -203,6 +231,7 @@ jobs:
           SHA_MACOS_X64: ${{ steps.sha.outputs.macos_x64 }}
           SHA_LINUX_ARM64: ${{ steps.sha.outputs.linux_arm64 }}
           SHA_LINUX_X64: ${{ steps.sha.outputs.linux_x64 }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
           if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
@@ -210,6 +239,12 @@ jobs:
             exit 1
           fi
 
+          # The tap's rulesets reject direct pushes to main, so the release
+          # pushes its own branch and opens a pull request for review.
+          tap_repo="coval-ai/homebrew-tap"
+          branch="release/coval-${VERSION}"
+          title="chore: update coval to ${VERSION#v}"
+          body_file="${RUNNER_TEMP}/homebrew-tap-pr-body.md"
           tap_dir="${RUNNER_TEMP}/homebrew-tap"
           auth_header="Authorization: Basic $(printf 'x-access-token:%s' "$HOMEBREW_TAP_TOKEN" | base64 | tr -d '\n')"
           git_auth() {
@@ -219,7 +254,7 @@ jobs:
               git "$@"
           }
 
-          git_auth clone "https://github.com/coval-ai/homebrew-tap.git" "$tap_dir"
+          git_auth clone --branch main "https://github.com/${tap_repo}.git" "$tap_dir"
           mkdir -p "$tap_dir/Formula"
           python scripts/render_homebrew_formula.py \
             --version "${VERSION#v}" \
@@ -227,31 +262,60 @@ jobs:
             --macos-x64 "$SHA_MACOS_X64" \
             --linux-arm64 "$SHA_LINUX_ARM64" \
             --linux-x64 "$SHA_LINUX_X64" \
-            --output "$tap_dir/Formula/coval.rb"
+            --output "$tap_dir/Formula/coval.rb" \
+            --pull-request-body "$body_file" \
+            --run-url "$RUN_URL"
 
           if [ -z "$(git -C "$tap_dir" status --porcelain -- Formula/coval.rb)" ]; then
             echo "Homebrew formula already matches ${VERSION}; nothing to push."
             exit 0
           fi
 
-          git -C "$tap_dir" config user.name "github-actions[bot]"
-          git -C "$tap_dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C "$tap_dir" add Formula/coval.rb
-          git -C "$tap_dir" commit -m "chore: update coval to ${VERSION#v}"
-          for attempt in 1 2 3; do
-            if git_auth -C "$tap_dir" push origin HEAD:main; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              break
-            fi
-            echo "Push attempt ${attempt} failed; rebasing on origin/main."
-            git_auth -C "$tap_dir" fetch origin main
-            git -C "$tap_dir" rebase origin/main
-            sleep $((attempt * 5))
-          done
-          echo "::error::Could not push the Homebrew formula update after 3 attempts."
-          exit 1
+          # A rerun reuses the release branch when it already carries this
+          # formula. Rebuilt release assets change the checksums, so the branch
+          # is then replaced with a fresh commit on main.
+          remote_sha="$(git_auth -C "$tap_dir" ls-remote origin "refs/heads/${branch}" | cut -f1)"
+          if [ -n "$remote_sha" ] \
+            && git_auth -C "$tap_dir" fetch --quiet origin "refs/heads/${branch}" \
+            && git -C "$tap_dir" diff --quiet FETCH_HEAD -- Formula/coval.rb; then
+            echo "${branch} already carries the ${VERSION} formula."
+          else
+            git -C "$tap_dir" switch --create "$branch"
+            git -C "$tap_dir" config user.name "github-actions[bot]"
+            git -C "$tap_dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C "$tap_dir" add Formula/coval.rb
+            git -C "$tap_dir" commit -m "$title"
+            git_auth -C "$tap_dir" push \
+              --force-with-lease="refs/heads/${branch}:${remote_sha}" \
+              origin "HEAD:refs/heads/${branch}"
+          fi
+
+          export GH_TOKEN="$HOMEBREW_TAP_TOKEN"
+          pr_number="$(
+            gh api "repos/${tap_repo}/pulls?head=coval-ai:${branch}&base=main&state=open" \
+              --jq '.[0].number // empty'
+          )"
+          if [ -n "$pr_number" ]; then
+            pr_url="$(
+              gh api --method PATCH "repos/${tap_repo}/pulls/${pr_number}" \
+                -f title="$title" \
+                -F body=@"$body_file" \
+                --jq '.html_url'
+            )"
+            echo "Updated ${pr_url}."
+          else
+            pr_url="$(
+              gh api --method POST "repos/${tap_repo}/pulls" \
+                -f title="$title" \
+                -f head="$branch" \
+                -f base=main \
+                -F body=@"$body_file" \
+                --jq '.html_url'
+            )"
+            echo "Opened ${pr_url}."
+          fi
+          echo "pr_url=${pr_url}" >> "$GITHUB_OUTPUT"
+          echo "Homebrew picks up ${VERSION} once ${pr_url} merges." >> "$GITHUB_STEP_SUMMARY"
 
   report-failure:
     needs: [validate, build, release, update-homebrew]
@@ -299,9 +363,16 @@ jobs:
     steps:
       - name: Close a recovered release failure issue
         uses: actions/github-script@v7
+        env:
+          TAP_PR_URL: ${{ needs.update-homebrew.outputs.tap_pr_url }}
         with:
           script: |
             const title = 'CLI release workflow is failing';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const prUrl = process.env.TAP_PR_URL;
+            const body = prUrl
+              ? `Recovered in ${runUrl}. Homebrew picks up \`${process.env.RELEASE_TAG}\` once ${prUrl} merges.`
+              : `Recovered in ${runUrl}.`;
             const issues = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -314,7 +385,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: existing.number,
-                body: `Recovered in ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}.`,
+                body,
               });
               await github.rest.issues.update({
                 owner: context.repo.owner,
