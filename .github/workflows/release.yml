@@ -195,9 +195,10 @@ jobs:
       tap_pr_url: ${{ steps.tap.outputs.pr_url }}
 
     steps:
+      # This job holds HOMEBREW_TAP_TOKEN, so it runs the formula renderer from
+      # the workflow's own ref (main, or the pushed tag), never RELEASE_REF.
       - uses: actions/checkout@v6
         with:
-          ref: ${{ env.RELEASE_REF }}
           persist-credentials: false
 
       - uses: actions/setup-python@v6
