@@ -29,20 +29,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  validate:
+  # Holds HOMEBREW_TAP_TOKEN, so it never checks out repository code.
+  verify-homebrew-token:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    permissions: {}
     steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.RELEASE_REF }}
-          persist-credentials: false
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
       - name: Verify Homebrew publishing credential
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
@@ -86,11 +77,25 @@ jobs:
             exit 1
           fi
 
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_REF }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
       - name: Match Cargo manifests and release tag
         run: python scripts/release_version.py --expected-tag "$RELEASE_TAG"
 
   build:
-    needs: validate
+    needs: [verify-homebrew-token, validate]
     permissions:
       contents: read
     strategy:
@@ -319,7 +324,7 @@ jobs:
           echo "Homebrew picks up ${VERSION} once ${pr_url} merges." >> "$GITHUB_STEP_SUMMARY"
 
   report-failure:
-    needs: [validate, build, release, update-homebrew]
+    needs: [verify-homebrew-token, validate, build, release, update-homebrew]
     if: ${{ always() && contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     permissions:
@@ -356,7 +361,7 @@ jobs:
             }
 
   close-recovered-failure:
-    needs: [validate, build, release, update-homebrew]
+    needs: [verify-homebrew-token, validate, build, release, update-homebrew]
     if: ${{ always() && needs.update-homebrew.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
