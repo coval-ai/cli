@@ -82,9 +82,10 @@ jobs:
     permissions:
       contents: read
     steps:
+      # Runs the workflow's own version check against the release commit's
+      # manifests, fetched as data, so no code from RELEASE_REF executes here.
       - uses: actions/checkout@v6
         with:
-          ref: ${{ env.RELEASE_REF }}
           persist-credentials: false
 
       - uses: actions/setup-python@v6
@@ -92,7 +93,18 @@ jobs:
           python-version: "3.12"
 
       - name: Match Cargo manifests and release tag
-        run: python scripts/release_version.py --expected-tag "$RELEASE_TAG"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          manifests="${RUNNER_TEMP}/release-manifests"
+          mkdir -p "$manifests"
+          for file in Cargo.toml Cargo.lock; do
+            gh api -H 'Accept: application/vnd.github.raw+json' \
+              "repos/${GITHUB_REPOSITORY}/contents/${file}?ref=${RELEASE_REF}" \
+              > "${manifests}/${file}"
+          done
+          python scripts/release_version.py --root "$manifests" --expected-tag "$RELEASE_TAG"
 
   build:
     needs: [verify-homebrew-token, validate]
