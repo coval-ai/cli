@@ -3,6 +3,9 @@ name: Release on version bump
 # Wait for the exact main-branch CI run to pass, then release an untagged Cargo
 # version. The release workflow is called directly because a tag pushed with
 # GITHUB_TOKEN does not trigger another workflow.
+#
+# The commit's version is read with a read-only token. The job that can write
+# tags never checks out or runs repository code.
 
 on:
   workflow_run:
@@ -11,8 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  issues: write
+  contents: read
 
 concurrency:
   group: release-on-version-bump
@@ -28,9 +30,11 @@ jobs:
         github.event.workflow_run.head_branch == 'main'
       )
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
-      release: ${{ steps.tag.outputs.release }}
-      release_ref: ${{ steps.tag.outputs.release_ref }}
+      release_candidate: ${{ steps.version.outputs.release_candidate }}
+      sha: ${{ steps.ref.outputs.sha }}
       tag: ${{ steps.version.outputs.tag }}
     steps:
       - name: Resolve the CI-tested commit
@@ -52,7 +56,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ steps.ref.outputs.sha }}
-          fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/setup-python@v6
         with:
@@ -69,12 +73,22 @@ jobs:
               --github-output "$GITHUB_OUTPUT"
           fi
 
+  tag:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release: ${{ steps.tag.outputs.release }}
+      release_ref: ${{ steps.tag.outputs.release_ref }}
+    steps:
       - name: Tag an unreleased version
         id: tag
         env:
-          RELEASE_CANDIDATE: ${{ steps.version.outputs.release_candidate }}
-          RELEASE_SHA: ${{ steps.ref.outputs.sha }}
-          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_CANDIDATE: ${{ needs.prepare.outputs.release_candidate }}
+          RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           set -euo pipefail
           if [ "$RELEASE_CANDIDATE" != "true" ]; then
@@ -83,10 +97,13 @@ jobs:
             exit 0
           fi
 
-          git fetch --tags --force
-
-          if git rev-parse -q --verify "refs/tags/$RELEASE_TAG" >/dev/null; then
-            existing_sha="$(git rev-list -n 1 "$RELEASE_TAG")"
+          # matching-refs is a prefix search, so keep only the exact tag.
+          tag_refs="$(
+            gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/tags/${RELEASE_TAG}" \
+              --jq "map(select(.ref == \"refs/tags/${RELEASE_TAG}\")) | length"
+          )"
+          if [ "$tag_refs" != "0" ]; then
+            existing_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/refs/tags/${RELEASE_TAG}" --jq '.sha')"
             if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
               echo "Manual recovery will rerun the existing ${RELEASE_TAG} release."
               echo "release=true" >> "$GITHUB_OUTPUT"
@@ -99,18 +116,30 @@ jobs:
             exit 0
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$RELEASE_TAG" "$RELEASE_SHA" -m "$RELEASE_TAG"
-          git push origin "$RELEASE_TAG"
+          tag_object="$(
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/tags" \
+              -f tag="$RELEASE_TAG" \
+              -f message="$RELEASE_TAG" \
+              -f object="$RELEASE_SHA" \
+              -f type=commit \
+              --jq '.sha'
+          )"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f ref="refs/tags/${RELEASE_TAG}" \
+            -f sha="$tag_object" \
+            --silent
+          echo "Tagged ${RELEASE_SHA} as ${RELEASE_TAG}."
           echo "release=true" >> "$GITHUB_OUTPUT"
           echo "release_ref=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
 
   release:
-    needs: prepare
-    if: needs.prepare.outputs.release == 'true'
+    needs: [prepare, tag]
+    if: needs.tag.outputs.release == 'true'
+    permissions:
+      contents: write
+      issues: write
     uses: ./.github/workflows/release.yml
     with:
-      release_ref: ${{ needs.prepare.outputs.release_ref }}
+      release_ref: ${{ needs.tag.outputs.release_ref }}
       tag_name: ${{ needs.prepare.outputs.tag }}
     secrets: inherit
