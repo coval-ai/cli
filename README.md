@@ -479,8 +479,11 @@ Publishing a new version:
 3. Merge only after current-head CI and review are green. The successful CI run
    for that exact `main` commit triggers `Release on version bump`.
 4. Verify the `v*` tag, all five binary artifacts, `SHA256SUMS`, and the GitHub
-   release. Then verify that `coval-ai/homebrew-tap` contains the same version
-   and that `brew update && brew upgrade coval-ai/tap/coval` installs it.
+   release. The release opens a `release/coval-vX.Y.Z` pull request on
+   `coval-ai/homebrew-tap`, because the tap accepts changes to `main` only
+   through reviewed pull requests. Get it approved and merged, then verify that
+   the tap contains the same version and that
+   `brew update && brew upgrade coval-ai/tap/coval` installs it.
 
 If the automatic release needs a retry, dispatch `Release on version bump` from
 the `main` branch. It reuses an existing matching tag safely. Do not hand-create
@@ -490,7 +493,8 @@ all release credentials. A successful GitHub release is not complete publishing
 proof until the Homebrew formula reports the same version.
 
 To recover Homebrew publishing, replace the token interactively, dispatch the
-retry from `main`, and verify both destinations:
+retry from `main`, merge the tap pull request it opens or updates, and verify
+both destinations:
 
 ```bash
 gh secret set HOMEBREW_TAP_TOKEN --repo coval-ai/cli
@@ -506,18 +510,20 @@ run_id="$(
 )"
 gh run watch "$run_id" --repo coval-ai/cli --exit-status
 gh release view "$expected_tag" --repo coval-ai/cli
+gh pr view "release/coval-$expected_tag" --repo coval-ai/homebrew-tap
+# After that pull request merges:
 gh api -H 'Accept: application/vnd.github.raw+json' \
   repos/coval-ai/homebrew-tap/contents/Formula/coval.rb | \
   grep -F "version \"$expected_version\""
 ```
 
-The release validation checks that `HOMEBREW_TAP_TOKEN` can push to
-`coval-ai/homebrew-tap` before building artifacts. As with `REGEN_PR_TOKEN`, a
+The release validation checks that `HOMEBREW_TAP_TOKEN` can push to and open
+pull requests on `coval-ai/homebrew-tap` before building artifacts. As with `REGEN_PR_TOKEN`, a
 secret record alone does not prove that the credential is present or authorized.
 
 The release workflow validates tag/version consistency, builds all five target
-binaries, creates or updates the GitHub release, and updates
-`coval-ai/homebrew-tap`. A manual `Release on version bump` dispatch safely
+binaries, creates or updates the GitHub release, and opens or updates the
+`coval-ai/homebrew-tap` pull request. A manual `Release on version bump` dispatch safely
 retries the current version without creating another tag.
 
 Repository prerequisite:
@@ -526,8 +532,11 @@ Repository prerequisite:
   read/write access to `coval-ai/cli`. The organization does not allow
   `GITHUB_TOKEN` to create pull requests.
 - `HOMEBREW_TAP_TOKEN`: a fine-grained token or GitHub App token with Contents
-  read/write access to `coval-ai/homebrew-tap`. The Homebrew update is
-  idempotent, so retrying an already-current formula succeeds without a commit.
+  and Pull requests read/write access to `coval-ai/homebrew-tap`. The Homebrew
+  update is idempotent: a retry reuses the release branch and its open pull
+  request, and an already-current formula succeeds without a commit. The tap
+  requires approval from someone other than the last pusher, so the token's
+  owner cannot approve the release pull request.
 
 ## Configuration
 

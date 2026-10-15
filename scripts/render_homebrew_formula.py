@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the Homebrew formula for one validated Coval CLI release."""
+"""Render the Homebrew formula and tap PR body for one validated CLI release."""
 
 from __future__ import annotations
 
@@ -13,13 +13,20 @@ else:
     from release_version import VERSION_RE
 
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+RELEASES_URL = "https://github.com/coval-ai/cli/releases"
+PLATFORM_ASSETS = {
+    "macos_arm64": "coval-macos-arm64.tar.gz",
+    "macos_x64": "coval-macos-x64.tar.gz",
+    "linux_arm64": "coval-linux-arm64.tar.gz",
+    "linux_x64": "coval-linux-x64.tar.gz",
+}
 
 
-def render_formula(version: str, checksums: dict[str, str]) -> str:
+def validate_release(version: str, checksums: dict[str, str]) -> None:
     if VERSION_RE.fullmatch(version) is None:
         raise ValueError(f"invalid release version: {version!r}")
 
-    expected_platforms = {"macos_arm64", "macos_x64", "linux_arm64", "linux_x64"}
+    expected_platforms = set(PLATFORM_ASSETS)
     if set(checksums) != expected_platforms:
         missing = sorted(expected_platforms - set(checksums))
         unexpected = sorted(set(checksums) - expected_platforms)
@@ -29,6 +36,10 @@ def render_formula(version: str, checksums: dict[str, str]) -> str:
     for platform, checksum in checksums.items():
         if SHA256_RE.fullmatch(checksum) is None:
             raise ValueError(f"invalid SHA-256 for {platform}: {checksum!r}")
+
+
+def render_formula(version: str, checksums: dict[str, str]) -> str:
+    validate_release(version, checksums)
 
     return f'''class Coval < Formula
   desc "CLI for Coval AI agent evaluation platform"
@@ -67,6 +78,29 @@ end
 '''
 
 
+def render_pull_request_body(
+    version: str, checksums: dict[str, str], run_url: str
+) -> str:
+    validate_release(version, checksums)
+
+    download_url = f"{RELEASES_URL}/download/v{version}"
+    rows = "\n".join(
+        f"| [`{asset}`]({download_url}/{asset}) | `{checksums[platform]}` |"
+        for platform, asset in PLATFORM_ASSETS.items()
+    )
+    return f"""Updates `Formula/coval.rb` to Coval CLI {version}.
+
+Release: {RELEASES_URL}/tag/v{version}
+Checksums: {download_url}/SHA256SUMS
+
+| Asset | SHA-256 |
+| --- | --- |
+{rows}
+
+Opened by the CLI release workflow: {run_url}
+"""
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True)
@@ -75,18 +109,23 @@ def main() -> int:
     parser.add_argument("--linux-arm64", required=True)
     parser.add_argument("--linux-x64", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--pull-request-body", type=Path)
+    parser.add_argument("--run-url")
     args = parser.parse_args()
+    if args.pull_request_body and not args.run_url:
+        parser.error("--pull-request-body requires --run-url")
 
-    formula = render_formula(
-        args.version,
-        {
-            "macos_arm64": args.macos_arm64,
-            "macos_x64": args.macos_x64,
-            "linux_arm64": args.linux_arm64,
-            "linux_x64": args.linux_x64,
-        },
-    )
-    args.output.write_text(formula)
+    checksums = {
+        "macos_arm64": args.macos_arm64,
+        "macos_x64": args.macos_x64,
+        "linux_arm64": args.linux_arm64,
+        "linux_x64": args.linux_x64,
+    }
+    args.output.write_text(render_formula(args.version, checksums))
+    if args.pull_request_body:
+        args.pull_request_body.write_text(
+            render_pull_request_body(args.version, checksums, args.run_url)
+        )
     return 0
 
 
