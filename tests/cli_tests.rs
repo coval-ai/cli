@@ -4779,6 +4779,45 @@ async fn test_review_projects_forward_reviewer_user_ids_and_skipping() {
 }
 
 #[tokio::test]
+async fn test_review_projects_preserve_skippable_metric_selections() {
+    for (method_name, command, path_value, required) in [
+        ("POST", "create", "/v1/review-projects", true),
+        ("PATCH", "update", "/v1/review-projects/proj456", false),
+    ] {
+        for selection in [json!(["met1", "met2"]), json!([]), Value::Null] {
+            let mock_server = MockServer::start().await;
+            let capture = BodyCapture::default();
+            Mock::given(method(method_name))
+                .and(path(path_value))
+                .and(capture.clone())
+                .respond_with(ResponseTemplate::new(200).set_body_json(review_project_response()))
+                .expect(1)
+                .mount(&mock_server)
+                .await;
+            let mut input = json!({"skippable_metric_ids": selection});
+            if required {
+                input["display_name"] = json!("New Project");
+                input["assignees"] = json!(["reviewer@example.com"]);
+                input["linked_simulation_ids"] = json!(["sim1"]);
+                input["linked_metric_ids"] = json!(["met1", "met2"]);
+            }
+            let mut command_line = coval_with_api(&mock_server);
+            command_line.arg("review-projects").arg(command);
+            if !required {
+                command_line.arg("proj456");
+            }
+            command_line
+                .arg("--input-json")
+                .arg(input.to_string())
+                .assert()
+                .success();
+            let body = capture.take();
+            assert_eq!(body.get("skippable_metric_ids"), Some(&selection));
+        }
+    }
+}
+
+#[tokio::test]
 async fn test_review_projects_create_flags_select_reviewers_by_user_id() {
     let mock_server = MockServer::start().await;
     let capture = BodyCapture::default();
@@ -4801,8 +4840,10 @@ async fn test_review_projects_create_flags_select_reviewers_by_user_id() {
             "--simulation-ids",
             "sim1",
             "--metric-ids",
-            "met1",
+            "met1,met2",
             "--allow-metric-skipping",
+            "--skippable-metric-ids",
+            "met1,met2",
         ])
         .assert()
         .success();
@@ -4813,6 +4854,7 @@ async fn test_review_projects_create_flags_select_reviewers_by_user_id() {
         json!([REVIEWER_USER_ID, OTHER_REVIEWER_USER_ID])
     );
     assert_eq!(body["allow_metric_skipping"], true);
+    assert_eq!(body["skippable_metric_ids"], json!(["met1", "met2"]));
     assert!(body.get("assignees").is_none());
 }
 
@@ -4831,6 +4873,8 @@ async fn test_review_projects_update_flags_forward_reviewer_user_ids() {
             OTHER_REVIEWER_USER_ID,
             "--allow-metric-skipping",
             "false",
+            "--skippable-metric-ids",
+            "met1,met2",
         ],
     )
     .await;
@@ -4842,6 +4886,7 @@ async fn test_review_projects_update_flags_forward_reviewer_user_ids() {
     );
     // A deliberate false is a real change, unlike the omitted default.
     assert_eq!(body["allow_metric_skipping"], false);
+    assert_eq!(body["skippable_metric_ids"], json!(["met1", "met2"]));
 }
 
 #[tokio::test]
@@ -4860,6 +4905,7 @@ async fn test_review_projects_update_omits_unset_reviewer_and_label_fields() {
         "assignee_user_ids",
         "opted_out_assignee_user_ids",
         "allow_metric_skipping",
+        "skippable_metric_ids",
         "review_label_enabled",
     ] {
         assert!(body.get(key).is_none(), "unset {key} must be omitted");
