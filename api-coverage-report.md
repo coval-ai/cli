@@ -12,12 +12,12 @@ only when coverage actually changes.
 
 | Metric | Value |
 | --- | ---: |
-| Reconciliation status | PASS |
+| Reconciliation status | ACTION REQUIRED |
 | Published operations | 186 |
 | First-class CLI operations | 119 |
 | Reviewed gaps | 67 |
 | Client operations | 143 |
-| Published request fields on covered operations | 449 |
+| Published request fields on covered operations | 451 |
 | Request fields modeled by the CLI | 449 |
 | Reviewed request-field gaps | 0 |
 
@@ -49,7 +49,7 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## Coverage snapshot mismatches
 
-- None.
+- `published_request_fields: recorded 449, current 451`
 
 ## Client-only operations
 
@@ -127,7 +127,8 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## New published request fields the CLI drops
 
-- None.
+- `PATCH /review-projects/{id} skippable_metric_ids`
+- `POST /review-projects skippable_metric_ids`
 
 ## Reviewed request-field gaps no longer present
 
@@ -143,4 +144,5 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## All current request-field gaps
 
-- None.
+- `PATCH /review-projects/{id} skippable_metric_ids`
+- `POST /review-projects skippable_metric_ids`
