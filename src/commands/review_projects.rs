@@ -89,6 +89,8 @@ pub struct CreateArgs {
     /// Let reviewers skip linked metrics
     #[arg(long, num_args = 0..=1, default_missing_value = "true")]
     allow_metric_skipping: Option<bool>,
+    #[arg(long, value_delimiter = ',')]
+    skippable_metric_ids: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -144,6 +146,8 @@ pub struct UpdateArgs {
     /// Let reviewers skip linked metrics
     #[arg(long, num_args = 0..=1, default_missing_value = "true")]
     allow_metric_skipping: Option<bool>,
+    #[arg(long, value_delimiter = ',')]
+    skippable_metric_ids: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -219,6 +223,11 @@ pub async fn execute(
                 "allow_metric_skipping",
                 args.allow_metric_skipping,
             )?;
+            input_json::insert(
+                &mut input,
+                "skippable_metric_ids",
+                args.skippable_metric_ids,
+            )?;
             let req: CreateReviewProjectRequest = input_json::finish(input)?;
             let project = client.review_projects().create(req).await?;
             emit_one_with_actions(
@@ -274,6 +283,11 @@ pub async fn execute(
                 &mut input,
                 "allow_metric_skipping",
                 args.allow_metric_skipping,
+            )?;
+            input_json::insert(
+                &mut input,
+                "skippable_metric_ids",
+                args.skippable_metric_ids,
             )?;
             let req: UpdateReviewProjectRequest = input_json::finish(input)?;
             let project = client
