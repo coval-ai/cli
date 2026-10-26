@@ -1147,6 +1147,39 @@ async fn test_python_metric_draft_source_file_and_missing_file() {
         .contains("failed to read --source-file"));
 }
 
+#[tokio::test]
+async fn test_python_metric_draft_ids_are_encoded_as_single_path_segments() {
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    Mock::given(method("GET"))
+        .and(path(
+            "/v1/python-metric-drafts/a%2F..%2Fb/previews/c%2F..%2Fd",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"previews": []})))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let response = stdout_json(
+        coval_with_api(&mock_server)
+            .args([
+                "--agent",
+                "python-metric-drafts",
+                "previews",
+                "a/../b",
+                "get",
+                "c/../d",
+                "--format",
+                "json",
+            ])
+            .env("HOME", temp_dir.path())
+            .env("XDG_CONFIG_HOME", temp_dir.path())
+            .assert()
+            .success(),
+    );
+    assert_eq!(response["ok"], true);
+}
+
 #[test]
 fn test_missing_api_key() {
     let temp_dir = tempfile::tempdir().unwrap();
