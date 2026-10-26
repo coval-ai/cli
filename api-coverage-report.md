@@ -13,12 +13,12 @@ only when coverage actually changes.
 | Metric | Value |
 | --- | ---: |
 | Reconciliation status | PASS |
-| Published operations | 186 |
-| First-class CLI operations | 119 |
+| Published operations | 192 |
+| First-class CLI operations | 125 |
 | Reviewed gaps | 67 |
-| Client operations | 143 |
-| Published request fields on covered operations | 451 |
-| Request fields modeled by the CLI | 451 |
+| Client operations | 149 |
+| Published request fields on covered operations | 464 |
+| Request fields modeled by the CLI | 464 |
 | Reviewed request-field gaps | 0 |
 
 Catalog: https://api.coval.dev/v1/openapi

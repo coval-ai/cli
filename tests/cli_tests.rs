@@ -5,7 +5,7 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
 use serde_json::{json, Value};
-use wiremock::matchers::{body_partial_json, header, method, path, query_param};
+use wiremock::matchers::{body_json, body_partial_json, header, method, path, query_param};
 use wiremock::{Match, Mock, MockServer, Request, ResponseTemplate};
 
 fn coval() -> Command {
@@ -110,6 +110,7 @@ const AGENT_RESOURCES: &[&str] = &[
     "test-sets",
     "test-cases",
     "personas",
+    "python-metric-drafts",
     "metrics",
     "mutations",
     "api-keys",
@@ -136,6 +137,7 @@ const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
     &["test-cases", "update", "--help"],
     &["personas", "create", "--help"],
     &["personas", "update", "--help"],
+    &["python-metric-drafts", "create", "--help"],
     &["personas", "background-sounds", "update", "--help"],
     &["metrics", "create", "--help"],
     &["metrics", "update", "--help"],
@@ -844,6 +846,338 @@ async fn test_agent_doctor_with_connectivity() {
     assert_eq!(value["data"]["api"]["connectivity"]["checked"], true);
     assert_eq!(value["data"]["api"]["connectivity"]["ok"], true);
     assert_eq!(value["warnings"].as_array().unwrap().len(), 0);
+}
+
+#[tokio::test]
+async fn test_python_metric_draft_commands_send_specified_requests() {
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let draft_response = json!({
+        "draft": {
+            "draft_id": "draft_123",
+            "version_id": "version_123",
+            "display_name": "Metric",
+            "description": "Description",
+            "source": "return True",
+            "output_type": "boolean",
+            "unit": null,
+            "requirements": {"audio": false, "traces": false},
+            "fingerprint": "a".repeat(64),
+            "published": false
+        }
+    });
+    let preview_response = json!({
+        "previews": [{
+            "preview_id": "preview_123",
+            "simulation_output_id": "simulation_123",
+            "status": "SUCCEEDED",
+            "value": true,
+            "explanation": null,
+            "error": null
+        }]
+    });
+    let preview_pending_response = json!({
+        "previews": [{
+            "preview_id": "preview_123",
+            "simulation_output_id": "simulation_123",
+            "status": "PENDING",
+            "value": null,
+            "explanation": null,
+            "error": null
+        }]
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/v1/python-metric-drafts"))
+        .and(header("X-API-Key", "test_key"))
+        .and(body_json(json!({
+            "display_name": "Metric",
+            "target_metric_id": "metric_123",
+            "target_version_id": "version_old",
+            "description": "Description",
+            "source": "return True",
+            "output_type": "boolean",
+            "unit": "score",
+            "requirements": {
+                "audio": true,
+                "traces": false,
+                "frame_tables": ["turns"]
+            }
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(draft_response.clone()))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1/python-metric-drafts/draft_123"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(draft_response))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1/python-metric-drafts/draft_123/previews"))
+        .and(body_json(
+            json!({"simulation_output_ids": ["simulation_123"]}),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(preview_pending_response))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/v1/python-metric-drafts/draft_123/previews/preview_123",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(preview_response.clone()))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(
+            "/v1/python-metric-drafts/draft_123/previews/preview_123/cancel",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(preview_response))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1/python-metric-drafts/draft_123/publish"))
+        .and(body_json(json!({
+            "preview_ids": ["preview_123"],
+            "fingerprint": "a".repeat(64)
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "metric_id": "metric_123",
+            "version_id": "version_new"
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let mut create_command = coval_with_api(&mock_server);
+    let create = stdout_json(
+        create_command
+            .args(["--agent", "python-metric-drafts", "create"])
+            .args([
+                "--display-name",
+                "Metric",
+                "--target-metric-id",
+                "metric_123",
+                "--target-version-id",
+                "version_old",
+                "--description",
+                "Description",
+                "--source",
+                "return True",
+                "--output-type",
+                "boolean",
+                "--unit",
+                "score",
+                "--require-audio",
+                "true",
+                "--require-traces",
+                "false",
+                "--frame-table",
+                "turns",
+            ])
+            .arg("--format")
+            .arg("json")
+            .env("HOME", temp_dir.path())
+            .env("XDG_CONFIG_HOME", temp_dir.path())
+            .assert()
+            .success(),
+    );
+    assert_eq!(create["ok"], true);
+    assert_eq!(
+        create["next_actions"][0]["id"],
+        "python-metric-drafts.previews.create"
+    );
+
+    let fingerprint = "a".repeat(64);
+    for args in [
+        vec!["python-metric-drafts", "get", "draft_123"],
+        vec![
+            "python-metric-drafts",
+            "previews",
+            "draft_123",
+            "create",
+            "--simulation-output-ids",
+            "simulation_123",
+        ],
+        vec![
+            "python-metric-drafts",
+            "previews",
+            "draft_123",
+            "get",
+            "preview_123",
+        ],
+        vec![
+            "python-metric-drafts",
+            "previews",
+            "draft_123",
+            "cancel",
+            "preview_123",
+        ],
+        vec![
+            "python-metric-drafts",
+            "publish",
+            "draft_123",
+            "--preview-ids",
+            "preview_123",
+            "--fingerprint",
+            fingerprint.as_str(),
+        ],
+    ] {
+        let command_operation = args.get(3).copied();
+        let mut command = coval_with_api(&mock_server);
+        let value = stdout_json(
+            command
+                .arg("--agent")
+                .args(&args)
+                .arg("--format")
+                .arg("json")
+                .env("HOME", temp_dir.path())
+                .env("XDG_CONFIG_HOME", temp_dir.path())
+                .assert()
+                .success(),
+        );
+        assert_eq!(value["ok"], true);
+        if command_operation == Some("create") {
+            assert_eq!(
+                value["next_actions"][0]["id"],
+                "python-metric-drafts.previews.get"
+            );
+        } else if command_operation == Some("get") {
+            assert_eq!(
+                value["next_actions"][0]["id"],
+                "python-metric-drafts.publish"
+            );
+        }
+    }
+    let invalid_preview = stdout_json(
+        coval_with_api(&mock_server)
+            .args([
+                "--agent",
+                "python-metric-drafts",
+                "previews",
+                "draft_123",
+                "create",
+                "--simulation-output-ids",
+                "simulation_123",
+                "--simulation-output-ids",
+                "simulation_456",
+                "--format",
+                "json",
+            ])
+            .env("HOME", temp_dir.path())
+            .env("XDG_CONFIG_HOME", temp_dir.path())
+            .assert()
+            .failure(),
+    );
+    assert_eq!(invalid_preview["ok"], false);
+}
+
+#[tokio::test]
+async fn test_python_metric_draft_source_file_and_missing_file() {
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let source_path = temp_dir.path().join("metric.py");
+    std::fs::write(&source_path, "def evaluate(conversation):\n    return 1\n").unwrap();
+    Mock::given(method("POST"))
+        .and(path("/v1/python-metric-drafts"))
+        .and(body_json(json!({
+            "display_name": "Metric",
+            "source": "def evaluate(conversation):\n    return 1\n",
+            "output_type": "number"
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "draft": {
+                "draft_id": "draft_123",
+                "version_id": "version_123",
+                "display_name": "Metric",
+                "description": "",
+                "source": "def evaluate(conversation):\n    return 1\n",
+                "output_type": "number",
+                "unit": null,
+                "requirements": {},
+                "fingerprint": "a".repeat(64),
+                "published": false
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let mut source_command = coval_with_api(&mock_server);
+    assert_eq!(
+        stdout_json(
+            source_command
+                .arg("--agent")
+                .args([
+                    "python-metric-drafts",
+                    "create",
+                    "--display-name",
+                    "Metric",
+                    "--source-file",
+                ])
+                .arg(&source_path)
+                .args(["--output-type", "number", "--format", "json"])
+                .env("HOME", temp_dir.path())
+                .env("XDG_CONFIG_HOME", temp_dir.path())
+                .assert()
+                .success(),
+        )["ok"],
+        true
+    );
+    let mut missing_command = coval_with_api(&mock_server);
+    let missing = stdout_json(
+        missing_command
+            .arg("--agent")
+            .args([
+                "python-metric-drafts",
+                "create",
+                "--display-name",
+                "Metric",
+                "--source-file",
+            ])
+            .arg(temp_dir.path().join("missing.py"))
+            .args(["--output-type", "number", "--format", "json"])
+            .env("HOME", temp_dir.path())
+            .env("XDG_CONFIG_HOME", temp_dir.path())
+            .assert()
+            .failure(),
+    );
+    assert_eq!(missing["ok"], false);
+    assert!(missing["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("failed to read --source-file"));
+}
+
+#[tokio::test]
+async fn test_python_metric_draft_ids_are_encoded_as_single_path_segments() {
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    Mock::given(method("GET"))
+        .and(path(
+            "/v1/python-metric-drafts/a%2F..%2Fb/previews/c%2F..%2Fd",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"previews": []})))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let response = stdout_json(
+        coval_with_api(&mock_server)
+            .args([
+                "--agent",
+                "python-metric-drafts",
+                "previews",
+                "a/../b",
+                "get",
+                "c/../d",
+                "--format",
+                "json",
+            ])
+            .env("HOME", temp_dir.path())
+            .env("XDG_CONFIG_HOME", temp_dir.path())
+            .assert()
+            .success(),
+    );
+    assert_eq!(response["ok"], true);
 }
 
 #[test]
@@ -2098,6 +2432,103 @@ async fn test_personas_update_forwards_the_interruption_rate_flag() {
         .success();
 
     assert_eq!(capture.take()["interruption_rate"], "HIGH");
+}
+
+#[tokio::test]
+async fn test_personas_interruption_instructions_flag_preserves_true_false_and_omitted() {
+    let mock_server = MockServer::start().await;
+    let persona = json!({
+        "persona": {
+            "resource_name": "personas/persona_123",
+            "id": "persona_123",
+            "name": "Test persona",
+            "create_time": "2025-01-15T10:30:00Z"
+        }
+    });
+    Mock::given(method("POST"))
+        .and(path("/v1/personas"))
+        .and(body_partial_json(json!({
+            "name": "Test persona",
+            "voice_name": "aria",
+            "language_code": "en-US",
+            "interruption_instructions_enabled": true
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(persona.clone()))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("PATCH"))
+        .and(path("/v1/personas/persona_123"))
+        .and(body_json(
+            json!({"interruption_instructions_enabled": false}),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(persona.clone()))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("PATCH"))
+        .and(path("/v1/personas/persona_123"))
+        .and(body_json(json!({})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(persona))
+        .mount(&mock_server)
+        .await;
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    assert_eq!(
+        stdout_json(
+            coval_with_api(&mock_server)
+                .args([
+                    "--agent",
+                    "personas",
+                    "create",
+                    "--name",
+                    "Test persona",
+                    "--voice",
+                    "aria",
+                    "--language",
+                    "en-US",
+                    "--interruption-instructions-enabled",
+                    "true",
+                    "--format",
+                    "json",
+                ])
+                .env("HOME", temp_dir.path())
+                .env("XDG_CONFIG_HOME", temp_dir.path())
+                .assert()
+                .success(),
+        )["ok"],
+        true
+    );
+    for args in [
+        vec![
+            "--agent",
+            "personas",
+            "update",
+            "persona_123",
+            "--interruption-instructions-enabled",
+            "false",
+            "--format",
+            "json",
+        ],
+        vec![
+            "--agent",
+            "personas",
+            "update",
+            "persona_123",
+            "--format",
+            "json",
+        ],
+    ] {
+        assert_eq!(
+            stdout_json(
+                coval_with_api(&mock_server)
+                    .args(args)
+                    .env("HOME", temp_dir.path())
+                    .env("XDG_CONFIG_HOME", temp_dir.path())
+                    .assert()
+                    .success(),
+            )["ok"],
+            true
+        );
+    }
 }
 
 #[tokio::test]

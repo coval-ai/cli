@@ -115,6 +115,9 @@ pub struct CreateArgs {
     /// Timer-driven interruption of agent speech (NONE, LOW, MEDIUM, or HIGH)
     #[arg(long)]
     interruption_rate: Option<String>,
+    /// Enable or disable interruption instructions
+    #[arg(long)]
+    interruption_instructions_enabled: Option<bool>,
     /// Background sound volume multiplier (>= 0.0)
     #[arg(long)]
     background_sound_volume: Option<f64>,
@@ -167,6 +170,9 @@ pub struct UpdateArgs {
     /// Timer-driven interruption of agent speech (NONE, LOW, MEDIUM, or HIGH)
     #[arg(long)]
     interruption_rate: Option<String>,
+    /// Enable or disable interruption instructions
+    #[arg(long)]
+    interruption_instructions_enabled: Option<bool>,
     /// Background sound volume multiplier (>= 0.0)
     #[arg(long)]
     background_sound_volume: Option<f64>,
@@ -295,6 +301,11 @@ pub async fn execute(
             input_json::insert(&mut input, "interruption_rate", args.interruption_rate)?;
             input_json::insert(
                 &mut input,
+                "interruption_instructions_enabled",
+                args.interruption_instructions_enabled,
+            )?;
+            input_json::insert(
+                &mut input,
                 "background_sound_volume",
                 args.background_sound_volume,
             )?;
@@ -333,6 +344,11 @@ pub async fn execute(
             input_json::insert(&mut input, "wait_seconds", args.wait_seconds)?;
             input_json::insert(&mut input, "multi_language_stt", args.multi_language_stt)?;
             input_json::insert(&mut input, "interruption_rate", args.interruption_rate)?;
+            input_json::insert(
+                &mut input,
+                "interruption_instructions_enabled",
+                args.interruption_instructions_enabled,
+            )?;
             input_json::insert(
                 &mut input,
                 "background_sound_volume",

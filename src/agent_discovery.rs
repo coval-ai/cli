@@ -454,6 +454,47 @@ const RESOURCE_SPECS: &[ResourceSpec] = &[
         pitfalls: &["Metric type controls required creation fields."],
     },
     ResourceSpec {
+        name: "python-metric-drafts",
+        commands: &[
+            "context",
+            "create",
+            "get",
+            "publish",
+            "previews.create",
+            "previews.get",
+            "previews.cancel",
+        ],
+        description: "Python metric drafts are immutable candidate definitions that must be previewed successfully before publishing.",
+        id_name: "draft_id",
+        id_format: "Draft ID returned by the Python metric drafts API",
+        requires: &["simulated-conversations"],
+        optional: &[],
+        produces: &["Python metric"],
+        related: &["metrics", "simulated-conversations"],
+        workflows: &[
+            WorkflowSpec {
+                name: "Create an immutable Python metric draft",
+                argv: &["python-metric-drafts", "create"],
+            },
+            WorkflowSpec {
+                name: "Preview a Python metric draft",
+                argv: &[
+                    "python-metric-drafts",
+                    "previews",
+                    "<draft_id>",
+                    "create",
+                    "--simulation-output-ids",
+                    "<simulation_output_id>",
+                ],
+            },
+        ],
+        pitfalls: &[
+            "Source or input/output changes require a new draft and preview.",
+            "Preview execution is asynchronous; poll its preview ID until terminal.",
+            "Publish only with the exact draft fingerprint and successful preview IDs.",
+        ],
+    },
+    ResourceSpec {
         name: "mutations",
         commands: &["context", "list", "get", "create", "update", "delete"],
         description: "Mutations are agent configuration overrides used to compare variants in evaluations.",
