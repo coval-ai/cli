@@ -6,10 +6,10 @@
 [snapshot]
 catalog_url = "https://api.coval.dev/v1/openapi"
 reviewed_at = "2026-10-19"
-published_operations = 186
-cli_supported_operations = 119
-published_request_fields = 451
-cli_modeled_request_fields = 451
+published_operations = 192
+cli_supported_operations = 125
+published_request_fields = 453
+cli_modeled_request_fields = 453
 
 [[allowed_extra]]
 operation = "POST /test-cases/{test_case_id}/media:upload-url"

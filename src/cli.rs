@@ -95,6 +95,11 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::personas::PersonaCommands,
     },
+    #[command(name = "python-metric-drafts")]
+    PythonMetricDrafts {
+        #[command(subcommand)]
+        command: commands::python_metric_drafts::PythonMetricDraftCommands,
+    },
     Metrics {
         #[command(subcommand)]
         command: commands::metrics::MetricCommands,
@@ -172,6 +177,7 @@ impl Commands {
                 commands::personas::PersonaCommands::BackgroundSounds { .. } => "background-sounds",
                 _ => "personas",
             },
+            Self::PythonMetricDrafts { .. } => "python-metric-drafts",
             Self::Metrics { .. } => "metrics",
             Self::Models { .. } => "models",
             Self::Mutations { .. } => "mutations",
@@ -208,6 +214,7 @@ impl Commands {
             Self::TestSets { command } => command.operation(),
             Self::TestCases { command } => command.operation(),
             Self::Personas { command } => command.operation(),
+            Self::PythonMetricDrafts { command } => command.operation(),
             Self::Metrics { command } => command.operation(),
             Self::Models { command } => command.operation(),
             Self::Mutations { command } => command.operation(),
@@ -289,6 +296,9 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
         Commands::Personas {
             command: commands::personas::PersonaCommands::Context,
         } => commands::agent::resource_context("personas", ctx),
+        Commands::PythonMetricDrafts {
+            command: commands::python_metric_drafts::PythonMetricDraftCommands::Context,
+        } => commands::agent::resource_context("python-metric-drafts", ctx),
         Commands::Metrics {
             command: commands::metrics::MetricCommands::Context,
         } => commands::agent::resource_context("metrics", ctx),
@@ -359,6 +369,9 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
                 }
                 Commands::Personas { command } => {
                     commands::personas::execute(command, &client, ctx).await
+                }
+                Commands::PythonMetricDrafts { command } => {
+                    commands::python_metric_drafts::execute(command, &client, ctx).await
                 }
                 Commands::Metrics { command } => {
                     commands::metrics::execute(command, &client, ctx).await

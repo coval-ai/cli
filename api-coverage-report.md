@@ -12,25 +12,20 @@ only when coverage actually changes.
 
 | Metric | Value |
 | --- | ---: |
-| Reconciliation status | ACTION REQUIRED |
+| Reconciliation status | PASS |
 | Published operations | 192 |
-| First-class CLI operations | 119 |
+| First-class CLI operations | 125 |
 | Reviewed gaps | 67 |
-| Client operations | 143 |
+| Client operations | 149 |
 | Published request fields on covered operations | 453 |
-| Request fields modeled by the CLI | 451 |
+| Request fields modeled by the CLI | 453 |
 | Reviewed request-field gaps | 0 |
 
 Catalog: https://api.coval.dev/v1/openapi
 
 ## New published operations without CLI commands
 
-- `GET /python-metric-drafts/{draft_id}`
-- `GET /python-metric-drafts/{draft_id}/previews/{preview_id}`
-- `POST /python-metric-drafts`
-- `POST /python-metric-drafts/{draft_id}/previews`
-- `POST /python-metric-drafts/{draft_id}/previews/{preview_id}/cancel`
-- `POST /python-metric-drafts/{draft_id}/publish`
+- None.
 
 ## Reviewed gaps no longer present
 
@@ -54,8 +49,7 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## Coverage snapshot mismatches
 
-- `published_operations: recorded 186, current 192`
-- `published_request_fields: recorded 451, current 453`
+- None.
 
 ## Client-only operations
 
@@ -85,8 +79,6 @@ Catalog: https://api.coval.dev/v1/openapi
 - `GET /organization/users`
 - `GET /personas/tags`
 - `GET /personas/{persona_id}/versions`
-- `GET /python-metric-drafts/{draft_id}`
-- `GET /python-metric-drafts/{draft_id}/previews/{preview_id}`
 - `GET /review-annotations/metric-health-stats`
 - `GET /review-projects/{project_id}/insights`
 - `GET /review-projects/{project_id}/metric-agreement`
@@ -121,10 +113,6 @@ Catalog: https://api.coval.dev/v1/openapi
 - `POST /metrics/{metric_id}/versions/{version_id}/revert`
 - `POST /personas/{persona_id}/duplicate`
 - `POST /personas/{persona_id}/versions/{version_id}/revert`
-- `POST /python-metric-drafts`
-- `POST /python-metric-drafts/{draft_id}/previews`
-- `POST /python-metric-drafts/{draft_id}/previews/{preview_id}/cancel`
-- `POST /python-metric-drafts/{draft_id}/publish`
 - `POST /review-annotations:withMetricOutputs`
 - `POST /review-projects/disagreement-state`
 - `POST /review-projects/{project_id}/complete-conversation`
@@ -139,8 +127,7 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## New published request fields the CLI drops
 
-- `PATCH /personas/{id} interruption_instructions_enabled`
-- `POST /personas interruption_instructions_enabled`
+- None.
 
 ## Reviewed request-field gaps no longer present
 
@@ -156,5 +143,4 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## All current request-field gaps
 
-- `PATCH /personas/{id} interruption_instructions_enabled`
-- `POST /personas interruption_instructions_enabled`
+- None.
