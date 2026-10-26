@@ -17,8 +17,8 @@ only when coverage actually changes.
 | First-class CLI operations | 125 |
 | Reviewed gaps | 67 |
 | Client operations | 149 |
-| Published request fields on covered operations | 453 |
-| Request fields modeled by the CLI | 453 |
+| Published request fields on covered operations | 464 |
+| Request fields modeled by the CLI | 464 |
 | Reviewed request-field gaps | 0 |
 
 Catalog: https://api.coval.dev/v1/openapi

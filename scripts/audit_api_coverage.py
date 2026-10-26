@@ -261,9 +261,19 @@ def _request_body_types(client_method: str, block: str) -> set[str]:
     """Return the Rust types a client function serializes as its request body."""
 
     types: set[str] = set()
-    for match in re.finditer(
-        r"\.(?:post|patch|put)\(\s*url\s*,\s*&(?P<binding>[A-Za-z0-9_]+)\s*\)", block
-    ):
+    body_calls = re.findall(r"\.(?:post|patch|put)\(", block)
+    body_matches = list(
+        re.finditer(
+            r"\.(?:post|patch|put)\(\s*url\s*,\s*&(?P<binding>[A-Za-z0-9_]+)\s*\)",
+            block,
+        )
+    )
+    if len(body_calls) != len(body_matches):
+        raise RuntimeError(
+            "could not resolve every request-body call in client function "
+            f"{client_method}; use a local url binding"
+        )
+    for match in body_matches:
         binding = match.group("binding")
         if re.search(rf"\b{binding}\s*:\s*serde_json::Value\b", block):
             types.add(PASSTHROUGH_BODY)

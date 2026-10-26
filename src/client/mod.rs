@@ -1017,9 +1017,8 @@ impl PythonMetricDraftsClient<'_> {
         &self,
         request: models::CreatePythonMetricDraftRequest,
     ) -> Result<models::PythonMetricDraftResponse, ApiError> {
-        self.0
-            .post(self.0.url("/v1/python-metric-drafts"), &request)
-            .await
+        let url = self.0.url("/v1/python-metric-drafts");
+        self.0.post(url, &request).await
     }
 
     pub async fn get(&self, draft_id: &str) -> Result<models::PythonMetricDraftResponse, ApiError> {
@@ -1035,13 +1034,10 @@ impl PythonMetricDraftsClient<'_> {
         request: models::PreviewPythonMetricRequest,
     ) -> Result<models::PythonMetricPreviewsResponse, ApiError> {
         let draft_id = encode_path_segment(draft_id);
-        self.0
-            .post(
-                self.0
-                    .url(&format!("/v1/python-metric-drafts/{draft_id}/previews")),
-                &request,
-            )
-            .await
+        let url = self
+            .0
+            .url(&format!("/v1/python-metric-drafts/{draft_id}/previews"));
+        self.0.post(url, &request).await
     }
 
     pub async fn get_preview(
@@ -1078,13 +1074,10 @@ impl PythonMetricDraftsClient<'_> {
         request: models::PublishPythonMetricRequest,
     ) -> Result<models::PublishPythonMetricResponse, ApiError> {
         let draft_id = encode_path_segment(draft_id);
-        self.0
-            .post(
-                self.0
-                    .url(&format!("/v1/python-metric-drafts/{draft_id}/publish")),
-                &request,
-            )
-            .await
+        let url = self
+            .0
+            .url(&format!("/v1/python-metric-drafts/{draft_id}/publish"));
+        self.0.post(url, &request).await
     }
 }
 
