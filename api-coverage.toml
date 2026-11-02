@@ -5,11 +5,11 @@
 
 [snapshot]
 catalog_url = "https://api.coval.dev/v1/openapi"
-reviewed_at = "2026-10-26"
-published_operations = 192
+reviewed_at = "2026-11-02"
+published_operations = 199
 cli_supported_operations = 125
-published_request_fields = 464
-cli_modeled_request_fields = 464
+published_request_fields = 472
+cli_modeled_request_fields = 472
 
 [[allowed_extra]]
 operation = "POST /test-cases/{test_case_id}/media:upload-url"
@@ -438,3 +438,31 @@ reason = "Served but deliberately hidden from the published schema as an interna
 operation = "POST /conversations/uploaded:submit"
 field = "audio"
 reason = "Served but deliberately hidden from the published schema as an internal field; the API still accepts it."
+
+[[known_gap]]
+operation = "GET /conversations/simulated/{conversation_id}/comments"
+reason = "Transcript comments need a dedicated cursor-paginated CLI resource with comments:read and workspace selection; they are distinct from metric review annotations."
+
+[[known_gap]]
+operation = "GET /conversations/simulated/{conversation_id}/comments/{comment_id}"
+reason = "Transcript comment retrieval belongs to the dedicated comment-thread CLI resource, with conversation ownership and workspace access checks."
+
+[[known_gap]]
+operation = "GET /conversations/uploaded/{conversation_id}/comments"
+reason = "Transcript comments need a dedicated cursor-paginated CLI resource with comments:read and workspace selection; they are distinct from metric review annotations."
+
+[[known_gap]]
+operation = "GET /conversations/uploaded/{conversation_id}/comments/{comment_id}"
+reason = "Transcript comment retrieval belongs to the dedicated comment-thread CLI resource, with conversation ownership and workspace access checks."
+
+[[known_gap]]
+operation = "POST /conversation-python-analyses"
+reason = "Exploratory audio analysis needs a request-UUID recovery and asynchronous-result CLI workflow; the CLI currently supports the immutable metric-draft and preview workflow instead."
+
+[[known_gap]]
+operation = "GET /conversation-python-analyses/{analysis_id}"
+reason = "Analysis polling belongs to the dedicated exploratory-audio-analysis CLI workflow, including recovery and expired-result handling."
+
+[[known_gap]]
+operation = "POST /python-metrics:fromAnalysis"
+reason = "Publishing from an exploratory analysis needs its own explicit approval workflow; the CLI currently publishes immutable metric drafts using exact fingerprints and successful previews."

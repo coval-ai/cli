@@ -28,6 +28,12 @@ pub struct TestSet {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateTestSetRequest {
+    #[serde(
+        default,
+        deserialize_with = "super::non_nullable_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub test_cases: Option<Vec<serde_json::Value>>,
     pub display_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub slug: Option<String>,

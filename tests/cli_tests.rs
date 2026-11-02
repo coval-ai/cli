@@ -8645,3 +8645,259 @@ async fn test_review_annotations_create_forwards_both_reviewer_identifiers() {
     assert_eq!(body["assignee"], "reviewer@example.com");
     assert_eq!(body["assignee_user_id"], REVIEWER_USER_ID);
 }
+
+#[tokio::test]
+async fn test_november_parity_review_batch_settings_preserve_null_and_omission() {
+    for (verb, command, endpoint) in [
+        ("POST", "create", "/v1/review-projects"),
+        ("PATCH", "update", "/v1/review-projects/proj456"),
+    ] {
+        for settings in [
+            json!({"batch_assignment_mode": "SELF", "batch_size": 1}),
+            json!({"batch_assignment_mode": "MANAGER", "batch_size": 50}),
+            json!({"batch_assignment_mode": null, "batch_size": null}),
+            json!({}),
+        ] {
+            let server = MockServer::start().await;
+            let capture = BodyCapture::default();
+            Mock::given(method(verb))
+                .and(path(endpoint))
+                .and(capture.clone())
+                .respond_with(ResponseTemplate::new(200).set_body_json(review_project_response()))
+                .expect(1)
+                .mount(&server)
+                .await;
+            let mut input = settings.clone();
+            if command == "create" {
+                input["display_name"] = json!("Review");
+                input["assignees"] = json!(["reviewer@example.com"]);
+                input["linked_simulation_ids"] = json!(["sim1"]);
+                input["linked_metric_ids"] = json!(["met1"]);
+            }
+            let mut cli = coval_with_api(&server);
+            cli.args(["review-projects", command]);
+            if command == "update" {
+                cli.arg("proj456");
+            }
+            cli.arg("--input-json")
+                .arg(input.to_string())
+                .assert()
+                .success();
+            let body = capture.take();
+            for field in ["batch_assignment_mode", "batch_size"] {
+                assert_eq!(body.get(field), settings.get(field));
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_november_parity_review_batch_flags_override_json() {
+    let body = patch_body_for(
+        "/v1/review-projects/proj456",
+        review_project_response(),
+        &[
+            "review-projects",
+            "update",
+            "proj456",
+            "--input-json",
+            r#"{"batch_assignment_mode":null,"batch_size":null}"#,
+            "--batch-assignment-mode",
+            "MANAGER",
+            "--batch-size",
+            "7",
+        ],
+    )
+    .await;
+    assert_eq!(body["batch_assignment_mode"], "MANAGER");
+    assert_eq!(body["batch_size"], 7);
+}
+
+fn november_uploaded_response() -> Value {
+    json!({"uploaded_conversation": {
+        "name": "conversations/uploaded123", "conversation_id": "uploaded123",
+        "status": "COMPLETED", "create_time": "2026-11-02T10:00:00Z", "has_audio": true
+    }})
+}
+
+#[tokio::test]
+async fn test_november_parity_uploaded_submit_preserves_channel_zero_and_one() {
+    for channel in [Some(json!(0)), Some(json!(1)), Some(Value::Null), None] {
+        let server = MockServer::start().await;
+        let capture = BodyCapture::default();
+        Mock::given(method("POST"))
+            .and(path("/v1/conversations/uploaded:submit"))
+            .and(capture.clone())
+            .respond_with(ResponseTemplate::new(200).set_body_json(november_uploaded_response()))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let mut input = json!({"audio_url": "https://example.com/call.wav"});
+        if let Some(value) = channel {
+            input["agent_channel"] = json!(value);
+        }
+        coval_with_api(&server)
+            .args(["uploaded-conversations", "submit", "--input-json"])
+            .arg(input.to_string())
+            .assert()
+            .success();
+        assert_eq!(
+            capture.take().get("agent_channel"),
+            input.get("agent_channel")
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_november_parity_uploaded_patch_agent_and_channel_targets() {
+    let body = patch_body_for(
+        "/v1/conversations/uploaded/uploaded123",
+        november_uploaded_response(),
+        &[
+            "uploaded-conversations",
+            "patch",
+            "uploaded123",
+            "--agent-id",
+            "fZSUMoKq67ZarVYCbugjsd",
+        ],
+    )
+    .await;
+    assert_eq!(body, json!({"agent_id": "fZSUMoKq67ZarVYCbugjsd"}));
+    for channel in ["0", "1"] {
+        let body = patch_body_for(
+            "/v1/conversations/uploaded/uploaded123",
+            november_uploaded_response(),
+            &[
+                "uploaded-conversations",
+                "patch",
+                "uploaded123",
+                "--audio-url",
+                "https://example.com/call.wav",
+                "--agent-channel",
+                channel,
+            ],
+        )
+        .await;
+        assert_eq!(
+            body,
+            json!({"audio_url": "https://example.com/call.wav", "agent_channel": channel.parse::<u8>().unwrap()})
+        );
+    }
+    let server = MockServer::start().await;
+    for extra in [
+        vec!["--metadata", "key=value"],
+        vec!["--audio-url", "https://example.com/call.wav"],
+    ] {
+        coval_with_api(&server)
+            .args([
+                "uploaded-conversations",
+                "patch",
+                "uploaded123",
+                "--agent-id",
+                "fZSUMoKq67ZarVYCbugjsd",
+            ])
+            .args(extra)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("mutually exclusive"));
+    }
+    coval_with_api(&server)
+        .args([
+            "uploaded-conversations",
+            "patch",
+            "uploaded123",
+            "--agent-channel",
+            "0",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("requires audio"));
+}
+
+#[tokio::test]
+async fn test_november_parity_test_set_inline_cases_and_invalid_null() {
+    for cases in [
+        Some(
+            json!([{"input_str":"Read the script", "input_type":"SCRIPT", "script_turns":["Hello"], "description":null, "expected_behaviors":["Greets"], "expected_output_json":{"category":"support"}}]),
+        ),
+        Some(json!([])),
+        None,
+    ] {
+        let server = MockServer::start().await;
+        let capture = BodyCapture::default();
+        Mock::given(method("POST"))
+            .and(path("/v1/test-sets"))
+            .and(capture.clone())
+            .respond_with(ResponseTemplate::new(200).set_body_json(test_set_patch_response()))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let mut input = json!({"display_name":"Inline cases"});
+        if let Some(value) = &cases {
+            input["test_cases"] = value.clone();
+        }
+        coval_with_api(&server)
+            .args(["test-sets", "create", "--input-json"])
+            .arg(input.to_string())
+            .assert()
+            .success();
+        let body = capture.take();
+        assert_eq!(body.get("test_cases"), input.get("test_cases"));
+    }
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/test-sets"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(test_set_patch_response()))
+        .expect(0)
+        .mount(&server)
+        .await;
+    coval_with_api(&server)
+        .args([
+            "test-sets",
+            "create",
+            "--input-json",
+            r#"{"display_name":"Invalid","test_cases":null}"#,
+        ])
+        .assert()
+        .failure();
+}
+
+#[tokio::test]
+async fn test_november_parity_rejects_invalid_batch_mode_and_flag_ranges() {
+    let server = MockServer::start().await;
+    coval_with_api(&server)
+        .args([
+            "review-projects",
+            "update",
+            "proj456",
+            "--input-json",
+            r#"{"batch_assignment_mode":"OTHER"}"#,
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown variant"));
+    for value in ["0", "51"] {
+        coval_with_api(&server)
+            .args([
+                "review-projects",
+                "update",
+                "proj456",
+                "--batch-size",
+                value,
+            ])
+            .assert()
+            .failure();
+    }
+    coval_with_api(&server)
+        .args([
+            "uploaded-conversations",
+            "patch",
+            "uploaded123",
+            "--audio-url",
+            "https://example.com/call.wav",
+            "--agent-channel",
+            "2",
+        ])
+        .assert()
+        .failure();
+}

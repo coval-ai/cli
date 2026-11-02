@@ -101,6 +101,12 @@ pub struct SubmitConversationRequest {
     pub occurred_at: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_id: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub agent_channel: Option<Option<u8>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Vec<String>>,
 }
@@ -136,13 +142,15 @@ pub struct ConversationAudioUrlResponse {
 #[derive(Debug, Serialize)]
 pub struct PatchConversationRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_channel: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub audio: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_reference: Option<serde_json::Value>,
-    /// Additive only: the API rejects a key that already has a value. Exactly one
-    /// of the four fields on this request may be supplied.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }

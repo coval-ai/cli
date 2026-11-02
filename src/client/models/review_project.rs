@@ -45,6 +45,16 @@ impl std::fmt::Display for ProjectType {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ValueEnum)]
+pub enum BatchAssignmentMode {
+    #[serde(rename = "SELF")]
+    #[value(name = "SELF")]
+    SelfAssigned,
+    #[serde(rename = "MANAGER")]
+    #[value(name = "MANAGER")]
+    ManagerAssigned,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateReviewProjectRequest {
     pub display_name: String,
@@ -66,6 +76,18 @@ pub struct CreateReviewProjectRequest {
     pub blind_labeling_shown_metric_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enforced_collaboration: Option<bool>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub batch_assignment_mode: Option<Option<BatchAssignmentMode>>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub batch_size: Option<Option<u8>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allow_metric_skipping: Option<bool>,
     #[serde(
@@ -118,6 +140,18 @@ pub struct UpdateReviewProjectRequest {
     pub metric_addition_completion_action: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enforced_collaboration: Option<bool>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub batch_assignment_mode: Option<Option<BatchAssignmentMode>>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub batch_size: Option<Option<u8>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allow_metric_skipping: Option<bool>,
     #[serde(
