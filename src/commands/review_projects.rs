@@ -2,7 +2,8 @@ use anyhow::Result;
 use clap::{Args, Subcommand};
 
 use crate::client::models::{
-    CreateReviewProjectRequest, ListParams, ProjectType, UpdateReviewProjectRequest,
+    BatchAssignmentMode, CreateReviewProjectRequest, ListParams, ProjectType,
+    UpdateReviewProjectRequest,
 };
 use crate::client::CovalClient;
 use crate::input_json::{self, InputJsonArg};
@@ -91,6 +92,14 @@ pub struct CreateArgs {
     allow_metric_skipping: Option<bool>,
     #[arg(long, value_delimiter = ',')]
     skippable_metric_ids: Option<Vec<String>>,
+    #[arg(
+        long,
+        value_enum,
+        help = "Who forms batches on an enforced collaborative project"
+    )]
+    batch_assignment_mode: Option<BatchAssignmentMode>,
+    #[arg(long, value_parser = clap::value_parser!(u8).range(1..=50), help = "Conversations per reviewer batch (1-50)")]
+    batch_size: Option<u8>,
 }
 
 #[derive(Args)]
@@ -148,6 +157,14 @@ pub struct UpdateArgs {
     allow_metric_skipping: Option<bool>,
     #[arg(long, value_delimiter = ',')]
     skippable_metric_ids: Option<Vec<String>>,
+    #[arg(
+        long,
+        value_enum,
+        help = "Who forms batches on an enforced collaborative project"
+    )]
+    batch_assignment_mode: Option<BatchAssignmentMode>,
+    #[arg(long, value_parser = clap::value_parser!(u8).range(1..=50), help = "Conversations per reviewer batch (1-50)")]
+    batch_size: Option<u8>,
 }
 
 #[derive(Args)]
@@ -228,6 +245,12 @@ pub async fn execute(
                 "skippable_metric_ids",
                 args.skippable_metric_ids,
             )?;
+            input_json::insert(
+                &mut input,
+                "batch_assignment_mode",
+                args.batch_assignment_mode,
+            )?;
+            input_json::insert(&mut input, "batch_size", args.batch_size)?;
             let req: CreateReviewProjectRequest = input_json::finish(input)?;
             let project = client.review_projects().create(req).await?;
             emit_one_with_actions(
@@ -289,6 +312,12 @@ pub async fn execute(
                 "skippable_metric_ids",
                 args.skippable_metric_ids,
             )?;
+            input_json::insert(
+                &mut input,
+                "batch_assignment_mode",
+                args.batch_assignment_mode,
+            )?;
+            input_json::insert(&mut input, "batch_size", args.batch_size)?;
             let req: UpdateReviewProjectRequest = input_json::finish(input)?;
             let project = client
                 .review_projects()

@@ -25,6 +25,8 @@ pub struct Persona {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interruption_rate: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub interruption_instructions_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub multi_language_stt: Option<bool>,
     pub create_time: DateTime<Utc>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -80,6 +82,8 @@ pub struct CreatePersonaRequest {
     pub conversation_initiation: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interruption_rate: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interruption_instructions_enabled: Option<bool>,
     #[serde(alias = "multiLanguageStt", skip_serializing_if = "Option::is_none")]
     pub multi_language_stt: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -132,6 +136,8 @@ pub struct UpdatePersonaRequest {
     pub conversation_initiation: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interruption_rate: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interruption_instructions_enabled: Option<bool>,
     #[serde(alias = "multiLanguageStt", skip_serializing_if = "Option::is_none")]
     pub multi_language_stt: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]

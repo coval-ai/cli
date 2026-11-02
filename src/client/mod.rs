@@ -178,6 +178,10 @@ impl CovalClient {
         MetricsClient(self)
     }
 
+    pub fn python_metric_drafts(&self) -> PythonMetricDraftsClient<'_> {
+        PythonMetricDraftsClient(self)
+    }
+
     pub fn mutations(&self, agent_id: &str) -> MutationsClient<'_> {
         MutationsClient {
             client: self,
@@ -247,6 +251,7 @@ pub struct TestSetsClient<'a>(&'a CovalClient);
 pub struct TestCasesClient<'a>(&'a CovalClient);
 pub struct PersonasClient<'a>(&'a CovalClient);
 pub struct MetricsClient<'a>(&'a CovalClient);
+pub struct PythonMetricDraftsClient<'a>(&'a CovalClient);
 pub struct MutationsClient<'a> {
     client: &'a CovalClient,
     agent_id: String,
@@ -1004,6 +1009,75 @@ impl MetricsClient<'_> {
             "/v1/metrics/{metric_id}/thresholds/{threshold_id}"
         ));
         self.0.delete(url).await
+    }
+}
+
+impl PythonMetricDraftsClient<'_> {
+    pub async fn create(
+        &self,
+        request: models::CreatePythonMetricDraftRequest,
+    ) -> Result<models::PythonMetricDraftResponse, ApiError> {
+        let url = self.0.url("/v1/python-metric-drafts");
+        self.0.post(url, &request).await
+    }
+
+    pub async fn get(&self, draft_id: &str) -> Result<models::PythonMetricDraftResponse, ApiError> {
+        let draft_id = encode_path_segment(draft_id);
+        self.0
+            .get(self.0.url(&format!("/v1/python-metric-drafts/{draft_id}")))
+            .await
+    }
+
+    pub async fn create_preview(
+        &self,
+        draft_id: &str,
+        request: models::PreviewPythonMetricRequest,
+    ) -> Result<models::PythonMetricPreviewsResponse, ApiError> {
+        let draft_id = encode_path_segment(draft_id);
+        let url = self
+            .0
+            .url(&format!("/v1/python-metric-drafts/{draft_id}/previews"));
+        self.0.post(url, &request).await
+    }
+
+    pub async fn get_preview(
+        &self,
+        draft_id: &str,
+        preview_id: &str,
+    ) -> Result<models::PythonMetricPreviewsResponse, ApiError> {
+        let draft_id = encode_path_segment(draft_id);
+        let preview_id = encode_path_segment(preview_id);
+        self.0
+            .get(self.0.url(&format!(
+                "/v1/python-metric-drafts/{draft_id}/previews/{preview_id}"
+            )))
+            .await
+    }
+
+    pub async fn cancel_preview(
+        &self,
+        draft_id: &str,
+        preview_id: &str,
+    ) -> Result<models::PythonMetricPreviewsResponse, ApiError> {
+        let draft_id = encode_path_segment(draft_id);
+        let preview_id = encode_path_segment(preview_id);
+        self.0
+            .post_empty(self.0.url(&format!(
+                "/v1/python-metric-drafts/{draft_id}/previews/{preview_id}/cancel"
+            )))
+            .await
+    }
+
+    pub async fn publish(
+        &self,
+        draft_id: &str,
+        request: models::PublishPythonMetricRequest,
+    ) -> Result<models::PublishPythonMetricResponse, ApiError> {
+        let draft_id = encode_path_segment(draft_id);
+        let url = self
+            .0
+            .url(&format!("/v1/python-metric-drafts/{draft_id}/publish"));
+        self.0.post(url, &request).await
     }
 }
 

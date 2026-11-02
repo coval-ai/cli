@@ -106,6 +106,8 @@ pub struct SubmitArgs {
     /// Agent ID to associate with this conversation (22-char ID)
     #[arg(long)]
     agent_id: Option<String>,
+    #[arg(long, value_parser = clap::value_parser!(u8).range(0..=1), help = "Agent channel in stereo audio: 0 is left, 1 is right")]
+    agent_channel: Option<u8>,
     /// When the conversation occurred (ISO 8601, e.g. 2026-05-05T12:34:56Z)
     #[arg(long)]
     occurred_at: Option<DateTime<Utc>>,
@@ -138,6 +140,10 @@ pub struct MetricDetailArgs {
 #[derive(Args)]
 pub struct PatchArgs {
     conversation_id: String,
+    #[arg(long, help = "Assign an agent to a conversation submitted without one")]
+    agent_id: Option<String>,
+    #[arg(long, value_parser = clap::value_parser!(u8).range(0..=1), help = "Agent channel in stereo audio: 0 is left, 1 is right")]
+    agent_channel: Option<u8>,
     #[arg(long)]
     audio_url: Option<String>,
     #[arg(long)]
@@ -405,22 +411,26 @@ async fn execute_for(
         }
         ConversationCommands::Patch(args) => {
             use crate::client::models::PatchConversationRequest;
-            // The API patches audio and metadata separately so a rejected metadata
-            // key can never leave audio half-attached, and accepts exactly one
-            // target per call.
+            if args.agent_channel.is_some() && args.audio_file.is_none() && args.audio_url.is_none()
+            {
+                anyhow::bail!("--agent-channel requires audio via --audio-file or --audio-url");
+            }
             let targets = [
                 args.audio_file.is_some(),
                 args.audio_url.is_some(),
                 !args.metadata.is_empty(),
+                args.agent_id.is_some(),
             ]
             .into_iter()
             .filter(|supplied| *supplied)
             .count();
             if targets > 1 {
-                anyhow::bail!("--audio-file, --audio-url, and --metadata are mutually exclusive");
+                anyhow::bail!(
+                    "--audio-file, --audio-url, --metadata, and --agent-id are mutually exclusive"
+                );
             }
             if targets == 0 {
-                anyhow::bail!("must provide exactly one of: --audio-file, --audio-url, --metadata");
+                anyhow::bail!("must provide exactly one of: --audio-file, --audio-url, --metadata, --agent-id");
             }
             let audio_b64 = match args.audio_file {
                 Some(path) => {
@@ -438,6 +448,8 @@ async fn execute_for(
                     .collect()
             });
             let req = PatchConversationRequest {
+                agent_id: args.agent_id,
+                agent_channel: args.agent_channel,
                 audio: audio_b64,
                 audio_url: args.audio_url,
                 audio_reference: None,
@@ -630,6 +642,7 @@ fn build_submit_request(args: SubmitArgs) -> Result<SubmitConversationRequest> {
     input_json::insert(&mut input, "external_conversation_id", args.external_id)?;
     input_json::insert(&mut input, "occurred_at", args.occurred_at)?;
     input_json::insert(&mut input, "agent_id", args.agent_id)?;
+    input_json::insert(&mut input, "agent_channel", args.agent_channel)?;
     input_json::insert(
         &mut input,
         "tags",

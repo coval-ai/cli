@@ -436,6 +436,44 @@ class RequestBodyTypeTests(unittest.TestCase):
             audit_api_coverage._request_body_types("agents.create", block)
 
 
+class RequestBodyAuditRegressionTests(unittest.TestCase):
+    def test_rejects_an_unrecognized_json_body_call(self):
+        block = """
+    pub async fn create(&self, request: models::CreateThingRequest) -> Result<T, E> {
+        self.0.post(self.0.url("/v1/things"), &request).await
+    }
+"""
+        with self.assertRaisesRegex(
+            RuntimeError, "could not resolve every request-body"
+        ):
+            audit_api_coverage._request_body_types("things.create", block)
+
+    def test_audits_all_python_metric_draft_request_fields(self):
+        operations, _ = audit_api_coverage._command_operations(
+            audit_api_coverage._client_operations()
+        )
+        fields = audit_api_coverage._cli_request_fields(
+            operations, audit_api_coverage._model_request_fields()
+        )
+        expected = {
+            "POST /python-metric-drafts": {
+                "display_name",
+                "source",
+                "output_type",
+                "target_metric_id",
+                "target_version_id",
+                "description",
+                "unit",
+                "requirements",
+            },
+            "POST /python-metric-drafts/{id}/previews": {"simulation_output_ids"},
+            "POST /python-metric-drafts/{id}/publish": {"preview_ids", "fingerprint"},
+        }
+        for operation, expected_fields in expected.items():
+            with self.subTest(operation=operation):
+                self.assertEqual(expected_fields, fields.get(operation))
+
+
 class ModelRequestFieldTests(unittest.TestCase):
     def _fields(self, source: str) -> dict[str, set[str]]:
         with tempfile.TemporaryDirectory() as directory:

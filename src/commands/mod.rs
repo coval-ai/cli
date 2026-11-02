@@ -10,6 +10,7 @@ pub mod models;
 pub mod monitors;
 pub mod mutations;
 pub mod personas;
+pub mod python_metric_drafts;
 pub mod reports;
 pub mod review_annotations;
 pub mod review_projects;

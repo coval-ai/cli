@@ -13,12 +13,12 @@ only when coverage actually changes.
 | Metric | Value |
 | --- | ---: |
 | Reconciliation status | PASS |
-| Published operations | 186 |
-| First-class CLI operations | 119 |
-| Reviewed gaps | 67 |
-| Client operations | 143 |
-| Published request fields on covered operations | 451 |
-| Request fields modeled by the CLI | 451 |
+| Published operations | 199 |
+| First-class CLI operations | 125 |
+| Reviewed gaps | 74 |
+| Client operations | 149 |
+| Published request fields on covered operations | 472 |
+| Request fields modeled by the CLI | 472 |
 | Reviewed request-field gaps | 0 |
 
 Catalog: https://api.coval.dev/v1/openapi
@@ -67,6 +67,11 @@ Catalog: https://api.coval.dev/v1/openapi
 - `GET /alerts`
 - `GET /alerts/{alert_id}`
 - `GET /alerts/{alert_id}/events`
+- `GET /conversation-python-analyses/{analysis_id}`
+- `GET /conversations/simulated/{conversation_id}/comments`
+- `GET /conversations/simulated/{conversation_id}/comments/{comment_id}`
+- `GET /conversations/uploaded/{conversation_id}/comments`
+- `GET /conversations/uploaded/{conversation_id}/comments/{comment_id}`
 - `GET /integrations/slack`
 - `GET /metrics/flows`
 - `GET /metrics/recently-deleted`
@@ -104,6 +109,7 @@ Catalog: https://api.coval.dev/v1/openapi
 - `POST /alerts`
 - `POST /alerts/{alert_id}/test-evaluate`
 - `POST /audio:upload`
+- `POST /conversation-python-analyses`
 - `POST /conversations/simulated:rerunMetrics`
 - `POST /integrations/slack/connect`
 - `POST /metrics/flows`
@@ -113,6 +119,7 @@ Catalog: https://api.coval.dev/v1/openapi
 - `POST /metrics/{metric_id}/versions/{version_id}/revert`
 - `POST /personas/{persona_id}/duplicate`
 - `POST /personas/{persona_id}/versions/{version_id}/revert`
+- `POST /python-metrics:fromAnalysis`
 - `POST /review-annotations:withMetricOutputs`
 - `POST /review-projects/disagreement-state`
 - `POST /review-projects/{project_id}/complete-conversation`

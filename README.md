@@ -65,6 +65,7 @@ coval simulated-conversations list --run-id <run_id>
 | `coval test-sets` | Manage test set collections |
 | `coval test-cases` | Manage individual test cases |
 | `coval personas` | Manage simulated personas |
+| `coval python-metric-drafts` | Create, preview, and publish Python metric drafts |
 | `coval metrics` | Manage evaluation metrics |
 | `coval models` | Inspect supported metric models |
 | `coval mutations` | Test agent variations with config overrides |
@@ -307,8 +308,27 @@ coval personas update <persona_id> --audio-degradation cell-handoff
 # Make the persona interrupt the agent more often (NONE, LOW, MEDIUM, or HIGH)
 coval personas update <persona_id> --interruption-rate HIGH
 
+# Enable interruption instructions
+coval personas update <persona_id> --interruption-instructions-enabled true
+
 # Clear a preset. A flag can only set a value, so clearing needs an explicit null.
 coval personas update <persona_id> --input-json '{"situate_speaker":null}'
+
+# Create an immutable Python metric draft and preview it on a simulation output
+coval python-metric-drafts create \
+  --display-name "Greeting quality" \
+  --source-file ./greeting_quality.py \
+  --output-type boolean \
+  --description "Checks whether the agent greets the caller" \
+  --require-audio false \
+  --require-traces false \
+  --frame-table turns
+coval python-metric-drafts previews <draft_id> create \
+  --simulation-output-ids <simulation_output_id>
+coval python-metric-drafts previews <draft_id> get <preview_id>
+coval python-metric-drafts publish <draft_id> \
+  --preview-ids <successful_preview_id> \
+  --fingerprint <draft_fingerprint>
 
 # Create a dashboard and make it the organization default
 coval dashboards create \
