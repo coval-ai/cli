@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  merge_group:
+    types: [checks_requested]
 
 env:
   CARGO_TERM_COLOR: always
@@ -118,3 +120,27 @@ jobs:
           path: |
             target/${{ matrix.target }}/release/coval
             target/${{ matrix.target }}/release/coval.exe
+
+  switchboard_gate:
+    name: Switchboard Gate
+    needs: [check, build]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require successful full-CI results
+        env:
+          CHECK_RESULT: ${{ needs.check.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Conservative full-CI gate"
+            echo "All repository checks and all five platform builds are required."
+            echo "- Check: ${CHECK_RESULT:-missing}"
+            echo "- Platform builds: ${BUILD_RESULT:-missing}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "${CHECK_RESULT:-}" != "success" ] || [ "${BUILD_RESULT:-}" != "success" ]; then
+            echo "::error::The check job and every platform build must succeed."
+            exit 1
+          fi
