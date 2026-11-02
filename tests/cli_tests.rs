@@ -870,7 +870,7 @@ async fn test_python_metric_draft_commands_send_specified_requests() {
         "previews": [{
             "preview_id": "preview_123",
             "simulation_output_id": "simulation_123",
-            "status": "SUCCEEDED",
+            "status": "COMPLETED",
             "value": true,
             "explanation": null,
             "error": null
@@ -1069,6 +1069,53 @@ async fn test_python_metric_draft_commands_send_specified_requests() {
             .failure(),
     );
     assert_eq!(invalid_preview["ok"], false);
+}
+
+#[tokio::test]
+async fn test_python_metric_preview_queued_with_admission_warning_offers_polling() {
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+
+    Mock::given(method("GET"))
+        .and(path("/v1/python-metric-drafts/draft_123/previews/preview_123"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "previews": [{
+                "preview_id": "preview_123",
+                "simulation_output_id": "simulation_123",
+                "status": "QUEUED",
+                "value": null,
+                "explanation": null,
+                "error": "queue admission is unconfirmed; the submission may still run, retain and poll this preview id before retrying"
+            }]
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let value = stdout_json(
+        coval_with_api(&mock_server)
+            .arg("--agent")
+            .args([
+                "python-metric-drafts",
+                "previews",
+                "draft_123",
+                "get",
+                "preview_123",
+            ])
+            .arg("--format")
+            .arg("json")
+            .env("HOME", temp_dir.path())
+            .env("XDG_CONFIG_HOME", temp_dir.path())
+            .assert()
+            .success(),
+    );
+
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["data"]["previews"][0]["status"], "QUEUED");
+    assert_eq!(
+        value["next_actions"][0]["id"],
+        "python-metric-drafts.previews.get"
+    );
 }
 
 #[tokio::test]

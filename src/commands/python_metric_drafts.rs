@@ -272,7 +272,9 @@ pub async fn execute(
                     .await?;
                 let mut actions = vec![next_actions::context("python-metric-drafts")];
                 if let Some(preview) = response.previews.first() {
-                    if preview.status.eq_ignore_ascii_case("succeeded") {
+                    if preview.status.eq_ignore_ascii_case("completed")
+                        || preview.status.eq_ignore_ascii_case("succeeded")
+                    {
                         actions.insert(
                             0,
                             NextAction::new(
@@ -292,12 +294,10 @@ pub async fn execute(
                             .primary()
                             .with_description("Publish only after the preview succeeds and the exact draft fingerprint is approved."),
                         );
-                    } else if preview.error.is_none()
-                        && !matches!(
-                            preview.status.to_ascii_lowercase().as_str(),
-                            "failed" | "cancelled" | "canceled" | "error"
-                        )
-                    {
+                    } else if !matches!(
+                        preview.status.to_ascii_lowercase().as_str(),
+                        "failed" | "cancelled" | "canceled" | "error"
+                    ) {
                         actions.insert(
                             0,
                             NextAction::new(
