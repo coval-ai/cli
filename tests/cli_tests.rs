@@ -8948,3 +8948,46 @@ async fn test_november_parity_rejects_invalid_batch_mode_and_flag_ranges() {
         .assert()
         .failure();
 }
+
+#[tokio::test]
+async fn test_python_metric_preview_unavailable_is_terminal() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/v1/python-metric-drafts/draft_123/previews/preview_123",
+        ))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "previews": [{
+                "preview_id": "preview_123", "simulation_output_id": "simulation_123",
+                "status": "SKIPPED", "value": null, "explanation": null,
+                "error": "Required conversation audio is unavailable"
+            }]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let value = stdout_json(
+        coval_with_api(&server)
+            .args([
+                "--agent",
+                "python-metric-drafts",
+                "previews",
+                "draft_123",
+                "get",
+                "preview_123",
+            ])
+            .assert()
+            .success(),
+    );
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["data"]["previews"][0]["status"], "SKIPPED");
+    assert_eq!(
+        value["data"]["previews"][0]["error"],
+        "Required conversation audio is unavailable"
+    );
+    for action in value["next_actions"].as_array().unwrap() {
+        assert_ne!(action["id"], "python-metric-drafts.previews.get");
+        assert_ne!(action["id"], "python-metric-drafts.publish");
+    }
+}

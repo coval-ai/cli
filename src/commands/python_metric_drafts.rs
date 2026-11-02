@@ -296,7 +296,7 @@ pub async fn execute(
                         );
                     } else if !matches!(
                         preview.status.to_ascii_lowercase().as_str(),
-                        "failed" | "cancelled" | "canceled" | "error"
+                        "failed" | "cancelled" | "canceled" | "error" | "skipped"
                     ) {
                         actions.insert(
                             0,
