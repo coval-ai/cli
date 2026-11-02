@@ -23,8 +23,8 @@ on:
 permissions:
   contents: read
   issues: write
-  # Lists the open rolling PR to comment on when hand commits are present.
-  pull-requests: read
+  # Commenting on a hand-reconciled pull request requires write access.
+  pull-requests: write
 
 concurrency:
   group: weekly-api-parity-pr
