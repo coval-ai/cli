@@ -206,6 +206,7 @@ jobs:
   update-homebrew:
     needs: release
     runs-on: ubuntu-latest
+    timeout-minutes: 70
     permissions:
       contents: read
     outputs:
@@ -309,29 +310,13 @@ jobs:
           fi
 
           export GH_TOKEN="$HOMEBREW_TAP_TOKEN"
-          pr_number="$(
-            gh api "repos/${tap_repo}/pulls?head=coval-ai:${branch}&base=main&state=open" \
-              --jq '.[0].number // empty'
+          pr_url="$(
+            python scripts/upsert_homebrew_pr.py \
+              --repo "$tap_repo" \
+              --branch "$branch" \
+              --title "$title" \
+              --body-file "$body_file"
           )"
-          if [ -n "$pr_number" ]; then
-            pr_url="$(
-              gh api --method PATCH "repos/${tap_repo}/pulls/${pr_number}" \
-                -f title="$title" \
-                -F body=@"$body_file" \
-                --jq '.html_url'
-            )"
-            echo "Updated ${pr_url}."
-          else
-            pr_url="$(
-              gh api --method POST "repos/${tap_repo}/pulls" \
-                -f title="$title" \
-                -f head="$branch" \
-                -f base=main \
-                -F body=@"$body_file" \
-                --jq '.html_url'
-            )"
-            echo "Opened ${pr_url}."
-          fi
           echo "pr_url=${pr_url}" >> "$GITHUB_OUTPUT"
           echo "Homebrew picks up ${VERSION} once ${pr_url} merges." >> "$GITHUB_STEP_SUMMARY"
 
