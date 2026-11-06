@@ -23,6 +23,7 @@ mod test_case;
 mod test_set;
 mod trace;
 mod widget;
+mod workspace;
 
 pub use agent::*;
 pub use api_key::*;
@@ -47,3 +48,4 @@ pub use test_case::*;
 pub use test_set::*;
 pub use trace::*;
 pub use widget::*;
+pub use workspace::*;

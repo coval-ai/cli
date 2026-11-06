@@ -5,11 +5,11 @@
 
 [snapshot]
 catalog_url = "https://api.coval.dev/v1/openapi"
-reviewed_at = "2026-11-02"
+reviewed_at = "2026-11-06"
 published_operations = 199
-cli_supported_operations = 125
-published_request_fields = 472
-cli_modeled_request_fields = 472
+cli_supported_operations = 131
+published_request_fields = 475
+cli_modeled_request_fields = 474
 
 [[allowed_extra]]
 operation = "POST /test-cases/{test_case_id}/media:upload-url"
@@ -365,30 +365,6 @@ operation = "DELETE /webhooks/{webhook_id}"
 reason = "Webhook resources remain to be modeled under COVAL-2079."
 
 [[known_gap]]
-operation = "GET /workspaces"
-reason = "Workspace management remains to be modeled under COVAL-2079."
-
-[[known_gap]]
-operation = "POST /workspaces"
-reason = "Workspace management remains to be modeled under COVAL-2079."
-
-[[known_gap]]
-operation = "GET /workspaces/{workspace_id}"
-reason = "Workspace management remains to be modeled under COVAL-2079."
-
-[[known_gap]]
-operation = "PATCH /workspaces/{workspace_id}"
-reason = "Workspace management remains to be modeled under COVAL-2079."
-
-[[known_gap]]
-operation = "DELETE /workspaces/{workspace_id}"
-reason = "Workspace management remains to be modeled under COVAL-2079."
-
-[[known_gap]]
-operation = "POST /workspaces/{workspace_id}/archive"
-reason = "Workspace management remains to be modeled under COVAL-2079."
-
-[[known_gap]]
 operation = "POST /review-projects/{project_id}/complete-conversation"
 reason = "Project-scoped completion remains to be modeled under COVAL-2079; this explicit write needs a deliberate command workflow rather than being exposed by the parity refresh."
 
@@ -438,6 +414,11 @@ reason = "Served but deliberately hidden from the published schema as an interna
 operation = "POST /conversations/uploaded:submit"
 field = "audio"
 reason = "Served but deliberately hidden from the published schema as an internal field; the API still accepts it."
+
+[[known_field_gap]]
+operation = "POST /workspaces"
+field = "slug"
+reason = "Deprecated and ignored by the API, including when null; workspaces are identified by the returned id."
 
 [[known_gap]]
 operation = "GET /conversations/simulated/{conversation_id}/comments"

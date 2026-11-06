@@ -2,13 +2,14 @@ pub mod error;
 pub mod models;
 
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
-use reqwest::Client;
+use reqwest::{Client, RequestBuilder};
 use url::Url;
 
 use self::error::ApiError;
 
 pub const DEFAULT_BASE_URL: &str = "https://api.coval.dev";
 const USER_AGENT: &str = concat!("coval-cli/", env!("CARGO_PKG_VERSION"));
+pub const WORKSPACE_HEADER: &str = "X-Coval-Workspace-Id";
 
 fn encode_path_segment(value: &str) -> String {
     url::form_urlencoded::byte_serialize(value.as_bytes()).collect()
@@ -18,6 +19,7 @@ pub struct CovalClient {
     http: Client,
     base_url: Url,
     api_key: String,
+    workspace_id: Option<String>,
 }
 
 impl CovalClient {
@@ -40,6 +42,22 @@ impl CovalClient {
             http,
             base_url,
             api_key,
+            workspace_id: None,
+        }
+    }
+
+    /// Scope every request to `workspace_id`. Without one, the API uses the
+    /// organization's default workspace.
+    pub fn with_workspace(mut self, workspace_id: Option<String>) -> Self {
+        self.workspace_id = workspace_id;
+        self
+    }
+
+    fn authorize(&self, request: RequestBuilder) -> RequestBuilder {
+        let request = request.header("X-API-Key", &self.api_key);
+        match &self.workspace_id {
+            Some(workspace_id) => request.header(WORKSPACE_HEADER, workspace_id),
+            None => request,
         }
     }
 
@@ -48,12 +66,7 @@ impl CovalClient {
     }
 
     pub async fn get<T: serde::de::DeserializeOwned>(&self, url: Url) -> Result<T, ApiError> {
-        let resp = self
-            .http
-            .get(url)
-            .header("X-API-Key", &self.api_key)
-            .send()
-            .await?;
+        let resp = self.authorize(self.http.get(url)).send().await?;
         self.handle_response(resp).await
     }
 
@@ -63,9 +76,7 @@ impl CovalClient {
         body: &B,
     ) -> Result<T, ApiError> {
         let resp = self
-            .http
-            .post(url)
-            .header("X-API-Key", &self.api_key)
+            .authorize(self.http.post(url))
             .json(body)
             .send()
             .await?;
@@ -76,12 +87,7 @@ impl CovalClient {
         &self,
         url: Url,
     ) -> Result<T, ApiError> {
-        let resp = self
-            .http
-            .post(url)
-            .header("X-API-Key", &self.api_key)
-            .send()
-            .await?;
+        let resp = self.authorize(self.http.post(url)).send().await?;
         self.handle_response(resp).await
     }
 
@@ -91,9 +97,7 @@ impl CovalClient {
         body: &B,
     ) -> Result<T, ApiError> {
         let resp = self
-            .http
-            .patch(url)
-            .header("X-API-Key", &self.api_key)
+            .authorize(self.http.patch(url))
             .json(body)
             .send()
             .await?;
@@ -101,12 +105,7 @@ impl CovalClient {
     }
 
     pub async fn delete(&self, url: Url) -> Result<(), ApiError> {
-        let resp = self
-            .http
-            .delete(url)
-            .header("X-API-Key", &self.api_key)
-            .send()
-            .await?;
+        let resp = self.authorize(self.http.delete(url)).send().await?;
 
         if resp.status().is_success() {
             Ok(())
@@ -239,6 +238,10 @@ impl CovalClient {
     pub fn traces(&self) -> TracesClient<'_> {
         TracesClient(self)
     }
+
+    pub fn workspaces(&self) -> WorkspacesClient<'_> {
+        WorkspacesClient(self)
+    }
 }
 
 pub struct AgentsClient<'a>(&'a CovalClient);
@@ -270,6 +273,7 @@ pub struct WidgetsClient<'a> {
 }
 pub struct TagsClient<'a>(&'a CovalClient);
 pub struct TracesClient<'a>(&'a CovalClient);
+pub struct WorkspacesClient<'a>(&'a CovalClient);
 
 pub struct MonitorsClient<'a>(&'a CovalClient);
 
@@ -1674,5 +1678,52 @@ impl TracesClient<'_> {
             }
         }
         self.0.get(url).await
+    }
+}
+
+impl WorkspacesClient<'_> {
+    pub async fn list(&self) -> Result<models::ListWorkspacesResponse, ApiError> {
+        let url = self.0.url("/v1/workspaces");
+        self.0.get(url).await
+    }
+
+    pub async fn get(&self, id: &str) -> Result<models::Workspace, ApiError> {
+        let id = encode_path_segment(id);
+        let url = self.0.url(&format!("/v1/workspaces/{id}"));
+        let resp: models::WorkspaceResponse = self.0.get(url).await?;
+        Ok(resp.workspace)
+    }
+
+    pub async fn create(
+        &self,
+        req: models::CreateWorkspaceRequest,
+    ) -> Result<models::Workspace, ApiError> {
+        let url = self.0.url("/v1/workspaces");
+        let resp: models::WorkspaceResponse = self.0.post(url, &req).await?;
+        Ok(resp.workspace)
+    }
+
+    pub async fn update(
+        &self,
+        id: &str,
+        req: models::UpdateWorkspaceRequest,
+    ) -> Result<models::Workspace, ApiError> {
+        let id = encode_path_segment(id);
+        let url = self.0.url(&format!("/v1/workspaces/{id}"));
+        let resp: models::WorkspaceResponse = self.0.patch(url, &req).await?;
+        Ok(resp.workspace)
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), ApiError> {
+        let id = encode_path_segment(id);
+        let url = self.0.url(&format!("/v1/workspaces/{id}"));
+        self.0.delete(url).await
+    }
+
+    pub async fn archive(&self, id: &str) -> Result<models::Workspace, ApiError> {
+        let id = encode_path_segment(id);
+        let url = self.0.url(&format!("/v1/workspaces/{id}/archive"));
+        let resp: models::WorkspaceResponse = self.0.post_empty(url).await?;
+        Ok(resp.workspace)
     }
 }
