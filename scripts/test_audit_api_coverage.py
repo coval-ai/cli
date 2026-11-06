@@ -1,7 +1,9 @@
 """Tests for the live API-coverage audit."""
 
+import datetime
 import io
 import tempfile
+import tomllib
 import unittest
 from contextlib import redirect_stderr
 from contextlib import redirect_stdout
@@ -679,6 +681,9 @@ class ManifestTests(unittest.TestCase):
             )
 
 
+AS_OF = datetime.date(2026, 11, 6)
+
+
 class AuditAggregationTests(unittest.TestCase):
     def _audit(
         self,
@@ -687,6 +692,9 @@ class AuditAggregationTests(unittest.TestCase):
         commands: dict[str, dict],
         published_fields: dict[str, set[str]] | None = None,
         cli_fields: dict[str, set[str] | None] | None = None,
+        published_parameters: dict[str, set[tuple[str, str]]] | None = None,
+        client_headers: set[tuple[str, str]] | None = None,
+        as_of: datetime.date = AS_OF,
     ) -> tuple[dict, bool]:
         with tempfile.TemporaryDirectory() as directory:
             manifest_path = Path(directory) / "api-coverage.toml"
@@ -694,6 +702,19 @@ class AuditAggregationTests(unittest.TestCase):
             with (
                 patch.object(audit_api_coverage, "MANIFEST_PATH", manifest_path),
                 patch.object(audit_api_coverage, "_published_specs", return_value=[]),
+                patch.object(
+                    audit_api_coverage,
+                    "_published_parameters",
+                    return_value=(
+                        published_parameters or {},
+                        {("header", "x-coval-workspace-id"): "X-Coval-Workspace-Id"},
+                    ),
+                ),
+                patch.object(
+                    audit_api_coverage,
+                    "_client_wide_headers",
+                    return_value=client_headers or set(),
+                ),
                 patch.object(
                     audit_api_coverage,
                     "_published_operations",
@@ -723,7 +744,9 @@ class AuditAggregationTests(unittest.TestCase):
                     return_value=cli_fields or {},
                 ),
             ):
-                return audit_api_coverage.audit(audit_api_coverage.CATALOG_URL)
+                return audit_api_coverage.audit(
+                    audit_api_coverage.CATALOG_URL, as_of=as_of
+                )
 
     def test_accepts_reviewed_gap_and_allowed_extra(self):
         manifest = f"""
@@ -733,10 +756,13 @@ published_operations = 2
 cli_supported_operations = 1
 published_request_fields = 0
 cli_modeled_request_fields = 0
+published_parameters = 0
+cli_supported_parameters = 0
 
 [[known_gap]]
 operation = "GET /beta"
 reason = "Reviewed"
+reviewed_at = "2026-11-01"
 
 [[allowed_extra]]
 operation = "POST /gamma"
@@ -766,6 +792,8 @@ published_operations = 2
 cli_supported_operations = 1
 published_request_fields = 0
 cli_modeled_request_fields = 0
+published_parameters = 0
+cli_supported_parameters = 0
 """
         published = {
             "GET /alpha": "GET /v1/alpha",
@@ -790,6 +818,8 @@ published_operations = 1
 cli_supported_operations = 1
 published_request_fields = 2
 cli_modeled_request_fields = 1
+published_parameters = 0
+cli_supported_parameters = 0
 """
         published = {"POST /things": "POST /v1/things"}
         commands = {"POST /things": {"operation": "POST /things"}}
@@ -814,11 +844,14 @@ published_operations = 1
 cli_supported_operations = 1
 published_request_fields = 2
 cli_modeled_request_fields = 1
+published_parameters = 0
+cli_supported_parameters = 0
 
 [[known_field_gap]]
 operation = "POST /things"
 field = "tags"
 reason = "Reviewed"
+reviewed_at = "2026-11-01"
 
 [[allowed_extra_field]]
 operation = "POST /things"
@@ -849,11 +882,14 @@ published_operations = 0
 cli_supported_operations = 0
 published_request_fields = 0
 cli_modeled_request_fields = 0
+published_parameters = 0
+cli_supported_parameters = 0
 
 [[known_field_gap]]
 operation = "POST /agents"
 field = "tags"
 reason = "Reviewed"
+reviewed_at = "2026-11-01"
 
 [[allowed_extra_field]]
 operation = "POST /agents"
@@ -871,15 +907,235 @@ published_operations = 0
 cli_supported_operations = 0
 published_request_fields = 0
 cli_modeled_request_fields = 0
+published_parameters = 0
+cli_supported_parameters = 0
 
 [[known_gap]]
 operation = "GET /agents"
 reason = "Reviewed"
+reviewed_at = "2026-11-01"
 
 [[allowed_extra]]
 operation = "GET /agents"
 reason = "Pre-deploy"
 """
+        with self.assertRaisesRegex(ValueError, "only one section"):
+            self._audit(manifest, {}, {})
+
+    def _snapshot(self, **counts) -> str:
+        values = {
+            "published_operations": 1,
+            "cli_supported_operations": 1,
+            "published_request_fields": 0,
+            "cli_modeled_request_fields": 0,
+            "published_parameters": 0,
+            "cli_supported_parameters": 0,
+            **counts,
+        }
+        lines = [f'catalog_url = "{audit_api_coverage.CATALOG_URL}"']
+        lines += [f"{key} = {value}" for key, value in values.items()]
+        return "[snapshot]\n" + "\n".join(lines) + "\n"
+
+    def test_requires_reviewed_at_on_every_reviewed_gap(self):
+        manifest = (
+            self._snapshot()
+            + """
+[[known_gap]]
+operation = "GET /beta"
+reason = "Reviewed"
+"""
+        )
+        with self.assertRaisesRegex(ValueError, "requires reviewed_at"):
+            self._audit(manifest, {"GET /beta": "GET /v1/beta"}, {})
+
+    def test_reports_a_reviewed_gap_past_its_deadline_as_overdue(self):
+        manifest = (
+            self._snapshot(published_operations=2)
+            + """
+[gap_review]
+max_age_days = 90
+
+[[known_gap]]
+operation = "GET /beta"
+reason = "Reviewed"
+reviewed_at = "2026-07-30"
+"""
+        )
+        published = {"GET /alpha": "GET /v1/alpha", "GET /beta": "GET /v1/beta"}
+        commands = {"GET /alpha": {"operation": "GET /alpha"}}
+
+        before, passed_before = self._audit(
+            manifest, published, commands, as_of=datetime.date(2026, 10, 28)
+        )
+        after, passed_after = self._audit(
+            manifest, published, commands, as_of=datetime.date(2026, 10, 29)
+        )
+
+        self.assertTrue(passed_before)
+        self.assertEqual([], before["overdue_reviewed_gaps"])
+        self.assertEqual("2026-10-28", before["earliest_review_deadline"])
+        self.assertFalse(passed_after)
+        self.assertEqual(
+            ["known_gap GET /beta (reviewed 2026-07-30)"],
+            after["overdue_reviewed_gaps"],
+        )
+        self.assertEqual(
+            {
+                key: value
+                for key, value in before.items()
+                if key != "overdue_reviewed_gaps"
+            },
+            {
+                key: value
+                for key, value in after.items()
+                if key != "overdue_reviewed_gaps"
+            },
+        )
+
+    def test_does_not_age_a_stale_reviewed_gap(self):
+        manifest = (
+            self._snapshot()
+            + """
+[[known_gap]]
+operation = "GET /beta"
+reason = "Reviewed"
+reviewed_at = "2025-01-01"
+"""
+        )
+        commands = {"GET /alpha": {"operation": "GET /alpha"}}
+
+        report, passed = self._audit(
+            manifest, {"GET /alpha": "GET /v1/alpha"}, commands
+        )
+
+        self.assertFalse(passed)
+        self.assertEqual(["GET /beta"], report["stale_gaps"])
+        self.assertEqual([], report["overdue_reviewed_gaps"])
+        self.assertIsNone(report["earliest_review_deadline"])
+
+    def test_ages_reviewed_field_and_parameter_gaps(self):
+        manifest = (
+            self._snapshot(
+                published_request_fields=1,
+                published_parameters=1,
+            )
+            + """
+[gap_review]
+max_age_days = 30
+
+[[known_field_gap]]
+operation = "POST /things"
+field = "tags"
+reason = "Reviewed"
+reviewed_at = "2026-09-01"
+
+[[known_parameter_gap]]
+operation = "*"
+in = "header"
+name = "X-Coval-Workspace-Id"
+reason = "Reviewed"
+reviewed_at = "2026-10-01"
+"""
+        )
+        commands = {"POST /things": {"operation": "POST /things"}}
+
+        report, passed = self._audit(
+            manifest,
+            {"POST /things": "POST /v1/things"},
+            commands,
+            published_fields={"POST /things": {"tags"}},
+            cli_fields={"POST /things": set()},
+            published_parameters={"POST /things": {("header", "x-coval-workspace-id")}},
+        )
+
+        self.assertFalse(passed)
+        self.assertEqual(
+            [
+                "known_field_gap POST /things tags (reviewed 2026-09-01)",
+                "known_parameter_gap * header X-Coval-Workspace-Id "
+                "(reviewed 2026-10-01)",
+            ],
+            report["overdue_reviewed_gaps"],
+        )
+
+    def test_fails_on_a_published_header_the_cli_cannot_send(self):
+        manifest = self._snapshot(published_parameters=1)
+        commands = {"GET /agents": {"operation": "GET /agents"}}
+
+        report, passed = self._audit(
+            manifest,
+            {"GET /agents": "GET /v1/agents"},
+            commands,
+            published_parameters={"GET /agents": {("header", "x-coval-workspace-id")}},
+            client_headers={("header", "x-api-key")},
+        )
+
+        self.assertFalse(passed)
+        self.assertEqual(
+            ["GET /agents header X-Coval-Workspace-Id"],
+            report["new_parameter_gaps"],
+        )
+
+    def test_accepts_a_client_wide_header_as_sendable(self):
+        manifest = self._snapshot(published_parameters=1, cli_supported_parameters=1)
+        commands = {"GET /agents": {"operation": "GET /agents"}}
+
+        report, passed = self._audit(
+            manifest,
+            {"GET /agents": "GET /v1/agents"},
+            commands,
+            published_parameters={"GET /agents": {("header", "x-coval-workspace-id")}},
+            client_headers={("header", "x-coval-workspace-id")},
+        )
+
+        self.assertTrue(passed)
+        self.assertEqual([], report["all_current_parameter_gaps"])
+
+    def test_reports_a_wildcard_parameter_gap_the_client_now_sends_as_stale(self):
+        manifest = (
+            self._snapshot(published_parameters=1, cli_supported_parameters=1)
+            + """
+[[known_parameter_gap]]
+operation = "*"
+in = "header"
+name = "X-Coval-Workspace-Id"
+reason = "Removed once the client sends it"
+reviewed_at = "2026-11-06"
+"""
+        )
+        commands = {"GET /agents": {"operation": "GET /agents"}}
+
+        report, passed = self._audit(
+            manifest,
+            {"GET /agents": "GET /v1/agents"},
+            commands,
+            published_parameters={"GET /agents": {("header", "x-coval-workspace-id")}},
+            client_headers={("header", "x-coval-workspace-id")},
+        )
+
+        self.assertFalse(passed)
+        self.assertEqual(
+            ["* header X-Coval-Workspace-Id"], report["stale_parameter_gaps"]
+        )
+
+    def test_rejects_a_parameter_in_multiple_manifest_sections(self):
+        manifest = (
+            self._snapshot()
+            + """
+[[known_parameter_gap]]
+operation = "GET /agents"
+in = "query"
+name = "tag_filters"
+reason = "Reviewed"
+reviewed_at = "2026-11-06"
+
+[[allowed_extra_parameter]]
+operation = "GET /agents"
+in = "query"
+name = "tag_filters"
+reason = "Served but undocumented"
+"""
+        )
         with self.assertRaisesRegex(ValueError, "only one section"):
             self._audit(manifest, {}, {})
 
@@ -893,12 +1149,16 @@ class SnapshotTests(unittest.TestCase):
                 "cli_supported_operations": 8,
                 "published_request_fields": 40,
                 "cli_modeled_request_fields": 40,
+                "published_parameters": 20,
+                "cli_supported_parameters": 12,
             },
             catalog_url=audit_api_coverage.CATALOG_URL,
             published_operation_count=11,
             supported_operation_count=8,
             compared_field_count=40,
             modeled_field_count=40,
+            compared_parameter_count=20,
+            supported_parameter_count=12,
         )
 
         self.assertEqual(
@@ -918,12 +1178,16 @@ class SnapshotTests(unittest.TestCase):
             supported_operation_count=8,
             compared_field_count=40,
             modeled_field_count=39,
+            compared_parameter_count=20,
+            supported_parameter_count=12,
         )
 
         self.assertEqual(
             [
                 "published_request_fields: recorded None, current 40",
                 "cli_modeled_request_fields: recorded None, current 39",
+                "published_parameters: recorded None, current 20",
+                "cli_supported_parameters: recorded None, current 12",
             ],
             mismatches,
         )
@@ -955,6 +1219,20 @@ class MarkdownReportTests(unittest.TestCase):
             "unexpected_cli_request_fields": [],
             "stale_allowed_extra_fields": [],
             "all_current_field_gaps": ["POST /things tags"],
+            "compared_parameter_count": 5,
+            "supported_parameter_count": 3,
+            "known_parameter_gap_count": 1,
+            "new_parameter_gaps": ["GET /things query tag_filters"],
+            "stale_parameter_gaps": [],
+            "unexpected_cli_parameters": [],
+            "stale_allowed_extra_parameters": [],
+            "all_current_parameter_gaps": [
+                "* header X-Coval-Workspace-Id (1 operation)",
+                "GET /things query tag_filters",
+            ],
+            "gap_review_max_age_days": 120,
+            "earliest_review_deadline": "2026-11-27",
+            "overdue_reviewed_gaps": ["known_gap GET /beta (reviewed 2026-07-30)"],
         }
 
     def test_renders_deterministic_actionable_report(self):
@@ -969,7 +1247,30 @@ class MarkdownReportTests(unittest.TestCase):
         self.assertIn("| Request fields modeled by the CLI | 3 |", rendered)
         self.assertIn("## New published request fields the CLI drops", rendered)
         self.assertIn("- `POST /things tags`", rendered)
+        self.assertIn(
+            "| Published header and query parameters on covered operations | 5 |",
+            rendered,
+        )
+        self.assertIn("| Reviewed gaps overdue for re-review | 1 |", rendered)
+        self.assertIn("| Earliest re-review deadline | 2026-11-27 |", rendered)
+        self.assertIn("## Reviewed gaps overdue for re-review", rendered)
+        self.assertIn("- `known_gap GET /beta (reviewed 2026-07-30)`", rendered)
+        self.assertIn("## New published parameters the CLI cannot send", rendered)
+        self.assertIn("- `* header X-Coval-Workspace-Id (1 operation)`", rendered)
+        self.assertIn("due for re-review 120 days", rendered)
         self.assertNotIn("Generated at", rendered)
+        self.assertEqual(
+            rendered, audit_api_coverage.render_markdown_report(self.report, False)
+        )
+
+    def test_reports_no_deadline_without_reviewed_gaps(self):
+        self.report["earliest_review_deadline"] = None
+        self.report["overdue_reviewed_gaps"] = []
+
+        rendered = audit_api_coverage.render_markdown_report(self.report, True)
+
+        self.assertIn("| Reconciliation status | PASS |", rendered)
+        self.assertIn("| Earliest re-review deadline | None |", rendered)
 
     @patch("scripts.audit_api_coverage.audit")
     def test_allow_drift_writes_report_and_returns_success(self, audit):
@@ -991,6 +1292,15 @@ class MarkdownReportTests(unittest.TestCase):
             self.assertEqual(0, result)
             self.assertIn("ACTION REQUIRED", output.read_text())
 
+    @patch("scripts.audit_api_coverage.audit")
+    def test_as_of_ages_reviewed_gaps_against_the_given_date(self, audit):
+        audit.return_value = (self.report, True)
+        argv = ["audit_api_coverage.py", "--as-of", "2026-12-01"]
+        with patch("sys.argv", argv), redirect_stdout(io.StringIO()):
+            audit_api_coverage.main()
+
+        self.assertEqual(datetime.date(2026, 12, 1), audit.call_args.args[2])
+
     def test_allow_drift_requires_markdown_output(self):
         with (
             patch("sys.argv", ["audit_api_coverage.py", "--allow-drift"]),
@@ -1000,6 +1310,464 @@ class MarkdownReportTests(unittest.TestCase):
             audit_api_coverage.main()
 
         self.assertEqual(2, exception.exception.code)
+
+
+class PublishedParameterTests(unittest.TestCase):
+    def test_collects_header_and_query_parameters_including_path_level_ones(self):
+        spec = {
+            "paths": {
+                "/v1/agents/{agent_id}": {
+                    "parameters": [
+                        {"name": "agent_id", "in": "path"},
+                        {"$ref": "#/components/parameters/WorkspaceId"},
+                    ],
+                    "get": {
+                        "parameters": [
+                            {"name": "view", "in": "query"},
+                            {"name": "session", "in": "cookie"},
+                        ]
+                    },
+                    "delete": {},
+                }
+            },
+            "components": {
+                "parameters": {
+                    "WorkspaceId": {"name": "X-Coval-Workspace-Id", "in": "header"}
+                }
+            },
+        }
+
+        parameters, names = audit_api_coverage._published_parameters([spec])
+
+        workspace = ("header", "x-coval-workspace-id")
+        self.assertEqual(
+            {
+                "GET /agents/{id}": {workspace, ("query", "view")},
+                "DELETE /agents/{id}": {workspace},
+            },
+            parameters,
+        )
+        self.assertEqual("X-Coval-Workspace-Id", names[workspace])
+
+    def test_rejects_an_unknown_parameter_reference(self):
+        spec = {
+            "paths": {
+                "/v1/agents": {
+                    "get": {"parameters": [{"$ref": "#/components/parameters/Nope"}]}
+                }
+            }
+        }
+        with self.assertRaisesRegex(RuntimeError, "unknown component"):
+            audit_api_coverage._published_parameters([spec])
+
+    def test_rejects_a_reference_outside_components_parameters(self):
+        spec = {
+            "paths": {
+                "/v1/agents": {
+                    "get": {"parameters": [{"$ref": "other.yaml#/Workspace"}]}
+                }
+            }
+        }
+        with self.assertRaisesRegex(RuntimeError, "unsupported parameter reference"):
+            audit_api_coverage._published_parameters([spec])
+
+    def test_matches_header_names_without_regard_to_case(self):
+        self.assertEqual(
+            ("header", "if-match"),
+            audit_api_coverage._parameter_key("header", "If-Match"),
+        )
+        self.assertEqual(
+            ("query", "pageSize"),
+            audit_api_coverage._parameter_key("query", "pageSize"),
+        )
+
+
+class FunctionParameterTests(unittest.TestCase):
+    HELPERS = {"ListParams": {"filter", "page_size"}}
+
+    def _parameters(self, block: str, constants: dict[str, str] | None = None):
+        return audit_api_coverage._function_parameters(
+            "things.list", block, constants or {}, self.HELPERS
+        )
+
+    def test_separates_named_parameters_from_shared_helper_keys(self):
+        block = """
+    pub async fn list(&self, params: models::ListParams, status: Option<String>) {
+        let mut url = self.0.url("/v1/things");
+        params.apply_to(&mut url);
+        if let Some(status) = status {
+            url.query_pairs_mut().append_pair("status", &status);
+        }
+        self.0.get(url).await
+    }
+"""
+        named, shared = self._parameters(block)
+
+        self.assertEqual({("query", "status")}, named)
+        self.assertEqual({("query", "filter"), ("query", "page_size")}, shared)
+
+    def test_resolves_a_header_name_constant(self):
+        block = """
+    pub async fn update(&self, etag: &str) {
+        let url = self.0.url("/v1/things/x");
+        self.0.http.patch(url).header(IF_MATCH_HEADER, etag);
+    }
+"""
+        named, _ = self._parameters(block, {"IF_MATCH_HEADER": "If-Match"})
+
+        self.assertEqual({("header", "if-match")}, named)
+
+    def test_rejects_a_computed_parameter_name(self):
+        block = """
+    pub async fn list(&self, key: &str) {
+        let mut url = self.0.url("/v1/things");
+        url.query_pairs_mut().append_pair(key, "1");
+    }
+"""
+        with self.assertRaisesRegex(RuntimeError, "could not resolve the parameter"):
+            self._parameters(block)
+
+    def test_rejects_an_unresolvable_query_helper(self):
+        block = """
+    pub async fn list(&self, params: LocalParams) {
+        let mut url = self.0.url("/v1/things");
+        params.apply_to(&mut url);
+    }
+"""
+        with self.assertRaisesRegex(RuntimeError, "query helper"):
+            self._parameters(block)
+
+    def test_rejects_query_construction_it_cannot_read(self):
+        block = """
+    pub async fn list(&self) {
+        let mut url = self.0.url("/v1/things");
+        url.set_query(Some("view=full"));
+    }
+"""
+        with self.assertRaisesRegex(RuntimeError, "query_pairs_mut"):
+            self._parameters(block)
+
+
+class ModelQueryHelperTests(unittest.TestCase):
+    def test_reads_the_keys_an_apply_to_helper_appends(self):
+        with tempfile.TemporaryDirectory() as directory:
+            models = Path(directory)
+            (models / "common.rs").write_text(
+                """
+const ORDER_KEY: &str = "order_by";
+
+pub struct ListParams {
+    pub filter: Option<String>,
+}
+
+impl ListParams {
+    pub fn apply_to(&self, url: &mut Url) {
+        let mut pairs = url.query_pairs_mut();
+        if let Some(ref filter) = self.filter {
+            pairs.append_pair("filter", filter);
+        }
+        pairs.append_pair(ORDER_KEY, "name");
+    }
+}
+
+impl Other {
+    pub fn describe(&self) {}
+}
+"""
+            )
+            with patch.object(audit_api_coverage, "MODELS_PATH", models):
+                helpers = audit_api_coverage._model_query_helpers()
+
+        self.assertEqual({"ListParams": {"filter", "order_by"}}, helpers)
+
+    def test_reads_the_real_list_params_helper(self):
+        helpers = audit_api_coverage._model_query_helpers()
+
+        self.assertEqual(
+            {"filter", "page_size", "page_token", "order_by"}, helpers["ListParams"]
+        )
+
+
+class ClientWideHeaderTests(unittest.TestCase):
+    def _headers(self, source: str) -> set[tuple[str, str]]:
+        with tempfile.TemporaryDirectory() as directory:
+            client_path = Path(directory) / "mod.rs"
+            client_path.write_text(source)
+            with patch.object(audit_api_coverage, "CLIENT_PATH", client_path):
+                return audit_api_coverage._client_wide_headers()
+
+    def test_reads_headers_set_inline_on_each_request(self):
+        source = """
+impl CovalClient {
+    pub async fn get(&self, url: Url) {
+        self.http.get(url).header("X-API-Key", &self.api_key).send().await
+    }
+}
+
+impl AgentsClient<'_> {
+    pub async fn update(&self) {
+        self.0.http.patch(url).header("If-Match", etag);
+    }
+}
+"""
+        self.assertEqual({("header", "x-api-key")}, self._headers(source))
+
+    def test_reads_an_authorize_helper_that_adds_the_workspace_header(self):
+        source = """
+pub const WORKSPACE_HEADER: &str = "X-Coval-Workspace-Id";
+
+impl CovalClient {
+    fn authorize(&self, request: RequestBuilder) -> RequestBuilder {
+        let request = request.header("X-API-Key", &self.api_key);
+        match &self.workspace_id {
+            Some(workspace_id) => request.header(WORKSPACE_HEADER, workspace_id),
+            None => request,
+        }
+    }
+}
+"""
+        self.assertEqual(
+            {("header", "x-api-key"), ("header", "x-coval-workspace-id")},
+            self._headers(source),
+        )
+
+    def test_rejects_a_client_without_a_base_implementation(self):
+        with self.assertRaisesRegex(RuntimeError, "impl CovalClient"):
+            self._headers("impl AgentsClient<'_> {\n}\n")
+
+    def test_reads_the_real_client(self):
+        self.assertIn(
+            ("header", "x-api-key"), audit_api_coverage._client_wide_headers()
+        )
+
+
+class ManifestParameterTests(unittest.TestCase):
+    @staticmethod
+    def _entry(**overrides) -> dict:
+        return {
+            "operation": "GET /agents",
+            "in": "query",
+            "name": "tag_filters",
+            "reason": "Reviewed",
+            **overrides,
+        }
+
+    def test_rejects_a_missing_location(self):
+        with self.assertRaisesRegex(ValueError, "non-empty"):
+            audit_api_coverage._manifest_parameter_entries(
+                [self._entry(**{"in": ""})], "known_parameter_gap"
+            )
+
+    def test_rejects_a_path_parameter(self):
+        with self.assertRaisesRegex(ValueError, "invalid parameter location"):
+            audit_api_coverage._manifest_parameter_entries(
+                [self._entry(**{"in": "path"})], "known_parameter_gap"
+            )
+
+    def test_rejects_an_invalid_operation(self):
+        with self.assertRaisesRegex(ValueError, "invalid operation"):
+            audit_api_coverage._manifest_parameter_entries(
+                [self._entry(operation="HEAD /agents")], "known_parameter_gap"
+            )
+
+    def test_rejects_a_header_listed_twice_in_different_case(self):
+        with self.assertRaisesRegex(ValueError, "duplicate entry"):
+            audit_api_coverage._manifest_parameter_entries(
+                [
+                    self._entry(**{"in": "header", "name": "If-Match"}),
+                    self._entry(**{"in": "header", "name": "if-match"}),
+                ],
+                "known_parameter_gap",
+            )
+
+    def test_canonicalizes_operations_and_accepts_any_operation(self):
+        entries = audit_api_coverage._manifest_parameter_entries(
+            [
+                self._entry(operation="GET /agents/{agent_id}", name="view"),
+                self._entry(
+                    operation="*", **{"in": "header", "name": "X-Coval-Workspace-Id"}
+                ),
+            ],
+            "known_parameter_gap",
+        )
+
+        self.assertEqual(
+            [
+                ("GET /agents/{id}", "query", "view"),
+                ("*", "header", "x-coval-workspace-id"),
+            ],
+            list(entries),
+        )
+
+
+class ParameterReconciliationTests(unittest.TestCase):
+    WORKSPACE = ("header", "x-coval-workspace-id")
+
+    def test_classifies_gaps_extras_and_stale_exceptions(self):
+        result = audit_api_coverage._parameter_reconciliation(
+            published_parameters={
+                "GET /things": {self.WORKSPACE, ("query", "view"), ("query", "filter")},
+                "GET /others": {("query", "view")},
+            },
+            cli_parameters={
+                "GET /things": {
+                    "named": {("query", "legacy"), ("query", "view")},
+                    "shared": {("query", "filter"), ("query", "order_by")},
+                }
+            },
+            client_headers={("header", "x-api-key")},
+            known_parameter_gaps={
+                ("*", "header", "x-coval-workspace-id"): {},
+                ("GET /things", "query", "retired"): {},
+            },
+            allowed_extra_parameters={},
+        )
+
+        self.assertEqual({("GET /things", *self.WORKSPACE)}, result["actual_gaps"])
+        self.assertEqual(set(), result["new_gaps"])
+        self.assertEqual(
+            {("GET /things", *self.WORKSPACE): ("*", *self.WORKSPACE)},
+            result["gap_matches"],
+        )
+        self.assertEqual({("GET /things", "query", "retired")}, result["stale_gaps"])
+        self.assertEqual(
+            {("GET /things", "query", "legacy")}, result["unexpected_extras"]
+        )
+        self.assertEqual(3, result["compared_parameter_count"])
+        self.assertEqual(2, result["supported_parameter_count"])
+
+    def test_prefers_an_exact_entry_over_a_wildcard(self):
+        gap = ("GET /things", *self.WORKSPACE)
+        entries = {("*", *self.WORKSPACE): {}, gap: {}}
+
+        self.assertEqual(
+            gap, audit_api_coverage._matching_parameter_entry(gap, entries)
+        )
+
+    def test_accepts_a_reviewed_extra_and_reports_a_stale_one(self):
+        result = audit_api_coverage._parameter_reconciliation(
+            published_parameters={"GET /api-keys": set()},
+            cli_parameters={
+                "GET /api-keys": {"named": {("query", "environment")}, "shared": set()}
+            },
+            client_headers=set(),
+            known_parameter_gaps={},
+            allowed_extra_parameters={
+                ("GET /api-keys", "query", "environment"): {},
+                ("GET /api-keys", "query", "retired"): {},
+            },
+        )
+
+        self.assertEqual(set(), result["unexpected_extras"])
+        self.assertEqual(
+            {("GET /api-keys", "query", "retired")}, result["stale_allowed_extras"]
+        )
+
+    def test_folds_wildcard_gaps_into_one_report_line(self):
+        names = {self.WORKSPACE: "X-Coval-Workspace-Id"}
+        known = {
+            ("*", *self.WORKSPACE): {
+                "operation": "*",
+                "in": "header",
+                "name": "X-Coval-Workspace-Id",
+            },
+            ("GET /b", "query", "view"): {},
+        }
+        result = audit_api_coverage._parameter_reconciliation(
+            published_parameters={
+                "GET /a": {self.WORKSPACE},
+                "GET /b": {self.WORKSPACE, ("query", "view")},
+            },
+            cli_parameters={
+                "GET /a": {"named": set(), "shared": set()},
+                "GET /b": {"named": set(), "shared": set()},
+            },
+            client_headers=set(),
+            known_parameter_gaps=known,
+            allowed_extra_parameters={},
+        )
+
+        self.assertEqual(
+            [
+                "* header X-Coval-Workspace-Id (2 operations)",
+                "GET /b query view",
+            ],
+            audit_api_coverage._current_parameter_gaps(result, known, names),
+        )
+
+
+class ReviewDateTests(unittest.TestCase):
+    def _dates(self, value) -> dict:
+        return audit_api_coverage._review_dates(
+            {"GET /agents": {"reviewed_at": value}}, "known_gap", AS_OF
+        )
+
+    def test_accepts_a_quoted_or_native_toml_date(self):
+        expected = {"GET /agents": datetime.date(2026, 8, 24)}
+        self.assertEqual(expected, self._dates("2026-08-24"))
+        self.assertEqual(expected, self._dates(datetime.date(2026, 8, 24)))
+
+    def test_rejects_a_missing_or_malformed_date(self):
+        for value in (None, "", "2026-8-24", "20260824", "2026-02-30", 20260824):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "requires reviewed_at"):
+                    self._dates(value)
+
+    def test_rejects_a_date_and_time(self):
+        with self.assertRaisesRegex(ValueError, "requires reviewed_at"):
+            self._dates(datetime.datetime(2026, 8, 24, 12, 0))
+
+    def test_rejects_a_date_more_than_a_day_ahead(self):
+        self.assertEqual(
+            {"GET /agents": datetime.date(2026, 11, 7)}, self._dates("2026-11-07")
+        )
+        with self.assertRaisesRegex(ValueError, "in the future"):
+            self._dates("2026-11-08")
+
+    def test_validates_the_maximum_age(self):
+        self.assertEqual(
+            audit_api_coverage.DEFAULT_GAP_REVIEW_MAX_AGE_DAYS,
+            audit_api_coverage._gap_review_max_age({}),
+        )
+        self.assertEqual(
+            30,
+            audit_api_coverage._gap_review_max_age(
+                {"gap_review": {"max_age_days": 30}}
+            ),
+        )
+        for value in (0, -1, "90", True):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "positive integer"):
+                    audit_api_coverage._gap_review_max_age(
+                        {"gap_review": {"max_age_days": value}}
+                    )
+
+    def test_marks_a_gap_overdue_only_after_its_deadline(self):
+        reviews = [
+            ("known_gap GET /a", datetime.date(2026, 7, 30)),
+            ("known_gap GET /b", datetime.date(2026, 8, 24)),
+        ]
+
+        on_deadline = audit_api_coverage._overdue_reviews(
+            reviews, datetime.date(2026, 10, 28), 90
+        )
+        after_deadline = audit_api_coverage._overdue_reviews(
+            reviews, datetime.date(2026, 10, 29), 90
+        )
+
+        self.assertEqual(([], "2026-10-28"), on_deadline)
+        self.assertEqual(
+            (["known_gap GET /a (reviewed 2026-07-30)"], "2026-10-28"), after_deadline
+        )
+
+    def test_the_repository_manifest_dates_every_reviewed_gap(self):
+        manifest = tomllib.loads(audit_api_coverage.MANIFEST_PATH.read_text())
+        for section in audit_api_coverage.REVIEWED_GAP_SECTIONS:
+            with self.subTest(section=section):
+                for entry in manifest.get(section, []):
+                    self.assertRegex(
+                        str(entry.get("reviewed_at")), r"^\d{4}-\d{2}-\d{2}$"
+                    )
 
 
 if __name__ == "__main__":
