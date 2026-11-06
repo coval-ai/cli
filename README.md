@@ -439,6 +439,19 @@ struct needs a `[[known_field_gap]]` entry, and a struct field absent from the
 published schema needs an `[[allowed_extra_field]]` entry. Both require a
 reason, and an entry that no longer describes real drift fails as stale.
 
+Header and query parameters follow the same rules. A published parameter on a
+covered operation that the CLI cannot send needs a `[[known_parameter_gap]]`
+entry, and a parameter a client function sends that the published operation
+does not list needs an `[[allowed_extra_parameter]]` entry. Headers that
+`CovalClient` attaches to every request count as sendable everywhere; an
+`operation = "*"` gap entry covers every operation that publishes a parameter.
+
+Every `[[known_gap]]`, `[[known_field_gap]]`, and `[[known_parameter_gap]]`
+entry needs a `reviewed_at` date. Once a gap is older than
+`[gap_review] max_age_days`, the audit reports it as overdue and fails until the
+gap is implemented or reviewed again with a new `reviewed_at`. Pass
+`--as-of YYYY-MM-DD` to reproduce an earlier run's aging.
+
 A repository-owned GitHub workflow runs every Monday and refreshes the
 deterministic `api-coverage-report.md`. When coverage changes, it opens or
 updates one rolling PR on `chore/weekly-api-parity`; the PR's CI remains blocked

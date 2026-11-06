@@ -1,7 +1,13 @@
 # Reviewed against the live public OpenAPI catalog by scripts/audit_api_coverage.py.
 # Every published operation must either reach a first-class CLI command or have a reason here,
-# and every published request-body property on a covered operation must either be declared on
-# the Rust request struct the CLI sends or have a reason in the request-field sections below.
+# every published request-body property on a covered operation must either be declared on
+# the Rust request struct the CLI sends or have a reason in the request-field sections below,
+# and every published header or query parameter on a covered operation must either be sendable
+# by the CLI or have a reason in the parameter sections at the end of this file.
+#
+# Every known_gap, known_field_gap and known_parameter_gap entry records the date someone last
+# reviewed it in reviewed_at. Once a gap is older than gap_review.max_age_days, the audit reports
+# ACTION REQUIRED until the gap is implemented or reviewed again with a new reviewed_at date.
 
 [snapshot]
 catalog_url = "https://api.coval.dev/v1/openapi"
@@ -10,6 +16,11 @@ published_operations = 199
 cli_supported_operations = 131
 published_request_fields = 475
 cli_modeled_request_fields = 474
+published_parameters = 196
+cli_supported_parameters = 144
+
+[gap_review]
+max_age_days = 120
 
 [[allowed_extra]]
 operation = "POST /test-cases/{test_case_id}/media:upload-url"
@@ -123,14 +134,17 @@ reason = "Retained legacy alias for the published POST /alerts/{alert_id}/test-e
 [[known_gap]]
 operation = "GET /agents/{agent_id}/versions"
 reason = "Agent version history remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /agents/{agent_id}/versions/{version_id}/revert"
 reason = "Agent version rollback remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /agents/{agent_id}/duplicate"
 reason = "Agent duplication remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 # Alerts is the canonical published surface after coval-ai/backend#6368. The
 # behaviour is already reachable from the CLI today via `coval monitors`, which
@@ -143,234 +157,292 @@ reason = "Agent duplication remains to be modeled under COVAL-2079."
 [[known_gap]]
 operation = "GET /alerts"
 reason = "Served today by `coval monitors list` through the retained /v1/monitors alias; a first-class `coval alerts` surface is a follow-up."
+reviewed_at = "2026-08-05"
 
 [[known_gap]]
 operation = "POST /alerts"
 reason = "Served today by `coval monitors create` through the retained /v1/monitors alias; a first-class `coval alerts` surface is a follow-up."
+reviewed_at = "2026-08-05"
 
 [[known_gap]]
 operation = "GET /alerts/{alert_id}"
 reason = "Served today by `coval monitors get` through the retained /v1/monitors alias; a first-class `coval alerts` surface is a follow-up."
+reviewed_at = "2026-08-05"
 
 [[known_gap]]
 operation = "PATCH /alerts/{alert_id}"
 reason = "Served today by `coval monitors update` through the retained /v1/monitors alias; a first-class `coval alerts` surface is a follow-up."
+reviewed_at = "2026-08-05"
 
 [[known_gap]]
 operation = "DELETE /alerts/{alert_id}"
 reason = "Served today by `coval monitors delete` through the retained /v1/monitors alias; a first-class `coval alerts` surface is a follow-up."
+reviewed_at = "2026-08-05"
 
 [[known_gap]]
 operation = "GET /alerts/{alert_id}/events"
 reason = "Served today by `coval monitors events` through the retained /v1/monitors alias; a first-class `coval alerts` surface is a follow-up."
+reviewed_at = "2026-08-05"
 
 [[known_gap]]
 operation = "POST /alerts/{alert_id}/test-evaluate"
 reason = "Served today by `coval monitors test-evaluate` through the retained /v1/monitors alias; a first-class `coval alerts` surface is a follow-up."
+reviewed_at = "2026-08-05"
 
 [[known_gap]]
 operation = "POST /audio:upload"
 reason = "Generic audio upload has not yet been given a CLI file-upload workflow."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /metrics/flows"
 reason = "Metric-flow resources remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /metrics/flows"
 reason = "Metric-flow resources remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "PATCH /metrics/flows/{flow_id}"
 reason = "Metric-flow resources remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "DELETE /metrics/flows/{flow_id}"
 reason = "Metric-flow resources remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /metrics/recently-deleted"
 reason = "Metric restore discovery remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /metrics/{metric_id}/restore"
 reason = "Metric restore remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /metrics/sql-schema"
 reason = "SQL metric authoring helpers remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /metrics/sql:test"
 reason = "SQL metric authoring helpers remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /metrics/tags"
 reason = "Metric tag-value discovery remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /metrics/template-variables"
 reason = "Metric template-variable discovery remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /metrics/outputs:batchGet"
 reason = "Batch metric-output reads remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /metrics/{metric_id}/baselines/{baseline_id}/history"
 reason = "Metric baseline history remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /metrics/{metric_id}/versions/{version_id}/revert"
 reason = "Metric version rollback remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /organization/conversation-metrics"
 reason = "Organization monitoring configuration remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "PATCH /organization/conversation-metrics"
 reason = "Organization monitoring configuration remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /organization/monitoring-metrics"
 reason = "Organization monitoring configuration remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "PATCH /organization/monitoring-metrics"
 reason = "Organization monitoring configuration remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /organization/users"
 reason = "The organization user roster remains to be modeled under COVAL-2079."
+reviewed_at = "2026-10-14"
 
 [[known_gap]]
 operation = "GET /personas/tags"
 reason = "Persona tag-value discovery remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /personas/{persona_id}/versions"
 reason = "Persona version history remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /personas/{persona_id}/versions/{version_id}/revert"
 reason = "Persona version rollback remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /personas/{persona_id}/duplicate"
 reason = "Persona duplication remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /review-annotations:withMetricOutputs"
 reason = "Advanced review reads remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /review-annotations/metric-health-stats"
 reason = "Review analytics remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /review-projects/{project_id}/insights"
 reason = "Review analytics remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /review-projects/{project_id}/metric-agreement"
 reason = "Review analytics remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /review-projects/{project_id}/progress"
 reason = "Review analytics remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /review-projects/disagreement-state"
 reason = "Review analytics remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /runs/tags"
 reason = "Run tag-value discovery remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /scheduled-runs/{scheduled_run_id}/runs"
 reason = "Scheduled-run execution history remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /conversations/simulated:rerunMetrics"
 reason = "Batch metric reruns need a dedicated confirmation-aware CLI workflow."
+reviewed_at = "2026-09-01"
 
 [[known_gap]]
 operation = "GET /simulations/{simulation_id}/attributes/{attribute_name}"
 reason = "Named simulation-attribute reads remain to be modeled under COVAL-2079."
+reviewed_at = "2026-10-14"
 
 [[known_gap]]
 operation = "GET /simulations/{simulation_id}/connect"
 reason = "SDK WebSocket connection discovery is intentionally delegated to the Coval Agent SDK, which consumes its one-use relay token."
+reviewed_at = "2026-10-14"
 
 [[known_gap]]
 operation = "GET /integrations/slack"
 reason = "Slack integration lifecycle remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /integrations/slack/connect"
 reason = "Slack integration lifecycle remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "DELETE /integrations/slack"
 reason = "Slack integration lifecycle remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /test-sets/{test_set_id}/agents"
 reason = "Test-set agent associations remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /test-sets/{test_set_id}/agents:add"
 reason = "Test-set agent associations remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "DELETE /test-sets/{test_set_id}/agents/{agent_id}"
 reason = "Test-set agent associations remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /test-sets/{test_set_id}/records"
 reason = "Test-set record export remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /test-sets/{test_set_id}/versions"
 reason = "Test-set version history remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /test-sets/{test_set_id}/versions/{version_id}/revert"
 reason = "Test-set version rollback remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /test-sets/{test_set_id}/duplicate"
 reason = "Test-set duplication remains to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /traces"
 reason = "OTLP ingestion is intentionally delegated to OpenTelemetry SDKs rather than JSON CLI input."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "GET /webhooks"
 reason = "Webhook resources remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /webhooks"
 reason = "Webhook resources remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "PATCH /webhooks/{webhook_id}"
 reason = "Webhook resources remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "DELETE /webhooks/{webhook_id}"
 reason = "Webhook resources remain to be modeled under COVAL-2079."
+reviewed_at = "2026-07-30"
 
 [[known_gap]]
 operation = "POST /review-projects/{project_id}/complete-conversation"
 reason = "Project-scoped completion remains to be modeled under COVAL-2079; this explicit write needs a deliberate command workflow rather than being exposed by the parity refresh."
+reviewed_at = "2026-10-05"
 
 [[known_gap]]
 operation = "POST /sofia/delegation-token"
 reason = "Customer API-key delegation token minting remains to be modeled under COVAL-2079 with an explicit security-sensitive CLI workflow."
+reviewed_at = "2026-10-05"
 
 # =============================================================================
 # REQUEST FIELDS
@@ -419,31 +491,414 @@ reason = "Served but deliberately hidden from the published schema as an interna
 operation = "POST /workspaces"
 field = "slug"
 reason = "Deprecated and ignored by the API, including when null; workspaces are identified by the returned id."
+reviewed_at = "2026-11-06"
 
 [[known_gap]]
 operation = "GET /conversations/simulated/{conversation_id}/comments"
 reason = "Transcript comments need a dedicated cursor-paginated CLI resource with comments:read and workspace selection; they are distinct from metric review annotations."
+reviewed_at = "2026-11-02"
 
 [[known_gap]]
 operation = "GET /conversations/simulated/{conversation_id}/comments/{comment_id}"
 reason = "Transcript comment retrieval belongs to the dedicated comment-thread CLI resource, with conversation ownership and workspace access checks."
+reviewed_at = "2026-11-02"
 
 [[known_gap]]
 operation = "GET /conversations/uploaded/{conversation_id}/comments"
 reason = "Transcript comments need a dedicated cursor-paginated CLI resource with comments:read and workspace selection; they are distinct from metric review annotations."
+reviewed_at = "2026-11-02"
 
 [[known_gap]]
 operation = "GET /conversations/uploaded/{conversation_id}/comments/{comment_id}"
 reason = "Transcript comment retrieval belongs to the dedicated comment-thread CLI resource, with conversation ownership and workspace access checks."
+reviewed_at = "2026-11-02"
 
 [[known_gap]]
 operation = "POST /conversation-python-analyses"
 reason = "Exploratory audio analysis needs a request-UUID recovery and asynchronous-result CLI workflow; the CLI currently supports the immutable metric-draft and preview workflow instead."
+reviewed_at = "2026-11-02"
 
 [[known_gap]]
 operation = "GET /conversation-python-analyses/{analysis_id}"
 reason = "Analysis polling belongs to the dedicated exploratory-audio-analysis CLI workflow, including recovery and expired-result handling."
+reviewed_at = "2026-11-02"
 
 [[known_gap]]
 operation = "POST /python-metrics:fromAnalysis"
 reason = "Publishing from an exploratory analysis needs its own explicit approval workflow; the CLI currently publishes immutable metric drafts using exact fingerprints and successful previews."
+reviewed_at = "2026-11-02"
+
+# Published header and query parameters the CLI cannot send yet. An operation of "*" would cover
+# every operation that publishes the parameter, which suits a header the client sends everywhere.
+
+[[known_parameter_gap]]
+operation = "GET /agents"
+in = "query"
+name = "tag_filters"
+reason = "Tag filtering on list commands remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /metrics"
+in = "query"
+name = "tag_filters"
+reason = "Tag filtering on list commands remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /personas"
+in = "query"
+name = "tag_filters"
+reason = "Tag filtering on list commands remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /run-templates"
+in = "query"
+name = "tag_filters"
+reason = "Tag filtering on list commands remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /test-sets"
+in = "query"
+name = "tag_filters"
+reason = "Tag filtering on list commands remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/simulated"
+in = "query"
+name = "include"
+reason = "Conversation list views, volume windows, time zones and expansions remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/simulated"
+in = "query"
+name = "time_zone"
+reason = "Conversation list views, volume windows, time zones and expansions remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/simulated"
+in = "query"
+name = "view"
+reason = "Conversation list views, volume windows, time zones and expansions remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/simulated"
+in = "query"
+name = "volume_end_date"
+reason = "Conversation list views, volume windows, time zones and expansions remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/simulated"
+in = "query"
+name = "volume_start_date"
+reason = "Conversation list views, volume windows, time zones and expansions remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/uploaded"
+in = "query"
+name = "aggregation"
+reason = "Uploaded-conversation list views, date windows, aggregation and grouping remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/uploaded"
+in = "query"
+name = "consistency"
+reason = "Uploaded-conversation list views, date windows, aggregation and grouping remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/uploaded"
+in = "query"
+name = "end_date"
+reason = "Uploaded-conversation list views, date windows, aggregation and grouping remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/uploaded"
+in = "query"
+name = "group_by_metadata"
+reason = "Uploaded-conversation list views, date windows, aggregation and grouping remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/uploaded"
+in = "query"
+name = "start_date"
+reason = "Uploaded-conversation list views, date windows, aggregation and grouping remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/uploaded"
+in = "query"
+name = "time_zone"
+reason = "Uploaded-conversation list views, date windows, aggregation and grouping remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/uploaded"
+in = "query"
+name = "view"
+reason = "Uploaded-conversation list views, date windows, aggregation and grouping remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/uploaded"
+in = "query"
+name = "volume_end_date"
+reason = "Uploaded-conversation list views, date windows, aggregation and grouping remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/uploaded"
+in = "query"
+name = "volume_start_date"
+reason = "Uploaded-conversation list views, date windows, aggregation and grouping remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/uploaded/{conversation_id}"
+in = "query"
+name = "include_progress"
+reason = "Upload-progress expansion remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/simulated/{conversation_id}/metrics"
+in = "query"
+name = "filter"
+reason = "Per-conversation metric listing does not yet filter, order, page, select a view or include superseded outputs; this remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/simulated/{conversation_id}/metrics"
+in = "query"
+name = "include_superseded"
+reason = "Per-conversation metric listing does not yet filter, order, page, select a view or include superseded outputs; this remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/simulated/{conversation_id}/metrics"
+in = "query"
+name = "order_by"
+reason = "Per-conversation metric listing does not yet filter, order, page, select a view or include superseded outputs; this remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/simulated/{conversation_id}/metrics"
+in = "query"
+name = "page_size"
+reason = "Per-conversation metric listing does not yet filter, order, page, select a view or include superseded outputs; this remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/simulated/{conversation_id}/metrics"
+in = "query"
+name = "page_token"
+reason = "Per-conversation metric listing does not yet filter, order, page, select a view or include superseded outputs; this remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/simulated/{conversation_id}/metrics"
+in = "query"
+name = "view"
+reason = "Per-conversation metric listing does not yet filter, order, page, select a view or include superseded outputs; this remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/uploaded/{conversation_id}/metrics"
+in = "query"
+name = "filter"
+reason = "Per-conversation metric listing does not yet filter, order, page, select a view or include superseded outputs; this remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/uploaded/{conversation_id}/metrics"
+in = "query"
+name = "include_superseded"
+reason = "Per-conversation metric listing does not yet filter, order, page, select a view or include superseded outputs; this remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/uploaded/{conversation_id}/metrics"
+in = "query"
+name = "order_by"
+reason = "Per-conversation metric listing does not yet filter, order, page, select a view or include superseded outputs; this remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/uploaded/{conversation_id}/metrics"
+in = "query"
+name = "page_size"
+reason = "Per-conversation metric listing does not yet filter, order, page, select a view or include superseded outputs; this remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/uploaded/{conversation_id}/metrics"
+in = "query"
+name = "page_token"
+reason = "Per-conversation metric listing does not yet filter, order, page, select a view or include superseded outputs; this remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /conversations/uploaded/{conversation_id}/metrics"
+in = "query"
+name = "view"
+reason = "Per-conversation metric listing does not yet filter, order, page, select a view or include superseded outputs; this remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /metrics/{metric_id}/baselines"
+in = "query"
+name = "agent_id"
+reason = "Baseline filtering by agent, persona, test set and status, and custom sigma levels, remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /metrics/{metric_id}/baselines"
+in = "query"
+name = "persona_id"
+reason = "Baseline filtering by agent, persona, test set and status, and custom sigma levels, remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /metrics/{metric_id}/baselines"
+in = "query"
+name = "sigma_levels"
+reason = "Baseline filtering by agent, persona, test set and status, and custom sigma levels, remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /metrics/{metric_id}/baselines"
+in = "query"
+name = "status"
+reason = "Baseline filtering by agent, persona, test set and status, and custom sigma levels, remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /metrics/{metric_id}/baselines"
+in = "query"
+name = "test_set_id"
+reason = "Baseline filtering by agent, persona, test set and status, and custom sigma levels, remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /metrics/{metric_id}/baselines/{baseline_id}"
+in = "query"
+name = "sigma_levels"
+reason = "Baseline filtering by agent, persona, test set and status, and custom sigma levels, remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /metrics/{metric_id}/thresholds"
+in = "query"
+name = "page_size"
+reason = "Threshold listing does not page yet; this remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /metrics/{metric_id}/thresholds"
+in = "query"
+name = "page_token"
+reason = "Threshold listing does not page yet; this remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "POST /review-annotations"
+in = "query"
+name = "project_id"
+reason = "Project-scoped review annotation access remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /review-annotations/{annotation_id}"
+in = "query"
+name = "project_id"
+reason = "Project-scoped review annotation access remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "PATCH /review-annotations/{annotation_id}"
+in = "query"
+name = "project_id"
+reason = "Project-scoped review annotation access remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "DELETE /review-annotations/{annotation_id}"
+in = "query"
+name = "project_id"
+reason = "Project-scoped review annotation access remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /runs"
+in = "query"
+name = "include"
+reason = "Run list expansions remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /tags"
+in = "query"
+name = "include_usage"
+reason = "Tag search, usage counts, unused-tag filtering and paging remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /tags"
+in = "query"
+name = "page_size"
+reason = "Tag search, usage counts, unused-tag filtering and paging remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /tags"
+in = "query"
+name = "page_token"
+reason = "Tag search, usage counts, unused-tag filtering and paging remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /tags"
+in = "query"
+name = "search"
+reason = "Tag search, usage counts, unused-tag filtering and paging remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /tags"
+in = "query"
+name = "tag_id"
+reason = "Tag search, usage counts, unused-tag filtering and paging remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "GET /tags"
+in = "query"
+name = "unused_only"
+reason = "Tag search, usage counts, unused-tag filtering and paging remain to be modeled under COVAL-2079."
+reviewed_at = "2026-11-06"
+
+[[known_parameter_gap]]
+operation = "PATCH /reports/{report_id}"
+in = "header"
+name = "If-Match"
+reason = "Optimistic concurrency for report updates remains to be modeled under COVAL-2079; the CLI updates reports without a revision precondition."
+reviewed_at = "2026-11-06"
+
+# Parameters the CLI sends that the published OpenAPI does not list.
+
+[[allowed_extra_parameter]]
+operation = "GET /api-keys"
+in = "query"
+name = "environment"
+reason = "Served by the public API, which filters keys by environment, but omitted from its published OpenAPI parameters."

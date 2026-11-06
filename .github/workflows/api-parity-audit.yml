@@ -293,11 +293,12 @@ jobs:
           commit-message: "chore(cli): refresh API parity report"
           title: "chore(cli): reconcile weekly API parity"
           body: |
-            Automated comparison of the live public OpenAPI catalog with first-class CLI commands.
+            Automated comparison of the live public OpenAPI catalog with first-class CLI commands, their request fields, and their header and query parameters.
 
-            - `api-coverage-report.md` is deterministic and changes only when API or CLI coverage changes.
+            - `api-coverage-report.md` is deterministic and changes only when API or CLI coverage changes, or when a reviewed gap passes its re-review deadline.
             - This PR does not claim to generate the CLI's hand-written command UX.
-            - If the report says `ACTION REQUIRED`, implement the missing commands or explicitly review the manifest exception, regenerate the report, and get CI green before merging.
+            - If the report says `ACTION REQUIRED`, implement the missing commands, fields or parameters, or explicitly review the manifest exception, regenerate the report, and get CI green before merging.
+            - A reviewed gap listed as overdue for re-review is still parked in `api-coverage.toml`. Implement it, or confirm it should stay parked and update its `reviewed_at` date.
 
             The branch is stable, so future weekly runs update this PR instead of opening duplicates.
           branch: chore/weekly-api-parity
