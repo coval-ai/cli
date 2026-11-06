@@ -123,6 +123,7 @@ const AGENT_RESOURCES: &[&str] = &[
     "monitors",
     "tags",
     "traces",
+    "workspaces",
 ];
 
 const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
@@ -174,6 +175,8 @@ const INPUT_JSON_HELP_COMMANDS: &[&[&str]] = &[
     &["monitors", "update", "--help"],
     &["tags", "create", "--help"],
     &["tags", "update", "--help"],
+    &["workspaces", "create", "--help"],
+    &["workspaces", "update", "--help"],
     &["traces", "search", "--help"],
 ];
 
@@ -8990,4 +8993,257 @@ async fn test_python_metric_preview_unavailable_is_terminal() {
         assert_ne!(action["id"], "python-metric-drafts.previews.get");
         assert_ne!(action["id"], "python-metric-drafts.publish");
     }
+}
+
+fn workspace_json(id: &str, display_name: &str, status: &str) -> Value {
+    json!({
+        "id": id,
+        "slug": "ignored-slug",
+        "display_name": display_name,
+        "status": status,
+        "workspace_type": "CUSTOM",
+        "created_at": "2026-11-01T00:00:00Z",
+        "last_updated_at": "2026-11-02T00:00:00Z"
+    })
+}
+
+struct HeaderAbsent(&'static str);
+
+impl Match for HeaderAbsent {
+    fn matches(&self, request: &Request) -> bool {
+        !request.headers.contains_key(self.0)
+    }
+}
+
+#[tokio::test]
+async fn test_workspaces_commands_send_specified_requests() {
+    let mock_server = MockServer::start().await;
+    let workspace_id = "01HZXW6Q8V4M2R7N5K3J9T1BCD";
+    let item_path = format!("/v1/workspaces/{workspace_id}");
+
+    Mock::given(method("GET"))
+        .and(path("/v1/workspaces"))
+        .and(header("X-API-Key", "test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "workspaces": [workspace_json(workspace_id, "Staging", "ACTIVE")]
+        })))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(item_path.as_str()))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "workspace": workspace_json(workspace_id, "Staging", "ACTIVE")
+        })))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1/workspaces"))
+        .and(body_json(json!({"display_name": "Staging"})))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "workspace": workspace_json(workspace_id, "Staging", "ACTIVE")
+        })))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("PATCH"))
+        .and(path(item_path.as_str()))
+        .and(body_json(json!({"display_name": "Staging v2"})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "workspace": workspace_json(workspace_id, "Staging v2", "ACTIVE")
+        })))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("{item_path}/archive").as_str()))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "workspace": workspace_json(workspace_id, "Staging v2", "ARCHIVED")
+        })))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path(item_path.as_str()))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "workspace": workspace_json(workspace_id, "Staging v2", "DELETED")
+        })))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let list = stdout_json(
+        coval_with_api(&mock_server)
+            .args(["--agent", "workspaces", "list"])
+            .assert()
+            .success(),
+    );
+    assert_eq!(list["resource"], "workspaces");
+    assert_eq!(list["data"][0]["id"], workspace_id);
+    assert_eq!(list["data"][0]["display_name"], "Staging");
+    assert!(list["next_actions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|action| action["id"] == "workspaces.scope"
+            && action["argv"]
+                == json!([
+                    "coval",
+                    "--agent",
+                    "--workspace",
+                    workspace_id,
+                    "agents",
+                    "list"
+                ])));
+
+    let get = stdout_json(
+        coval_with_api(&mock_server)
+            .args(["--agent", "workspaces", "get", workspace_id])
+            .assert()
+            .success(),
+    );
+    assert_eq!(get["data"]["status"], "ACTIVE");
+    assert_eq!(get["data"]["workspace_type"], "CUSTOM");
+
+    coval_with_api(&mock_server)
+        .args(["workspaces", "create", "--name", "Staging"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(workspace_id));
+
+    let updated = stdout_json(
+        coval_with_api(&mock_server)
+            .args(["--agent", "workspaces", "update", workspace_id])
+            .args(["--input-json", r#"{"display_name":"Staging v2"}"#])
+            .assert()
+            .success(),
+    );
+    assert_eq!(updated["data"]["display_name"], "Staging v2");
+
+    let archived = stdout_json(
+        coval_with_api(&mock_server)
+            .args(["--agent", "workspaces", "archive", workspace_id])
+            .assert()
+            .success(),
+    );
+    assert_eq!(archived["data"]["status"], "ARCHIVED");
+
+    coval_with_api(&mock_server)
+        .args(["workspaces", "delete", workspace_id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Workspace deleted."));
+}
+
+#[tokio::test]
+async fn test_workspaces_create_and_update_require_a_name() {
+    let mock_server = MockServer::start().await;
+
+    for args in [
+        &["workspaces", "create"][..],
+        &["workspaces", "update", "01HZXW6Q8V4M2R7N5K3J9T1BCD"][..],
+    ] {
+        coval_with_api(&mock_server)
+            .args(args)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("provide --name"));
+    }
+    assert!(mock_server.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_workspace_scope_precedence_flag_env_config() {
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let config_dir = temp_dir.path().join(".config").join("coval");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("config.toml"),
+        r#"workspace_id = "ws_config""#,
+    )
+    .unwrap();
+
+    for scoped in ["ws_flag", "ws_env", "ws_config"] {
+        Mock::given(method("GET"))
+            .and(path("/v1/agents"))
+            .and(header("X-Coval-Workspace-Id", scoped))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "agents": [] })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+    }
+
+    // The flag beats the environment, which beats the config file.
+    coval_with_api(&mock_server)
+        .args(["--workspace", "ws_flag", "agents", "list"])
+        .env("HOME", temp_dir.path())
+        .env("COVAL_WORKSPACE_ID", "ws_env")
+        .assert()
+        .success();
+    coval_with_api(&mock_server)
+        .args(["agents", "list"])
+        .env("HOME", temp_dir.path())
+        .env("COVAL_WORKSPACE_ID", "ws_env")
+        .assert()
+        .success();
+    coval_with_api(&mock_server)
+        .args(["agents", "list"])
+        .env("HOME", temp_dir.path())
+        .env_remove("COVAL_WORKSPACE_ID")
+        .assert()
+        .success();
+}
+
+#[tokio::test]
+async fn test_requests_omit_workspace_header_without_a_workspace() {
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+
+    Mock::given(method("GET"))
+        .and(path("/v1/agents"))
+        .and(HeaderAbsent("X-Coval-Workspace-Id"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "agents": [] })))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    coval_with_api(&mock_server)
+        .args(["agents", "list"])
+        .env("HOME", temp_dir.path())
+        .env_remove("COVAL_WORKSPACE_ID")
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_config_set_and_clear_workspace_id() {
+    let temp_dir = tempfile::tempdir().unwrap();
+
+    coval()
+        .args([
+            "config",
+            "set",
+            "workspace_id",
+            "01HZXW6Q8V4M2R7N5K3J9T1BCD",
+        ])
+        .env("HOME", temp_dir.path())
+        .assert()
+        .success();
+    coval()
+        .args(["config", "get", "workspace_id"])
+        .env("HOME", temp_dir.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("01HZXW6Q8V4M2R7N5K3J9T1BCD"));
+
+    coval()
+        .args(["config", "set", "workspace_id", ""])
+        .env("HOME", temp_dir.path())
+        .assert()
+        .success();
+    let config =
+        std::fs::read_to_string(temp_dir.path().join(".config/coval/config.toml")).unwrap();
+    assert!(!config.contains("workspace_id"), "{config}");
 }

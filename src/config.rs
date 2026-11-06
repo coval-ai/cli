@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 pub struct Config {
     pub api_key: Option<String>,
     pub api_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
 }
 
 impl Config {

@@ -137,6 +137,11 @@ pub fn manifest() -> Manifest {
                 scope: "global",
             },
             FlagInfo {
+                name: "workspace",
+                flag: "--workspace",
+                scope: "global",
+            },
+            FlagInfo {
                 name: "input-json",
                 flag: "--input-json",
                 scope: "body commands",
@@ -231,6 +236,7 @@ fn mutates(command: &str) -> bool {
         "create"
             | "update"
             | "delete"
+            | "archive"
             | "launch"
             | "submit"
             | "widgets.create"
@@ -747,6 +753,35 @@ const RESOURCE_SPECS: &[ResourceSpec] = &[
             "Search cursors are opaque and must be reused with the same filters and sort order.",
             "Summary accepts exactly one of simulation-id or conversation-id.",
             "Raw span responses can contain customer telemetry values; handle them accordingly.",
+        ],
+    },
+    ResourceSpec {
+        name: "workspaces",
+        commands: &[
+            "context", "list", "get", "create", "update", "delete", "archive",
+        ],
+        description: "Workspaces partition an organization's agents, test sets, personas, metrics, runs, and other resources. Every command runs in the organization's default workspace unless --workspace or COVAL_WORKSPACE_ID names another.",
+        id_name: "workspace_id",
+        id_format: "26-character ULID",
+        requires: &[],
+        optional: &[],
+        produces: &["isolated resource scopes"],
+        related: &["agents", "test-sets", "personas", "metrics", "runs"],
+        workflows: &[
+            WorkflowSpec {
+                name: "Inspect workspaces",
+                argv: &["workspaces", "list"],
+            },
+            WorkflowSpec {
+                name: "List agents in a workspace",
+                argv: &["--workspace", "<workspace_id>", "agents", "list"],
+            },
+        ],
+        pitfalls: &[
+            "Use the workspace id, not the deprecated slug, to identify a workspace.",
+            "The default workspace cannot be renamed, archived, or deleted.",
+            "delete is a soft delete; a deleted workspace returns 404 afterwards.",
+            "--workspace applies to every command in the invocation; omit it to use the default workspace.",
         ],
     },
 ];

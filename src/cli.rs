@@ -22,6 +22,15 @@ pub struct Cli {
     #[arg(long, global = true, env = "COVAL_API_URL")]
     pub api_url: Option<String>,
 
+    /// Workspace ID to scope requests to (default: the organization's default workspace)
+    #[arg(
+        long,
+        global = true,
+        env = "COVAL_WORKSPACE_ID",
+        value_name = "WORKSPACE_ID"
+    )]
+    pub workspace: Option<String>,
+
     #[arg(long, global = true)]
     pub agent: bool,
 }
@@ -157,6 +166,11 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::traces::TraceCommands,
     },
+    #[command(about = "Manage workspaces")]
+    Workspaces {
+        #[command(subcommand)]
+        command: commands::workspaces::WorkspaceCommands,
+    },
 }
 
 impl Commands {
@@ -194,6 +208,7 @@ impl Commands {
             Self::Monitors { .. } => "monitors",
             Self::Tags { .. } => "tags",
             Self::Traces { .. } => "traces",
+            Self::Workspaces { .. } => "workspaces",
         }
     }
 
@@ -228,6 +243,7 @@ impl Commands {
             Self::Monitors { command } => command.operation(),
             Self::Tags { command } => command.operation(),
             Self::Traces { command } => command.operation(),
+            Self::Workspaces { command } => command.operation(),
         }
     }
 }
@@ -250,6 +266,10 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
     };
     let api_key = cli.api_key.or(config.api_key);
     let api_url = cli.api_url.or(config.api_url);
+    let workspace_id = cli
+        .workspace
+        .or(config.workspace_id)
+        .filter(|id| !id.trim().is_empty());
 
     match cli.command {
         Commands::Agent { command } => {
@@ -335,13 +355,16 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
         Commands::Traces {
             command: commands::traces::TraceCommands::Context,
         } => commands::agent::resource_context("traces", ctx),
+        Commands::Workspaces {
+            command: commands::workspaces::WorkspaceCommands::Context,
+        } => commands::agent::resource_context("workspaces", ctx),
         _ => {
             let api_key = api_key.ok_or_else(|| {
                 anyhow::anyhow!(
                     "Not authenticated. Run `coval login` or set COVAL_API_KEY environment variable."
                 )
             })?;
-            let client = CovalClient::new(api_key, api_url.as_deref());
+            let client = CovalClient::new(api_key, api_url.as_deref()).with_workspace(workspace_id);
 
             match cli.command {
                 Commands::Agents { command } => {
@@ -409,6 +432,9 @@ pub async fn run(cli: Cli, ctx: &OutputContext) -> anyhow::Result<()> {
                 Commands::Tags { command } => commands::tags::execute(command, &client, ctx).await,
                 Commands::Traces { command } => {
                     commands::traces::execute(command, &client, ctx).await
+                }
+                Commands::Workspaces { command } => {
+                    commands::workspaces::execute(command, &client, ctx).await
                 }
                 _ => unreachable!(),
             }
