@@ -1535,9 +1535,10 @@ impl CovalClient {
         with self.assertRaisesRegex(RuntimeError, "impl CovalClient"):
             self._headers("impl AgentsClient<'_> {\n}\n")
 
-    def test_reads_the_real_client(self):
-        self.assertIn(
-            ("header", "x-api-key"), audit_api_coverage._client_wide_headers()
+    def test_reads_the_real_client_workspace_header(self):
+        self.assertTrue(
+            {("header", "x-api-key"), ("header", "x-coval-workspace-id")}
+            <= audit_api_coverage._client_wide_headers()
         )
 
 

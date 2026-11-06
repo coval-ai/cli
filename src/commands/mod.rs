@@ -22,3 +22,4 @@ pub mod tags;
 pub mod test_cases;
 pub mod test_sets;
 pub mod traces;
+pub mod workspaces;

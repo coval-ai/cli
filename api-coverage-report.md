@@ -19,15 +19,15 @@ and update `reviewed_at`.
 | --- | ---: |
 | Reconciliation status | PASS |
 | Published operations | 199 |
-| First-class CLI operations | 125 |
-| Reviewed gaps | 74 |
-| Client operations | 149 |
-| Published request fields on covered operations | 472 |
-| Request fields modeled by the CLI | 472 |
-| Reviewed request-field gaps | 0 |
+| First-class CLI operations | 131 |
+| Reviewed gaps | 68 |
+| Client operations | 155 |
+| Published request fields on covered operations | 475 |
+| Request fields modeled by the CLI | 474 |
+| Reviewed request-field gaps | 1 |
 | Published header and query parameters on covered operations | 196 |
-| Parameters the CLI can send | 72 |
-| Reviewed parameter gaps | 124 |
+| Parameters the CLI can send | 144 |
+| Reviewed parameter gaps | 52 |
 | Reviewed gaps overdue for re-review | 0 |
 | Earliest re-review deadline | 2026-11-27 |
 
@@ -76,7 +76,6 @@ Catalog: https://api.coval.dev/v1/openapi
 - `DELETE /metrics/flows/{flow_id}`
 - `DELETE /test-sets/{test_set_id}/agents/{agent_id}`
 - `DELETE /webhooks/{webhook_id}`
-- `DELETE /workspaces/{workspace_id}`
 - `GET /agents/{agent_id}/versions`
 - `GET /alerts`
 - `GET /alerts/{alert_id}`
@@ -110,14 +109,11 @@ Catalog: https://api.coval.dev/v1/openapi
 - `GET /test-sets/{test_set_id}/records`
 - `GET /test-sets/{test_set_id}/versions`
 - `GET /webhooks`
-- `GET /workspaces`
-- `GET /workspaces/{workspace_id}`
 - `PATCH /alerts/{alert_id}`
 - `PATCH /metrics/flows/{flow_id}`
 - `PATCH /organization/conversation-metrics`
 - `PATCH /organization/monitoring-metrics`
 - `PATCH /webhooks/{webhook_id}`
-- `PATCH /workspaces/{workspace_id}`
 - `POST /agents/{agent_id}/duplicate`
 - `POST /agents/{agent_id}/versions/{version_id}/revert`
 - `POST /alerts`
@@ -143,8 +139,6 @@ Catalog: https://api.coval.dev/v1/openapi
 - `POST /test-sets/{test_set_id}/versions/{version_id}/revert`
 - `POST /traces`
 - `POST /webhooks`
-- `POST /workspaces`
-- `POST /workspaces/{workspace_id}/archive`
 
 ## New published request fields the CLI drops
 
@@ -164,7 +158,7 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## All current request-field gaps
 
-- None.
+- `POST /workspaces slug`
 
 ## New published parameters the CLI cannot send
 
@@ -184,7 +178,6 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## All current parameter gaps
 
-- `* header X-Coval-Workspace-Id (72 operations)`
 - `DELETE /review-annotations/{id} query project_id`
 - `GET /agents query tag_filters`
 - `GET /conversations/simulated query include`

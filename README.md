@@ -79,6 +79,7 @@ coval simulated-conversations list --run-id <run_id>
 | `coval monitors` | Manage production monitors and events |
 | `coval tags` | Manage resource tags |
 | `coval traces` | Search and inspect OpenTelemetry traces |
+| `coval workspaces` | Manage workspaces |
 | `coval config` | Manage CLI configuration |
 
 ### Command Migration
@@ -102,6 +103,7 @@ action previously identified as `simulations.list_for_run`.
 |------|-------------|
 | `--format json` | Output as JSON (default: table) |
 | `--api-key` | Override API key |
+| `--workspace <id>` | Scope the command to a workspace (env `COVAL_WORKSPACE_ID`, config `workspace_id`; default: the organization's default workspace) |
 | `--help` | Show help |
 
 ## Examples
@@ -335,6 +337,30 @@ coval dashboards create \
   --name "Production Metrics" \
   --description "Latency and quality overview" \
   --default true
+```
+
+### Work in a Workspace
+
+Every command runs in the organization's default workspace unless you name
+another one with `--workspace`, `COVAL_WORKSPACE_ID`, or the `workspace_id`
+config key (in that order of precedence).
+
+```bash
+# List workspaces and create one
+coval workspaces list
+coval workspaces create --name "Staging agents"
+
+# Run any command inside a workspace
+coval --workspace 01HZXW6Q8V4M2R7N5K3J9T1BCD agents list
+COVAL_WORKSPACE_ID=01HZXW6Q8V4M2R7N5K3J9T1BCD coval test-sets list
+
+# Make a workspace the default for this machine (empty value clears it)
+coval config set workspace_id 01HZXW6Q8V4M2R7N5K3J9T1BCD
+
+# Rename, archive, or soft-delete a custom workspace
+coval workspaces update 01HZXW6Q8V4M2R7N5K3J9T1BCD --name "Staging"
+coval workspaces archive 01HZXW6Q8V4M2R7N5K3J9T1BCD
+coval workspaces delete 01HZXW6Q8V4M2R7N5K3J9T1BCD
 ```
 
 ### JSON Output for Scripting
@@ -577,6 +603,8 @@ Config file: `~/.config/coval/config.toml`
 
 ```toml
 api_key = "sk_..."
+# Optional: scope every command to this workspace
+workspace_id = "01HZXW6Q8V4M2R7N5K3J9T1BCD"
 ```
 
 ## Environment Variables
@@ -584,6 +612,7 @@ api_key = "sk_..."
 | Variable | Description |
 |----------|-------------|
 | `COVAL_API_KEY` | API key (overrides config file) |
+| `COVAL_WORKSPACE_ID` | Workspace to scope requests to (overrides config file) |
 
 ## License
 

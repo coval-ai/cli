@@ -38,6 +38,7 @@ pub fn execute(cmd: ConfigCommands, ctx: &OutputContext) -> Result<()> {
             let value = match key.as_str() {
                 "api_key" => config.api_key.map(|key| mask_api_key(&key)),
                 "api_url" => config.api_url,
+                "workspace_id" => config.workspace_id,
                 _ => anyhow::bail!("Unknown config key: {key}"),
             };
 
@@ -60,6 +61,9 @@ pub fn execute(cmd: ConfigCommands, ctx: &OutputContext) -> Result<()> {
             match key.as_str() {
                 "api_key" => config.api_key = Some(value),
                 "api_url" => config.api_url = Some(value),
+                "workspace_id" => {
+                    config.workspace_id = Some(value).filter(|id| !id.trim().is_empty());
+                }
                 _ => anyhow::bail!("Unknown config key: {key}"),
             }
             config.save()?;
