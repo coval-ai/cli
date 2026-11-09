@@ -1427,6 +1427,17 @@ class FunctionParameterTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "could not resolve the parameter"):
             self._parameters(block)
 
+    def test_rejects_computed_parameter_call_names(self):
+        for call in [
+            '.header(header_name(), "value")',
+            '.append_pair(query_name(), "value")',
+        ]:
+            with self.subTest(call=call):
+                with self.assertRaisesRegex(
+                    RuntimeError, "could not resolve the parameter"
+                ):
+                    self._parameters(call)
+
     def test_rejects_an_unresolvable_query_helper(self):
         block = """
     pub async fn list(&self, params: LocalParams) {
@@ -1479,6 +1490,23 @@ impl Other {
                 helpers = audit_api_coverage._model_query_helpers()
 
         self.assertEqual({"ListParams": {"filter", "order_by"}}, helpers)
+
+    def test_rejects_unreadable_query_construction_in_shared_helpers(self):
+        for call in [
+            'url.set_query(Some("view=full"));',
+            "url.query(&params);",
+            'url.query_pairs_mut().append_pair(query_name(), "value");',
+        ]:
+            with self.subTest(call=call), tempfile.TemporaryDirectory() as directory:
+                models = Path(directory)
+                (models / "common.rs").write_text(
+                    "impl ListParams {\n    pub fn apply_to(&self, url: &mut Url) {\n"
+                    + call
+                    + "\n    }\n}\n"
+                )
+                with patch.object(audit_api_coverage, "MODELS_PATH", models):
+                    with self.assertRaisesRegex(RuntimeError, "could not resolve"):
+                        audit_api_coverage._model_query_helpers()
 
     def test_reads_the_real_list_params_helper(self):
         helpers = audit_api_coverage._model_query_helpers()

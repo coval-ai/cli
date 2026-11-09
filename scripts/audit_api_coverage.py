@@ -372,8 +372,8 @@ def _request_body_types(client_method: str, block: str) -> set[str]:
     return types
 
 
-_HEADER_CALL = re.compile(r"\.header\(\s*(?P<name>[^,()]+?)\s*,")
-_QUERY_PAIR_CALL = re.compile(r"\bappend_pair\(\s*(?P<name>[^,()]+?)\s*,")
+_HEADER_CALL = re.compile(r"\.header\(\s*(?P<name>[^,]+?)\s*,")
+_QUERY_PAIR_CALL = re.compile(r"\bappend_pair\(\s*(?P<name>[^,]+?)\s*,")
 _QUERY_HELPER_CALL = re.compile(r"\b(?P<binding>[A-Za-z0-9_]+)\s*\.\s*apply_to\(")
 _UNSUPPORTED_QUERY_CALL = re.compile(r"\.(?:query|set_query)\(")
 _STRING_CONSTANT = re.compile(
@@ -415,6 +415,11 @@ def _model_query_helpers() -> dict[str, set[str]]:
             if not re.search(r"\bfn apply_to\s*\(", body):
                 continue
             name = implementation["name"]
+            if _UNSUPPORTED_QUERY_CALL.search(body):
+                raise RuntimeError(
+                    f"could not resolve the query parameters of {name}::apply_to; "
+                    "append them with url.query_pairs_mut().append_pair"
+                )
             helpers[name] = {
                 _parameter_name(match["name"], constants, f"{name}::apply_to")
                 for match in _QUERY_PAIR_CALL.finditer(body)
