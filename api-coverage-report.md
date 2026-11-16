@@ -22,8 +22,8 @@ and update `reviewed_at`.
 | First-class CLI operations | 131 |
 | Reviewed gaps | 68 |
 | Client operations | 155 |
-| Published request fields on covered operations | 475 |
-| Request fields modeled by the CLI | 474 |
+| Published request fields on covered operations | 477 |
+| Request fields modeled by the CLI | 476 |
 | Reviewed request-field gaps | 1 |
 | Published header and query parameters on covered operations | 196 |
 | Parameters the CLI can send | 144 |

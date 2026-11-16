@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Args, Subcommand};
 
 use crate::client::models::{
-    BatchAssignmentMode, CreateReviewProjectRequest, ListParams, ProjectType,
+    BatchAllocationOrder, BatchAssignmentMode, CreateReviewProjectRequest, ListParams, ProjectType,
     UpdateReviewProjectRequest,
 };
 use crate::client::CovalClient;
@@ -100,6 +100,12 @@ pub struct CreateArgs {
     batch_assignment_mode: Option<BatchAssignmentMode>,
     #[arg(long, value_parser = clap::value_parser!(u8).range(1..=50), help = "Conversations per reviewer batch (1-50)")]
     batch_size: Option<u8>,
+    #[arg(
+        long,
+        value_enum,
+        help = "Which free conversations a new reviewer batch takes"
+    )]
+    batch_allocation_order: Option<BatchAllocationOrder>,
 }
 
 #[derive(Args)]
@@ -165,6 +171,12 @@ pub struct UpdateArgs {
     batch_assignment_mode: Option<BatchAssignmentMode>,
     #[arg(long, value_parser = clap::value_parser!(u8).range(1..=50), help = "Conversations per reviewer batch (1-50)")]
     batch_size: Option<u8>,
+    #[arg(
+        long,
+        value_enum,
+        help = "Which free conversations a new reviewer batch takes"
+    )]
+    batch_allocation_order: Option<BatchAllocationOrder>,
 }
 
 #[derive(Args)]
@@ -251,6 +263,11 @@ pub async fn execute(
                 args.batch_assignment_mode,
             )?;
             input_json::insert(&mut input, "batch_size", args.batch_size)?;
+            input_json::insert(
+                &mut input,
+                "batch_allocation_order",
+                args.batch_allocation_order,
+            )?;
             let req: CreateReviewProjectRequest = input_json::finish(input)?;
             let project = client.review_projects().create(req).await?;
             emit_one_with_actions(
@@ -318,6 +335,11 @@ pub async fn execute(
                 args.batch_assignment_mode,
             )?;
             input_json::insert(&mut input, "batch_size", args.batch_size)?;
+            input_json::insert(
+                &mut input,
+                "batch_allocation_order",
+                args.batch_allocation_order,
+            )?;
             let req: UpdateReviewProjectRequest = input_json::finish(input)?;
             let project = client
                 .review_projects()

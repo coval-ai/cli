@@ -8703,9 +8703,10 @@ async fn test_november_parity_review_batch_settings_preserve_null_and_omission()
         ("PATCH", "update", "/v1/review-projects/proj456"),
     ] {
         for settings in [
-            json!({"batch_assignment_mode": "SELF", "batch_size": 1}),
-            json!({"batch_assignment_mode": "MANAGER", "batch_size": 50}),
-            json!({"batch_assignment_mode": null, "batch_size": null}),
+            json!({"batch_assignment_mode": "SELF", "batch_size": 1, "batch_allocation_order": "LIST_ORDER"}),
+            json!({"batch_assignment_mode": "MANAGER", "batch_size": 50, "batch_allocation_order": "LATEST_ADDED_FIRST"}),
+            json!({"batch_assignment_mode": null, "batch_size": null, "batch_allocation_order": "RANDOM"}),
+            json!({"batch_assignment_mode": null, "batch_size": null, "batch_allocation_order": null}),
             json!({}),
         ] {
             let server = MockServer::start().await;
@@ -8734,7 +8735,11 @@ async fn test_november_parity_review_batch_settings_preserve_null_and_omission()
                 .assert()
                 .success();
             let body = capture.take();
-            for field in ["batch_assignment_mode", "batch_size"] {
+            for field in [
+                "batch_assignment_mode",
+                "batch_size",
+                "batch_allocation_order",
+            ] {
                 assert_eq!(body.get(field), settings.get(field));
             }
         }
@@ -8751,16 +8756,19 @@ async fn test_november_parity_review_batch_flags_override_json() {
             "update",
             "proj456",
             "--input-json",
-            r#"{"batch_assignment_mode":null,"batch_size":null}"#,
+            r#"{"batch_assignment_mode":null,"batch_size":null,"batch_allocation_order":null}"#,
             "--batch-assignment-mode",
             "MANAGER",
             "--batch-size",
             "7",
+            "--batch-allocation-order",
+            "RANDOM",
         ],
     )
     .await;
     assert_eq!(body["batch_assignment_mode"], "MANAGER");
     assert_eq!(body["batch_size"], 7);
+    assert_eq!(body["batch_allocation_order"], "RANDOM");
 }
 
 fn november_uploaded_response() -> Value {
@@ -8922,6 +8930,17 @@ async fn test_november_parity_rejects_invalid_batch_mode_and_flag_ranges() {
             "proj456",
             "--input-json",
             r#"{"batch_assignment_mode":"OTHER"}"#,
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown variant"));
+    coval_with_api(&server)
+        .args([
+            "review-projects",
+            "update",
+            "proj456",
+            "--input-json",
+            r#"{"batch_allocation_order":"OTHER"}"#,
         ])
         .assert()
         .failure()
