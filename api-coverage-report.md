@@ -17,12 +17,12 @@ and update `reviewed_at`.
 
 | Metric | Value |
 | --- | ---: |
-| Reconciliation status | PASS |
+| Reconciliation status | ACTION REQUIRED |
 | Published operations | 199 |
 | First-class CLI operations | 131 |
 | Reviewed gaps | 68 |
 | Client operations | 155 |
-| Published request fields on covered operations | 475 |
+| Published request fields on covered operations | 477 |
 | Request fields modeled by the CLI | 474 |
 | Reviewed request-field gaps | 1 |
 | Published header and query parameters on covered operations | 196 |
@@ -63,7 +63,7 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## Coverage snapshot mismatches
 
-- None.
+- `published_request_fields: recorded 475, current 477`
 
 ## Client-only operations
 
@@ -142,7 +142,8 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## New published request fields the CLI drops
 
-- None.
+- `PATCH /review-projects/{id} batch_allocation_order`
+- `POST /review-projects batch_allocation_order`
 
 ## Reviewed request-field gaps no longer present
 
@@ -158,6 +159,8 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## All current request-field gaps
 
+- `PATCH /review-projects/{id} batch_allocation_order`
+- `POST /review-projects batch_allocation_order`
 - `POST /workspaces slug`
 
 ## New published parameters the CLI cannot send
