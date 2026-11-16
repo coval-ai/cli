@@ -55,6 +55,19 @@ pub enum BatchAssignmentMode {
     ManagerAssigned,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ValueEnum)]
+pub enum BatchAllocationOrder {
+    #[serde(rename = "LIST_ORDER")]
+    #[value(name = "LIST_ORDER")]
+    ListOrder,
+    #[serde(rename = "LATEST_ADDED_FIRST")]
+    #[value(name = "LATEST_ADDED_FIRST")]
+    LatestAddedFirst,
+    #[serde(rename = "RANDOM")]
+    #[value(name = "RANDOM")]
+    Random,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateReviewProjectRequest {
     pub display_name: String,
@@ -88,6 +101,12 @@ pub struct CreateReviewProjectRequest {
         skip_serializing_if = "Option::is_none"
     )]
     pub batch_size: Option<Option<u8>>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub batch_allocation_order: Option<Option<BatchAllocationOrder>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allow_metric_skipping: Option<bool>,
     #[serde(
@@ -152,6 +171,12 @@ pub struct UpdateReviewProjectRequest {
         skip_serializing_if = "Option::is_none"
     )]
     pub batch_size: Option<Option<u8>>,
+    #[serde(
+        default,
+        deserialize_with = "super::explicit_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub batch_allocation_order: Option<Option<BatchAllocationOrder>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allow_metric_skipping: Option<bool>,
     #[serde(

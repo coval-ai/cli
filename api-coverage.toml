@@ -11,11 +11,11 @@
 
 [snapshot]
 catalog_url = "https://api.coval.dev/v1/openapi"
-reviewed_at = "2026-11-06"
+reviewed_at = "2026-11-16"
 published_operations = 199
 cli_supported_operations = 131
-published_request_fields = 475
-cli_modeled_request_fields = 474
+published_request_fields = 477
+cli_modeled_request_fields = 476
 published_parameters = 196
 cli_supported_parameters = 144
 
