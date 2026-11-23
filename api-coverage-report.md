@@ -17,15 +17,15 @@ and update `reviewed_at`.
 
 | Metric | Value |
 | --- | ---: |
-| Reconciliation status | PASS |
-| Published operations | 199 |
+| Reconciliation status | ACTION REQUIRED |
+| Published operations | 201 |
 | First-class CLI operations | 131 |
 | Reviewed gaps | 68 |
 | Client operations | 155 |
 | Published request fields on covered operations | 477 |
 | Request fields modeled by the CLI | 476 |
 | Reviewed request-field gaps | 1 |
-| Published header and query parameters on covered operations | 196 |
+| Published header and query parameters on covered operations | 197 |
 | Parameters the CLI can send | 144 |
 | Reviewed parameter gaps | 52 |
 | Reviewed gaps overdue for re-review | 0 |
@@ -39,7 +39,8 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## New published operations without CLI commands
 
-- None.
+- `GET /organization/caller-id`
+- `PATCH /organization/caller-id`
 
 ## Reviewed gaps no longer present
 
@@ -63,7 +64,8 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## Coverage snapshot mismatches
 
-- None.
+- `published_operations: recorded 199, current 201`
+- `published_parameters: recorded 196, current 197`
 
 ## Client-only operations
 
@@ -92,6 +94,7 @@ Catalog: https://api.coval.dev/v1/openapi
 - `GET /metrics/tags`
 - `GET /metrics/template-variables`
 - `GET /metrics/{metric_id}/baselines/{baseline_id}/history`
+- `GET /organization/caller-id`
 - `GET /organization/conversation-metrics`
 - `GET /organization/monitoring-metrics`
 - `GET /organization/users`
@@ -111,6 +114,7 @@ Catalog: https://api.coval.dev/v1/openapi
 - `GET /webhooks`
 - `PATCH /alerts/{alert_id}`
 - `PATCH /metrics/flows/{flow_id}`
+- `PATCH /organization/caller-id`
 - `PATCH /organization/conversation-metrics`
 - `PATCH /organization/monitoring-metrics`
 - `PATCH /webhooks/{webhook_id}`
@@ -162,7 +166,7 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## New published parameters the CLI cannot send
 
-- None.
+- `GET /metrics/{id} query include`
 
 ## Reviewed parameter gaps no longer present
 
@@ -208,6 +212,7 @@ Catalog: https://api.coval.dev/v1/openapi
 - `GET /conversations/uploaded/{id}/metrics query page_token`
 - `GET /conversations/uploaded/{id}/metrics query view`
 - `GET /metrics query tag_filters`
+- `GET /metrics/{id} query include`
 - `GET /metrics/{id}/baselines query agent_id`
 - `GET /metrics/{id}/baselines query persona_id`
 - `GET /metrics/{id}/baselines query sigma_levels`
