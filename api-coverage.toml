@@ -11,12 +11,12 @@
 
 [snapshot]
 catalog_url = "https://api.coval.dev/v1/openapi"
-reviewed_at = "2026-11-16"
-published_operations = 199
+reviewed_at = "2026-11-24"
+published_operations = 208
 cli_supported_operations = 131
 published_request_fields = 477
 cli_modeled_request_fields = 476
-published_parameters = 196
+published_parameters = 197
 cli_supported_parameters = 144
 
 [gap_review]
@@ -902,3 +902,55 @@ operation = "GET /api-keys"
 in = "query"
 name = "environment"
 reason = "Served by the public API, which filters keys by environment, but omitted from its published OpenAPI parameters."
+
+[[known_gap]]
+operation = "GET /clustering-assignments"
+reason = "Cluster-assignment browsing needs dedicated command and pagination UX; this new command family remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-24"
+
+[[known_gap]]
+operation = "GET /clustering-runs"
+reason = "Clustering-run discovery and pagination need a dedicated command family under COVAL-2079."
+reviewed_at = "2026-11-24"
+
+[[known_gap]]
+operation = "GET /clustering-runs/latest"
+reason = "Latest clustering-run lookup remains part of the unmodeled clustering command family under COVAL-2079."
+reviewed_at = "2026-11-24"
+
+[[known_gap]]
+operation = "GET /clustering-runs/{run_id}"
+reason = "Clustering-run details remain part of the unmodeled clustering command family under COVAL-2079."
+reviewed_at = "2026-11-24"
+
+[[known_gap]]
+operation = "GET /metrics/catalog"
+reason = "Shared metric-catalog discovery needs dedicated command and pagination UX under COVAL-2079."
+reviewed_at = "2026-11-24"
+
+[[known_gap]]
+operation = "GET /metrics/catalog/{entry_id}"
+reason = "Shared metric-catalog entry inspection remains part of the unmodeled catalog command family under COVAL-2079."
+reviewed_at = "2026-11-24"
+
+[[known_gap]]
+operation = "POST /metrics/catalog/{entry_id}/copy"
+reason = "Copying a shared catalog entry into the active organization requires explicit destination and mutation UX under COVAL-2079."
+reviewed_at = "2026-11-24"
+
+[[known_gap]]
+operation = "GET /organization/caller-id"
+reason = "Organization caller-ID pool and carrier-authorized ANI configuration have no first-class CLI command yet; track the new command family under COVAL-2079."
+reviewed_at = "2026-11-24"
+
+[[known_gap]]
+operation = "PATCH /organization/caller-id"
+reason = "Replacing carrier-verified organization ANI allowlists needs dedicated validation and mutation UX under COVAL-2079; this audit does not introduce caller-ID administration."
+reviewed_at = "2026-11-24"
+
+[[known_parameter_gap]]
+operation = "GET /metrics/{metric_id}"
+in = "query"
+name = "include"
+reason = "The reviewed_audit_admission expansion exposes a bounded human-review capability; dedicated audit-admission UX remains to be modeled under COVAL-2079."
+reviewed_at = "2026-11-24"

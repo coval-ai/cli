@@ -18,16 +18,16 @@ and update `reviewed_at`.
 | Metric | Value |
 | --- | ---: |
 | Reconciliation status | PASS |
-| Published operations | 199 |
+| Published operations | 208 |
 | First-class CLI operations | 131 |
-| Reviewed gaps | 68 |
+| Reviewed gaps | 77 |
 | Client operations | 155 |
 | Published request fields on covered operations | 477 |
 | Request fields modeled by the CLI | 476 |
 | Reviewed request-field gaps | 1 |
-| Published header and query parameters on covered operations | 196 |
+| Published header and query parameters on covered operations | 197 |
 | Parameters the CLI can send | 144 |
-| Reviewed parameter gaps | 52 |
+| Reviewed parameter gaps | 53 |
 | Reviewed gaps overdue for re-review | 0 |
 | Earliest re-review deadline | 2026-11-27 |
 
@@ -80,18 +80,25 @@ Catalog: https://api.coval.dev/v1/openapi
 - `GET /alerts`
 - `GET /alerts/{alert_id}`
 - `GET /alerts/{alert_id}/events`
+- `GET /clustering-assignments`
+- `GET /clustering-runs`
+- `GET /clustering-runs/latest`
+- `GET /clustering-runs/{run_id}`
 - `GET /conversation-python-analyses/{analysis_id}`
 - `GET /conversations/simulated/{conversation_id}/comments`
 - `GET /conversations/simulated/{conversation_id}/comments/{comment_id}`
 - `GET /conversations/uploaded/{conversation_id}/comments`
 - `GET /conversations/uploaded/{conversation_id}/comments/{comment_id}`
 - `GET /integrations/slack`
+- `GET /metrics/catalog`
+- `GET /metrics/catalog/{entry_id}`
 - `GET /metrics/flows`
 - `GET /metrics/recently-deleted`
 - `GET /metrics/sql-schema`
 - `GET /metrics/tags`
 - `GET /metrics/template-variables`
 - `GET /metrics/{metric_id}/baselines/{baseline_id}/history`
+- `GET /organization/caller-id`
 - `GET /organization/conversation-metrics`
 - `GET /organization/monitoring-metrics`
 - `GET /organization/users`
@@ -111,6 +118,7 @@ Catalog: https://api.coval.dev/v1/openapi
 - `GET /webhooks`
 - `PATCH /alerts/{alert_id}`
 - `PATCH /metrics/flows/{flow_id}`
+- `PATCH /organization/caller-id`
 - `PATCH /organization/conversation-metrics`
 - `PATCH /organization/monitoring-metrics`
 - `PATCH /webhooks/{webhook_id}`
@@ -122,6 +130,7 @@ Catalog: https://api.coval.dev/v1/openapi
 - `POST /conversation-python-analyses`
 - `POST /conversations/simulated:rerunMetrics`
 - `POST /integrations/slack/connect`
+- `POST /metrics/catalog/{entry_id}/copy`
 - `POST /metrics/flows`
 - `POST /metrics/outputs:batchGet`
 - `POST /metrics/sql:test`
@@ -208,6 +217,7 @@ Catalog: https://api.coval.dev/v1/openapi
 - `GET /conversations/uploaded/{id}/metrics query page_token`
 - `GET /conversations/uploaded/{id}/metrics query view`
 - `GET /metrics query tag_filters`
+- `GET /metrics/{id} query include`
 - `GET /metrics/{id}/baselines query agent_id`
 - `GET /metrics/{id}/baselines query persona_id`
 - `GET /metrics/{id}/baselines query sigma_levels`
