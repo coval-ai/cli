@@ -17,17 +17,17 @@ and update `reviewed_at`.
 
 | Metric | Value |
 | --- | ---: |
-| Reconciliation status | ACTION REQUIRED |
-| Published operations | 201 |
+| Reconciliation status | PASS |
+| Published operations | 208 |
 | First-class CLI operations | 131 |
-| Reviewed gaps | 68 |
+| Reviewed gaps | 77 |
 | Client operations | 155 |
 | Published request fields on covered operations | 477 |
 | Request fields modeled by the CLI | 476 |
 | Reviewed request-field gaps | 1 |
 | Published header and query parameters on covered operations | 197 |
 | Parameters the CLI can send | 144 |
-| Reviewed parameter gaps | 52 |
+| Reviewed parameter gaps | 53 |
 | Reviewed gaps overdue for re-review | 0 |
 | Earliest re-review deadline | 2026-11-27 |
 
@@ -39,8 +39,7 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## New published operations without CLI commands
 
-- `GET /organization/caller-id`
-- `PATCH /organization/caller-id`
+- None.
 
 ## Reviewed gaps no longer present
 
@@ -64,8 +63,7 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## Coverage snapshot mismatches
 
-- `published_operations: recorded 199, current 201`
-- `published_parameters: recorded 196, current 197`
+- None.
 
 ## Client-only operations
 
@@ -82,12 +80,18 @@ Catalog: https://api.coval.dev/v1/openapi
 - `GET /alerts`
 - `GET /alerts/{alert_id}`
 - `GET /alerts/{alert_id}/events`
+- `GET /clustering-assignments`
+- `GET /clustering-runs`
+- `GET /clustering-runs/latest`
+- `GET /clustering-runs/{run_id}`
 - `GET /conversation-python-analyses/{analysis_id}`
 - `GET /conversations/simulated/{conversation_id}/comments`
 - `GET /conversations/simulated/{conversation_id}/comments/{comment_id}`
 - `GET /conversations/uploaded/{conversation_id}/comments`
 - `GET /conversations/uploaded/{conversation_id}/comments/{comment_id}`
 - `GET /integrations/slack`
+- `GET /metrics/catalog`
+- `GET /metrics/catalog/{entry_id}`
 - `GET /metrics/flows`
 - `GET /metrics/recently-deleted`
 - `GET /metrics/sql-schema`
@@ -126,6 +130,7 @@ Catalog: https://api.coval.dev/v1/openapi
 - `POST /conversation-python-analyses`
 - `POST /conversations/simulated:rerunMetrics`
 - `POST /integrations/slack/connect`
+- `POST /metrics/catalog/{entry_id}/copy`
 - `POST /metrics/flows`
 - `POST /metrics/outputs:batchGet`
 - `POST /metrics/sql:test`
@@ -166,7 +171,7 @@ Catalog: https://api.coval.dev/v1/openapi
 
 ## New published parameters the CLI cannot send
 
-- `GET /metrics/{id} query include`
+- None.
 
 ## Reviewed parameter gaps no longer present
 

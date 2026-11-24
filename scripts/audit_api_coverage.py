@@ -139,14 +139,25 @@ def _canonical_operation(method: str, path: str) -> str:
     return f"{method.upper()} {path}"
 
 
+class PublishedSpecs(list):
+    def __init__(self, documents: dict[str, dict]):
+        super().__init__(documents.values())
+        self.documents = documents
+
+
 def _published_specs(catalog_url: str, allowed_origins: frozenset[str]) -> list[dict]:
     """Fetch the catalog index and every per-resource spec exactly once."""
 
     catalog = json.loads(_fetch(catalog_url, allowed_origins))
-    return [
-        yaml.safe_load(_fetch(entry["url"], allowed_origins))
-        for entry in catalog["specs"]
-    ]
+    documents = {}
+    for entry in catalog["specs"]:
+        stem = urlsplit(entry["url"]).path.rsplit("/", 1)[-1].removesuffix(".yaml")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", stem):
+            raise RuntimeError(f"invalid catalog document stem {stem!r}")
+        if entry.get("name", stem) != stem or stem in documents:
+            raise RuntimeError(f"ambiguous catalog document stem {stem!r}")
+        documents[stem] = yaml.safe_load(_fetch(entry["url"], allowed_origins))
+    return PublishedSpecs(documents)
 
 
 def _published_operations(specs: list[dict]) -> dict[str, str]:
@@ -217,17 +228,33 @@ def _parameter_key(location: str, name: str) -> tuple[str, str]:
     return (location, name.lower() if location == "header" else name)
 
 
-def _resolve_parameter(parameter: dict, components: dict) -> dict:
+def _resolve_parameter(
+    parameter: dict,
+    components: dict,
+    documents: dict[str, dict] | None = None,
+    seen: frozenset[tuple[int, str]] = frozenset(),
+) -> dict:
     reference = parameter.get("$ref")
     if reference is None:
         return parameter
-    prefix = "#/components/parameters/"
-    if not reference.startswith(prefix):
+    document, separator, fragment = reference.partition("#")
+    prefix = "/components/parameters/"
+    if not separator or not fragment.startswith(prefix):
         raise RuntimeError(f"unsupported parameter reference {reference!r}")
-    target = components.get(reference.removeprefix(prefix))
+    if document:
+        document = document.removeprefix("./")
+        stem = document.removesuffix(".yaml")
+        if document != f"{stem}.yaml" or stem not in (documents or {}):
+            raise RuntimeError(f"unsupported parameter reference {reference!r}")
+        components = (documents[stem].get("components") or {}).get("parameters") or {}
+    name = fragment.removeprefix(prefix)
+    identity = (id(components), name)
+    if identity in seen:
+        raise RuntimeError(f"cyclic parameter reference {reference!r}")
+    target = components.get(name)
     if target is None:
         raise RuntimeError(f"parameter references unknown component {reference!r}")
-    return _resolve_parameter(target, components)
+    return _resolve_parameter(target, components, documents, seen | {identity})
 
 
 def _published_parameters(
@@ -236,7 +263,7 @@ def _published_parameters(
     """Map each published operation to its header and query parameter keys.
 
     Path-level parameters apply to every operation on the path, and references
-    to ``components/parameters`` are resolved within the same spec. The second
+    to ``components/parameters`` use only documents fetched from the catalog. The second
     value maps each key to its published spelling for the report.
     """
 
@@ -252,7 +279,9 @@ def _published_parameters(
                     continue
                 keys = parameters.setdefault(_canonical_operation(method, path), set())
                 for parameter in [*shared, *(operation.get("parameters") or [])]:
-                    parameter = _resolve_parameter(parameter, components)
+                    parameter = _resolve_parameter(
+                        parameter, components, getattr(specs, "documents", {})
+                    )
                     location = parameter.get("in")
                     name = parameter.get("name")
                     if location not in PARAMETER_LOCATIONS or not name:

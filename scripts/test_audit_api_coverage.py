@@ -2,6 +2,7 @@
 
 import datetime
 import io
+import json
 import tempfile
 import tomllib
 import unittest
@@ -1370,6 +1371,145 @@ class PublishedParameterTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(RuntimeError, "unsupported parameter reference"):
             audit_api_coverage._published_parameters([spec])
+
+    @staticmethod
+    def _catalog_specs(documents):
+        catalog = {
+            "specs": [
+                {"name": name, "url": f"https://api.coval.dev/v1/openapi/{name}"}
+                for name in documents
+            ]
+        }
+        with patch("scripts.audit_api_coverage._fetch") as fetch:
+            fetch.side_effect = [
+                json.dumps(catalog).encode(),
+                *(json.dumps(document).encode() for document in documents.values()),
+            ]
+            specs = audit_api_coverage._published_specs(
+                audit_api_coverage.CATALOG_URL,
+                audit_api_coverage.DEFAULT_ALLOWED_ORIGINS,
+            )
+        self_calls = fetch.call_count
+        if self_calls != len(documents) + 1:
+            raise AssertionError("References must not fetch additional documents")
+        return specs
+
+    def test_resolves_only_catalog_backed_cross_spec_parameter_refs(self):
+        specs = self._catalog_specs(
+            {
+                "metric-catalog": {
+                    "paths": {
+                        "/metric-catalog": {
+                            "get": {
+                                "parameters": [
+                                    {
+                                        "$ref": "metrics.yaml#/components/parameters/WorkspaceId"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "components": {
+                        "parameters": {
+                            "WorkspaceId": {"name": "wrong-local-name", "in": "query"}
+                        }
+                    },
+                },
+                "metrics": {
+                    "components": {
+                        "parameters": {
+                            "WorkspaceId": {"$ref": "#/components/parameters/Actual"},
+                            "Actual": {"name": "X-Coval-Workspace-Id", "in": "header"},
+                        }
+                    }
+                },
+            }
+        )
+        parameters, _ = audit_api_coverage._published_parameters(specs)
+        self.assertEqual(
+            {"GET /metric-catalog": {("header", "x-coval-workspace-id")}}, parameters
+        )
+
+    def test_accepts_publisher_dot_prefix_and_manifest_slug_spelling(self):
+        specs = self._catalog_specs(
+            {
+                "metrics": {
+                    "paths": {
+                        "/metrics": {
+                            "get": {
+                                "parameters": [
+                                    {
+                                        "$ref": "./Metric_1.yaml#/components/parameters/WorkspaceId"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                "Metric_1": {
+                    "components": {
+                        "parameters": {
+                            "WorkspaceId": {
+                                "name": "X-Coval-Workspace-Id",
+                                "in": "header",
+                            }
+                        }
+                    }
+                },
+            }
+        )
+        parameters, _ = audit_api_coverage._published_parameters(specs)
+        self.assertEqual(
+            {"GET /metrics": {("header", "x-coval-workspace-id")}}, parameters
+        )
+
+    def test_rejects_unlisted_external_documents_without_network_fetch(self):
+        for reference in [
+            "other.yaml#/components/parameters/WorkspaceId",
+            "../metrics.yaml#/components/parameters/WorkspaceId",
+            "./../metrics.yaml#/components/parameters/WorkspaceId",
+            "/metrics.yaml#/components/parameters/WorkspaceId",
+            "./other.yaml#/components/parameters/WorkspaceId",
+            "https://api.coval.dev/metrics.yaml#/components/parameters/WorkspaceId",
+            "file:///metrics.yaml#/components/parameters/WorkspaceId",
+        ]:
+            with self.subTest(reference=reference):
+                specs = self._catalog_specs(
+                    {
+                        "metrics": {
+                            "paths": {
+                                "/metrics": {
+                                    "get": {"parameters": [{"$ref": reference}]}
+                                }
+                            }
+                        }
+                    }
+                )
+                with self.assertRaisesRegex(
+                    RuntimeError, "unsupported parameter reference"
+                ):
+                    audit_api_coverage._published_parameters(specs)
+
+    def test_rejects_parameter_reference_cycles(self):
+        spec = {
+            "paths": {
+                "/metrics": {
+                    "get": {"parameters": [{"$ref": "#/components/parameters/A"}]}
+                }
+            },
+            "components": {
+                "parameters": {
+                    "A": {"$ref": "#/components/parameters/B"},
+                    "B": {"$ref": "#/components/parameters/A"},
+                }
+            },
+        }
+        with self.assertRaisesRegex(RuntimeError, "cyclic parameter reference"):
+            audit_api_coverage._published_parameters([spec])
+
+    def test_rejects_ambiguous_catalog_aliases(self):
+        with self.assertRaisesRegex(RuntimeError, "ambiguous catalog document"):
+            self._catalog_specs({"metrics": {}, "metrics.yaml": {}})
 
     def test_matches_header_names_without_regard_to_case(self):
         self.assertEqual(
